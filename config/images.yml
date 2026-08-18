@@ -1,0 +1,134 @@
+version: 1
+
+paths:
+  iso_directory: images/iso
+  cache_file: .crucible/image-index.json
+
+images:
+
+  kali-rolling:
+    required: true
+    family: linux
+    distribution: kali
+    version: rolling
+    architecture: amd64
+    installer: debian-preseed
+
+    match:
+      filename:
+        - '^kali-linux-[0-9]{4}\.[0-9]+(?:\.[0-9]+)?-installer-amd64\.iso$'
+        - '^kali-linux-[0-9]{4}\.[0-9]+(?:\.[0-9]+)?-live-amd64\.iso$'
+        - '^kali-linux-.*amd64\.iso$'
+
+      volume_label:
+        - 'kali'
+
+      osinfo:
+        - 'kali'
+
+
+  ubuntu-26.04-desktop:
+    required: true
+    family: linux
+    distribution: ubuntu
+    version: "26.04"
+    flavor: desktop
+    architecture: amd64
+    installer: ubuntu-autoinstall
+
+    match:
+      filename:
+        - '^ubuntu-26\.04(?:\.[0-9]+)?-desktop-amd64\.iso$'
+        - '^ubuntu-26\.04.*desktop.*amd64.*\.iso$'
+
+      volume_label:
+        - 'ubuntu.*26\.04.*desktop'
+
+      osinfo:
+        - 'ubuntu.*26\.04'
+
+
+  ubuntu-26.04-server:
+    required: true
+    family: linux
+    distribution: ubuntu
+    version: "26.04"
+    flavor: server
+    architecture: amd64
+    installer: ubuntu-autoinstall
+
+    match:
+      filename:
+        - '^ubuntu-26\.04(?:\.[0-9]+)?-live-server-amd64\.iso$'
+        - '^ubuntu-26\.04.*server.*amd64.*\.iso$'
+
+      volume_label:
+        - 'ubuntu.*server.*26\.04'
+        - 'ubuntu-server.*26\.04'
+
+      osinfo:
+        - 'ubuntu.*26\.04'
+
+
+  windows-10:
+    required: true
+    family: windows
+    distribution: windows
+    version: "10"
+    architecture: amd64
+    installer: windows-unattend
+
+    match:
+      filename:
+        - '^win10.*\.iso$'
+        - '^windows[-_ ]?10.*\.iso$'
+
+      volume_label:
+        - 'win10'
+        - 'windows.*10'
+
+      osinfo:
+        - 'windows.*10'
+
+
+  windows-11:
+    required: true
+    family: windows
+    distribution: windows
+    version: "11"
+    architecture: amd64
+    installer: windows-unattend
+
+    match:
+      filename:
+        - '^win11.*\.iso$'
+        - '^windows[-_ ]?11.*\.iso$'
+
+      volume_label:
+        - 'win11'
+        - 'windows.*11'
+
+      osinfo:
+        - 'windows.*11'
+
+
+  windows-server-2022:
+    required: true
+    family: windows
+    distribution: windows-server
+    version: "2022"
+    architecture: amd64
+    installer: windows-unattend
+
+    match:
+      filename:
+        - '^.*windows.*server.*2022.*\.iso$'
+        - '^.*server.*2022.*\.iso$'
+        - '^server_eval_x64fre.*\.iso$'
+
+      volume_label:
+        - 'server.*2022'
+        - 'server_eval'
+
+      osinfo:
+        - 'windows.*server.*2022'

@@ -60,7 +60,10 @@ host_vars/*/secrets.yml
 group_vars/*/secrets.yml
 
 # Large downloadable source installation media
-images/source/*.iso
+images/iso/*.iso
+
+# Crucible runtime state
+.crucible/
 
 # VM disk formats
 *.vdi
