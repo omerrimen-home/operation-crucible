@@ -205,7 +205,7 @@ class VirtualBoxProvider:
                 "VBoxManage is accessible from the shell."
             )
 
-        self.binary = str(Path(self.binary).resolve())
+        self.binary = os.path.abspath(self.binary)
 
         self.vm_base_folder = Path(
             vm_base_folder or DEFAULT_VM_BASE_FOLDER
