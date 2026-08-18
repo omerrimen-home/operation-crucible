@@ -1,0 +1,67 @@
+schema_version: 1
+
+id: kali-rolling
+display_name: Kali Linux Rolling
+
+image_id: kali-rolling
+
+os:
+  family: linux
+  distribution: kali
+  version: rolling
+  flavor: installer
+  architecture: amd64
+
+installer:
+  backend: debian-preseed
+  template_directory: installers/kali/templates
+  bootstrap_script: installers/kali/bootstrap.sh
+
+defaults:
+  cpus: 2
+  memory_mb: 4096
+  disk_gb: 50
+
+management:
+  transport: ssh
+  port: 22
+  user: crucible
+  python_required: true
+
+virtualbox:
+  ostype_candidates:
+    - Debian_64
+    - Debian12_64
+    - Linux_64
+
+  firmware: efi
+  chipset: piix3
+  ioapic: true
+  rtc_utc: true
+  paravirt_provider: kvm
+
+  graphics:
+    controller: vmsvga
+    vram_mb: 128
+
+  security:
+    tpm: none
+    secure_boot: false
+
+  network:
+    nic_type: 82540EM
+
+  storage:
+    controller_name: SATA Controller
+    controller_type: IntelAHCI
+    port_count: 4
+
+    disk_port: 0
+    installation_iso_port: 1
+    bootstrap_iso_port: 2
+
+  boot_order:
+    - dvd
+    - disk
+    - none
+    - none

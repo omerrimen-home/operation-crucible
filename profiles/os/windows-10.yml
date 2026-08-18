@@ -1,0 +1,67 @@
+schema_version: 1
+
+id: windows-10
+display_name: Microsoft Windows 10
+
+image_id: windows-10
+
+os:
+  family: windows
+  distribution: windows
+  version: "10"
+  architecture: amd64
+
+installer:
+  backend: windows-unattend
+  template_directory: installers/windows/templates
+  answer_file: Autounattend.xml.j2
+  bootstrap_script: installers/windows/bootstrap.ps1
+
+defaults:
+  cpus: 2
+  memory_mb: 4096
+  disk_gb: 64
+
+management:
+  transport: psrp
+  port: 5986
+  user: crucible
+  python_required: false
+
+virtualbox:
+  ostype_candidates:
+    - Windows10_64
+    - Windows10
+    - Windows_64
+
+  firmware: efi
+  chipset: piix3
+  ioapic: true
+  rtc_utc: false
+  paravirt_provider: hyperv
+
+  graphics:
+    controller: vboxsvga
+    vram_mb: 128
+
+  security:
+    tpm: none
+    secure_boot: false
+
+  network:
+    nic_type: 82540EM
+
+  storage:
+    controller_name: SATA Controller
+    controller_type: IntelAHCI
+    port_count: 4
+
+    disk_port: 0
+    installation_iso_port: 1
+    bootstrap_iso_port: 2
+
+  boot_order:
+    - dvd
+    - disk
+    - none
+    - none

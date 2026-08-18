@@ -1,0 +1,67 @@
+schema_version: 1
+
+id: ubuntu-26.04-server
+display_name: Ubuntu 26.04 LTS Server
+
+image_id: ubuntu-26.04-server
+
+os:
+  family: linux
+  distribution: ubuntu
+  version: "26.04"
+  flavor: server
+  architecture: amd64
+
+installer:
+  backend: ubuntu-autoinstall
+  template_directory: installers/ubuntu/templates
+  bootstrap_script: installers/ubuntu/bootstrap.sh
+
+defaults:
+  cpus: 2
+  memory_mb: 2048
+  disk_gb: 30
+
+management:
+  transport: ssh
+  port: 22
+  user: crucible
+  python_required: true
+
+virtualbox:
+  ostype_candidates:
+    - Ubuntu_64
+    - Ubuntu
+    - Linux_64
+
+  firmware: efi
+  chipset: piix3
+  ioapic: true
+  rtc_utc: true
+  paravirt_provider: kvm
+
+  graphics:
+    controller: vmsvga
+    vram_mb: 32
+
+  security:
+    tpm: none
+    secure_boot: false
+
+  network:
+    nic_type: 82540EM
+
+  storage:
+    controller_name: SATA Controller
+    controller_type: IntelAHCI
+    port_count: 4
+
+    disk_port: 0
+    installation_iso_port: 1
+    bootstrap_iso_port: 2
+
+  boot_order:
+    - dvd
+    - disk
+    - none
+    - none
