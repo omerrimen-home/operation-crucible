@@ -1,0 +1,60 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Ansible secrets
+vault-password*
+*.vault-password
+secrets.yml
+secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# VM images / disks
+*.iso
+*.vdi
+*.vmdk
+*.qcow2
+*.ova
+*.ovf
+
+# Terraform if eventually used
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Local inventories containing credentials
+inventory/local/
+host_vars/*/secrets.yml
+group_vars/*/secrets.yml
