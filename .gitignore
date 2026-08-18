@@ -58,3 +58,12 @@ logs/
 inventory/local/
 host_vars/*/secrets.yml
 group_vars/*/secrets.yml
+
+# Large downloadable source installation media
+images/source/*.iso
+
+# VM disk formats
+*.vdi
+*.vmdk
+*.qcow2
+*.ova
