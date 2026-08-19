@@ -1,0 +1,43 @@
+#cloud-config
+autoinstall:
+  version: 1
+
+  refresh-installer:
+    update: false
+
+  locale: {{ locale | yaml_string }}
+
+  keyboard:
+    layout: {{ keyboard_layout | yaml_string }}
+    variant: {{ keyboard_variant | yaml_string }}
+
+  timezone: {{ timezone | yaml_string }}
+
+  identity:
+    hostname: {{ hostname | yaml_string }}
+    realname: {{ realname | yaml_string }}
+    username: {{ username | yaml_string }}
+    password: {{ password_hash | yaml_string }}
+
+  ssh:
+    install-server: {{ "true" if ssh_install_server else "false" }}
+    allow-pw: {{ "true" if ssh_allow_password else "false" }}
+{% if ssh_authorized_keys %}
+    authorized-keys:
+{% for key in ssh_authorized_keys %}
+      - {{ key | yaml_string }}
+{% endfor %}
+{% else %}
+    authorized-keys: []
+{% endif %}
+
+  storage:
+    layout:
+      name: {{ storage_layout | yaml_string }}
+
+  updates: {{ updates | yaml_string }}
+  shutdown: {{ shutdown | yaml_string }}
+
+  reporting:
+    builtin:
+      type: print

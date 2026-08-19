@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import getpass
+import secrets
+import shutil
+import string
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,19 +16,10 @@ import yaml
 from crucible.cli.create_machine import create_machine
 
 
-# ============================================================
-# Paths
-# ============================================================
-
 REPO_ROOT = Path(__file__).resolve().parent
 
 MACHINE_MANIFEST_DIR = REPO_ROOT / "manifests" / "machines"
 LAB_MANIFEST_DIR = REPO_ROOT / "manifests" / "labs"
-
-
-# ============================================================
-# Current v0.1 capabilities
-# ============================================================
 
 SUPPORTED_VM_COUNT = 1
 
@@ -43,10 +39,19 @@ DEFAULT_HARDWARE = {
     "disk_gb": 20,
 }
 
-
-# ============================================================
-# Terminal appearance
-# ============================================================
+DEFAULT_AUTOINSTALL = {
+    "realname": "Crucible User",
+    "username": "crucible",
+    "locale": "en_CA.UTF-8",
+    "timezone": "America/Toronto",
+    "keyboard_layout": "us",
+    "keyboard_variant": "",
+    "storage_layout": "direct",
+    "updates": "security",
+    "shutdown": "reboot",
+    "ssh_install_server": True,
+    "ssh_allow_password": True,
+}
 
 USE_COLOR = sys.stdout.isatty()
 
@@ -57,6 +62,11 @@ GOLD = "\033[38;5;214m" if USE_COLOR else ""
 RED = "\033[31m" if USE_COLOR else ""
 GREEN = "\033[32m" if USE_COLOR else ""
 CYAN = "\033[36m" if USE_COLOR else ""
+YELLOW = "\033[33m" if USE_COLOR else ""
+
+
+class CrucibleForgeError(RuntimeError):
+    """Expected error raised by the human-facing Crucible Forge."""
 
 
 def clear_screen() -> None:
@@ -85,25 +95,42 @@ def show_banner() -> None:
                    ____\_|_/____
                   /             \
                  /_______________\
-
-        """
+"""
         + RESET
     )
 
     print(f"{BOLD}       OPERATION CRUCIBLE{RESET}")
     print(f"{DIM}       Infrastructure forged to order.{RESET}")
     print()
-
     print(
         "Welcome to the Crucible Forge.\n"
-        "Describe the environment you need and Crucible will "
-        "construct it.\n"
+        "Describe the environment you need and Crucible will construct it."
     )
+    print()
 
 
-# ============================================================
-# User questions
-# ============================================================
+def ask_yes_no(prompt: str, *, default: bool = True) -> bool:
+    suffix = "[Y/n]" if default else "[y/N]"
+
+    while True:
+        answer = input(f"{prompt} {suffix}: ").strip().lower()
+
+        if not answer:
+            return default
+
+        if answer in {"y", "yes"}:
+            return True
+
+        if answer in {"n", "no"}:
+            return False
+
+        print(f"{RED}Please answer yes or no.{RESET}")
+
+
+def ask_with_default(prompt: str, default: str) -> str:
+    answer = input(f"{prompt} [{default}]: ").strip()
+    return answer if answer else default
+
 
 def ask_vm_count() -> int:
     while True:
@@ -119,8 +146,7 @@ def ask_vm_count() -> int:
 
         print()
         print(
-            f"{RED}Crucible v0.1 currently supports exactly "
-            f"one VM.{RESET}"
+            f"{RED}Crucible v0.1 currently supports exactly one VM.{RESET}"
         )
         print()
 
@@ -131,28 +157,20 @@ def ask_operating_system() -> dict[str, Any]:
     print()
 
     for key, os_info in SUPPORTED_OPERATING_SYSTEMS.items():
-        print(
-            f"  [{key}] "
-            f"{os_info['name']} {os_info['version']}"
-        )
+        print(f"  [{key}] {os_info['name']} {os_info['version']}")
 
     print()
 
     while True:
-        answer = input("Selection [1]: ").strip()
-
-        if not answer:
-            answer = "1"
+        answer = input("Selection [1]: ").strip() or "1"
 
         if answer in SUPPORTED_OPERATING_SYSTEMS:
-            return SUPPORTED_OPERATING_SYSTEMS[answer]
+            return dict(SUPPORTED_OPERATING_SYSTEMS[answer])
 
-        print()
         print(
-            f"{RED}That operating system is not currently "
-            f"supported by Crucible.{RESET}"
+            f"{RED}That operating system is not currently supported "
+            f"by Crucible.{RESET}"
         )
-        print()
 
 
 def ask_hardware_defaults() -> dict[str, int]:
@@ -160,75 +178,292 @@ def ask_hardware_defaults() -> dict[str, int]:
     print(f"{BOLD}VM hardware defaults:{RESET}")
     print()
     print(f"  CPUs        : {DEFAULT_HARDWARE['cpus']}")
-    print(
-        f"  Memory      : "
-        f"{DEFAULT_HARDWARE['memory_mb']} MB"
-    )
-    print(
-        f"  Virtual disk: "
-        f"{DEFAULT_HARDWARE['disk_gb']} GB"
-    )
+    print(f"  Memory      : {DEFAULT_HARDWARE['memory_mb']} MB")
+    print(f"  Virtual disk: {DEFAULT_HARDWARE['disk_gb']} GB")
     print("  Disk type   : Dynamically allocated VDI")
     print("  Network     : Crucible management network")
     print()
 
     while True:
-        answer = input(
-            f"{BOLD}Use VM hardware defaults?{RESET} [Y]: "
-        ).strip().lower()
-
-        if not answer:
-            answer = "y"
-
-        if answer in {"y", "yes"}:
+        if ask_yes_no(
+            f"{BOLD}Use VM hardware defaults?{RESET}",
+            default=True,
+        ):
             return dict(DEFAULT_HARDWARE)
 
         print()
         print(
-            f"{RED}Custom VM hardware is not exposed in "
-            f"Crucible v0.1 yet.{RESET}"
+            f"{RED}Custom VM hardware is not exposed in Crucible "
+            f"v0.1 yet.{RESET}"
         )
-        print(
-            "The default hardware configuration must currently "
-            "be used."
-        )
+        print("The default hardware configuration must currently be used.")
         print()
 
 
-# ============================================================
-# Manifest generation
-# ============================================================
+def detect_ssh_public_key() -> str | None:
+    candidates = (
+        Path.home() / ".ssh" / "id_ed25519.pub",
+        Path.home() / ".ssh" / "id_ecdsa.pub",
+        Path.home() / ".ssh" / "id_rsa.pub",
+    )
+
+    for candidate in candidates:
+        try:
+            value = candidate.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            continue
+
+        if value:
+            return value
+
+    return None
+
+
+def generate_password(length: int = 20) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#%^*-_"
+
+    while True:
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
+
+        if (
+            any(char.islower() for char in password)
+            and any(char.isupper() for char in password)
+            and any(char.isdigit() for char in password)
+        ):
+            return password
+
+
+def hash_password(password: str) -> str:
+    openssl = shutil.which("openssl")
+
+    if openssl is None:
+        raise CrucibleForgeError(
+            "OpenSSL is required to generate the Ubuntu password hash. "
+            "Install it with: sudo apt install openssl"
+        )
+
+    result = subprocess.run(
+        [openssl, "passwd", "-6", "-stdin"],
+        input=password + "\n",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise CrucibleForgeError(
+            "OpenSSL could not generate the autoinstall password hash:\n"
+            + result.stderr.strip()
+        )
+
+    password_hash = result.stdout.strip()
+
+    if not password_hash.startswith("$6$"):
+        raise CrucibleForgeError(
+            "OpenSSL returned an unexpected password hash format."
+        )
+
+    return password_hash
+
+
+def ask_password() -> tuple[str, str]:
+    print()
+    print(
+        "Press Enter at the password prompt to have Crucible generate "
+        "a strong password."
+    )
+
+    first = getpass.getpass("Login password [generate]: ")
+
+    if not first:
+        plaintext = generate_password()
+        return plaintext, hash_password(plaintext)
+
+    second = getpass.getpass("Confirm password: ")
+
+    if first != second:
+        raise CrucibleForgeError("The two passwords did not match.")
+
+    return first, hash_password(first)
+
+
+def show_autoinstall_defaults(
+    vm_name: str,
+    detected_key: str | None,
+) -> None:
+    print()
+    print(f"{BOLD}Ubuntu autoinstall defaults:{RESET}")
+    print()
+    print(f"  Hostname        : {vm_name}")
+    print(f"  User            : {DEFAULT_AUTOINSTALL['username']}")
+    print(f"  Real name       : {DEFAULT_AUTOINSTALL['realname']}")
+    print(f"  Locale          : {DEFAULT_AUTOINSTALL['locale']}")
+    print(f"  Timezone        : {DEFAULT_AUTOINSTALL['timezone']}")
+    print(f"  Keyboard        : {DEFAULT_AUTOINSTALL['keyboard_layout']}")
+    print(f"  Storage layout  : {DEFAULT_AUTOINSTALL['storage_layout']}")
+    print(f"  Security updates: {DEFAULT_AUTOINSTALL['updates']}")
+    print("  OpenSSH server  : yes")
+    print("  SSH password    : allowed")
+    print("  Login password  : securely generated")
+
+    if detected_key:
+        print("  SSH public key  : detected and included")
+    else:
+        print("  SSH public key  : none detected")
+
+    print()
+
+
+def ask_autoinstall(
+    vm_name: str,
+) -> tuple[dict[str, Any], str | None]:
+    detected_key = detect_ssh_public_key()
+    show_autoinstall_defaults(vm_name, detected_key)
+
+    use_defaults = ask_yes_no(
+        f"{BOLD}Use Ubuntu autoinstall defaults?{RESET}",
+        default=True,
+    )
+
+    if use_defaults:
+        plaintext_password = generate_password()
+        password_hash = hash_password(plaintext_password)
+
+        authorized_keys = [detected_key] if detected_key else []
+
+        return (
+            {
+                "enabled": True,
+                "hostname": vm_name,
+                "identity": {
+                    "realname": DEFAULT_AUTOINSTALL["realname"],
+                    "username": DEFAULT_AUTOINSTALL["username"],
+                    "password_hash": password_hash,
+                },
+                "locale": DEFAULT_AUTOINSTALL["locale"],
+                "timezone": DEFAULT_AUTOINSTALL["timezone"],
+                "keyboard": {
+                    "layout": DEFAULT_AUTOINSTALL["keyboard_layout"],
+                    "variant": DEFAULT_AUTOINSTALL["keyboard_variant"],
+                },
+                "storage": {
+                    "layout": DEFAULT_AUTOINSTALL["storage_layout"],
+                },
+                "ssh": {
+                    "install_server": DEFAULT_AUTOINSTALL[
+                        "ssh_install_server"
+                    ],
+                    "allow_password": DEFAULT_AUTOINSTALL[
+                        "ssh_allow_password"
+                    ],
+                    "authorized_keys": authorized_keys,
+                },
+                "updates": DEFAULT_AUTOINSTALL["updates"],
+                "shutdown": DEFAULT_AUTOINSTALL["shutdown"],
+            },
+            plaintext_password,
+        )
+
+    print()
+    print(f"{BOLD}Custom autoinstall configuration{RESET}")
+    print()
+
+    hostname = ask_with_default("Hostname", vm_name)
+    username = ask_with_default(
+        "Username",
+        DEFAULT_AUTOINSTALL["username"],
+    )
+    realname = ask_with_default(
+        "Real name",
+        DEFAULT_AUTOINSTALL["realname"],
+    )
+    locale = ask_with_default(
+        "Locale",
+        DEFAULT_AUTOINSTALL["locale"],
+    )
+    timezone = ask_with_default(
+        "Timezone",
+        DEFAULT_AUTOINSTALL["timezone"],
+    )
+    keyboard_layout = ask_with_default(
+        "Keyboard layout",
+        DEFAULT_AUTOINSTALL["keyboard_layout"],
+    )
+
+    plaintext_password, password_hash = ask_password()
+
+    install_ssh = ask_yes_no(
+        "Install OpenSSH server?",
+        default=True,
+    )
+
+    allow_password = False
+    authorized_keys: list[str] = []
+
+    if install_ssh:
+        allow_password = ask_yes_no(
+            "Allow SSH password authentication?",
+            default=True,
+        )
+
+        if detected_key and ask_yes_no(
+            "Include detected SSH public key?",
+            default=True,
+        ):
+            authorized_keys.append(detected_key)
+
+    return (
+        {
+            "enabled": True,
+            "hostname": hostname,
+            "identity": {
+                "realname": realname,
+                "username": username,
+                "password_hash": password_hash,
+            },
+            "locale": locale,
+            "timezone": timezone,
+            "keyboard": {
+                "layout": keyboard_layout,
+                "variant": "",
+            },
+            "storage": {
+                "layout": "direct",
+            },
+            "ssh": {
+                "install_server": install_ssh,
+                "allow_password": allow_password,
+                "authorized_keys": authorized_keys,
+            },
+            "updates": "security",
+            "shutdown": "reboot",
+        },
+        plaintext_password,
+    )
+
 
 def build_machine_manifest(
     os_info: dict[str, Any],
     hardware: dict[str, int],
+    autoinstall: dict[str, Any],
 ) -> dict[str, Any]:
-
     return {
         "schema_version": 1,
-
         "name": os_info["default_vm_name"],
-
         "profile": os_info["profile"],
-
-        # Logical image ID.
-        #
-        # This is intentionally NOT an ISO filename.
         "image_id": os_info["image_id"],
-
         "resources": {
             "cpus": hardware["cpus"],
             "memory_mb": hardware["memory_mb"],
             "disk_gb": hardware["disk_gb"],
         },
-
         "network": {
             "management": {
                 "enabled": True,
                 "slot": 1,
             }
         },
-
+        "autoinstall": autoinstall,
         "start": {
             "enabled": True,
             "headless": False,
@@ -238,22 +473,18 @@ def build_machine_manifest(
 
 def build_lab_manifest(
     machine_manifest_path: Path,
+    machine_name: str,
 ) -> dict[str, Any]:
-
     relative_machine_path = (
-        machine_manifest_path
-        .relative_to(REPO_ROOT)
-        .as_posix()
+        machine_manifest_path.relative_to(REPO_ROOT).as_posix()
     )
 
     return {
         "schema_version": 1,
-
         "name": "crucible-lab",
-
         "machines": [
             {
-                "name": "ubuntu-server-01",
+                "name": machine_name,
                 "manifest": relative_machine_path,
             }
         ],
@@ -264,7 +495,6 @@ def write_yaml(
     path: Path,
     data: dict[str, Any],
 ) -> None:
-
     path.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -274,7 +504,6 @@ def write_yaml(
         "w",
         encoding="utf-8",
     ) as file:
-
         yaml.safe_dump(
             data,
             file,
@@ -286,23 +515,17 @@ def write_yaml(
 def generate_manifests(
     os_info: dict[str, Any],
     hardware: dict[str, int],
+    autoinstall: dict[str, Any],
 ) -> tuple[Path, Path]:
-
     vm_name = os_info["default_vm_name"]
 
-    machine_path = (
-        MACHINE_MANIFEST_DIR
-        / f"{vm_name}.yml"
-    )
-
-    lab_path = (
-        LAB_MANIFEST_DIR
-        / "crucible-lab.yml"
-    )
+    machine_path = MACHINE_MANIFEST_DIR / f"{vm_name}.yml"
+    lab_path = LAB_MANIFEST_DIR / "crucible-lab.yml"
 
     machine_manifest = build_machine_manifest(
         os_info,
         hardware,
+        autoinstall,
     )
 
     write_yaml(
@@ -312,6 +535,7 @@ def generate_manifests(
 
     lab_manifest = build_lab_manifest(
         machine_path,
+        vm_name,
     )
 
     write_yaml(
@@ -322,14 +546,9 @@ def generate_manifests(
     return lab_path, machine_path
 
 
-# ============================================================
-# Forge
-# ============================================================
-
 def forge_machine(
     machine_manifest_path: Path,
 ) -> None:
-
     print()
     print(
         f"{GOLD}{BOLD}"
@@ -354,66 +573,74 @@ def forge_machine(
     )
 
 
-# ============================================================
-# Main
-# ============================================================
-
 def main() -> int:
-    show_banner()
+    try:
+        show_banner()
 
-    # --------------------------------------------------------
-    # Gather desired topology
-    # --------------------------------------------------------
+        vm_count = ask_vm_count()
+        os_info = ask_operating_system()
+        hardware = ask_hardware_defaults()
 
-    vm_count = ask_vm_count()
+        if vm_count != SUPPORTED_VM_COUNT:
+            raise CrucibleForgeError(
+                "Unsupported VM count reached orchestration layer."
+            )
 
-    os_info = ask_operating_system()
+        vm_name = str(os_info["default_vm_name"])
 
-    hardware = ask_hardware_defaults()
+        autoinstall, plaintext_password = ask_autoinstall(vm_name)
 
-    # vm_count is deliberately simple for v0.1.
-    #
-    # Later this becomes a loop that collects one definition
-    # for each requested machine.
-    if vm_count != SUPPORTED_VM_COUNT:
-        raise RuntimeError(
-            "Unsupported VM count reached orchestration layer."
+        print()
+        print(f"{CYAN}Generating Crucible manifests...{RESET}")
+
+        lab_path, machine_path = generate_manifests(
+            os_info,
+            hardware,
+            autoinstall,
         )
 
-    # --------------------------------------------------------
-    # Generate manifests
-    # --------------------------------------------------------
+        print()
+        print(f"{GREEN}[✓]{RESET} Topology manifest:")
+        print(f"    {lab_path.relative_to(REPO_ROOT)}")
 
-    print()
-    print(f"{CYAN}Generating Crucible manifests...{RESET}")
+        print()
+        print(f"{GREEN}[✓]{RESET} Machine manifest:")
+        print(f"    {machine_path.relative_to(REPO_ROOT)}")
 
-    lab_path, machine_path = generate_manifests(
-        os_info,
-        hardware,
-    )
+        if plaintext_password:
+            print()
+            print(
+                f"{YELLOW}{BOLD}Generated login credentials{RESET}"
+            )
+            print(
+                f"  Username: "
+                f"{autoinstall['identity']['username']}"
+            )
+            print(f"  Password: {plaintext_password}")
+            print(
+                f"{DIM}"
+                "The plaintext password is not written to the manifest."
+                f"{RESET}"
+            )
 
-    print()
-    print(f"{GREEN}[✓]{RESET} Topology manifest:")
-    print(f"    {lab_path.relative_to(REPO_ROOT)}")
+        forge_machine(machine_path)
 
-    print()
-    print(f"{GREEN}[✓]{RESET} Machine manifest:")
-    print(f"    {machine_path.relative_to(REPO_ROOT)}")
+        print()
+        print(f"{GREEN}{BOLD}Forge complete.{RESET}")
 
-    # --------------------------------------------------------
-    # Create the environment
-    # --------------------------------------------------------
+        return 0
 
-    forge_machine(machine_path)
-
-    print()
-    print(
-        f"{GREEN}{BOLD}"
-        "Forge complete."
-        f"{RESET}"
-    )
-
-    return 0
+    except (
+        CrucibleForgeError,
+        FileNotFoundError,
+        ValueError,
+        KeyError,
+    ) as exc:
+        print(
+            f"\n{RED}ERROR: {exc}{RESET}",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":

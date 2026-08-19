@@ -7,6 +7,10 @@ from typing import Any
 
 from crucible.hypervisors.virtualbox import VirtualBoxProvider
 from crucible.provisioning.image_detector import load_yaml, scan_images
+from crucible.provisioning.ubuntu_autoinstall import (
+    UbuntuAutoinstallError,
+    build_seed_iso,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -27,7 +31,6 @@ class CrucibleError(RuntimeError):
 
 
 def _repo_path(path: Path) -> Path:
-    """Treat relative paths as relative to the repository root."""
     if path.is_absolute():
         return path
 
@@ -35,7 +38,6 @@ def _repo_path(path: Path) -> Path:
 
 
 def load_machine_manifest(path: Path) -> dict[str, Any]:
-    """Load and minimally validate a machine manifest."""
     manifest = load_yaml(path)
 
     for key in ("name", "profile", "image_id"):
@@ -48,7 +50,6 @@ def load_machine_manifest(path: Path) -> dict[str, Any]:
 
 
 def load_os_profile(profile_name: str) -> dict[str, Any]:
-    """Load an OS profile from profiles/os/."""
     profile_path = PROFILE_DIR / f"{profile_name}.yml"
 
     if not profile_path.is_file():
@@ -60,10 +61,6 @@ def load_os_profile(profile_name: str) -> dict[str, Any]:
 
 
 def resolve_iso(image_id: str) -> Path:
-    """
-    Ask the existing image detector to locate the ISO belonging
-    to the requested logical image ID.
-    """
     scan, _ = scan_images(IMAGE_CONFIG)
 
     records = (
@@ -105,8 +102,6 @@ def create_machine(
     *,
     verbose: bool = False,
 ) -> None:
-    """Create one VM from a Crucible machine manifest."""
-
     manifest = load_machine_manifest(manifest_path)
 
     name = str(manifest["name"])
@@ -116,34 +111,41 @@ def create_machine(
     resources = manifest.get("resources", {})
     network = manifest.get("network", {})
     start = manifest.get("start", {})
+    autoinstall = manifest.get("autoinstall", {})
 
-    # ---------------------------------------------------------
-    # 1. Load OS profile
-    # ---------------------------------------------------------
-
-    print(f"[1/5] Loading OS profile: {profile_name}")
+    print(f"[1/6] Loading OS profile: {profile_name}")
 
     profile = load_os_profile(profile_name)
 
-    # ---------------------------------------------------------
-    # 2. Find installation ISO
-    # ---------------------------------------------------------
-
-    print(f"[2/5] Resolving installation ISO: {image_id}")
+    print(f"[2/6] Resolving installation ISO: {image_id}")
 
     iso_path = resolve_iso(image_id)
 
     print(f"      -> {iso_path}")
 
-    # ---------------------------------------------------------
-    # 3. Create VirtualBox machine
-    # ---------------------------------------------------------
+    seed_iso_path: Path | None = None
+
+    if isinstance(autoinstall, dict) and autoinstall.get(
+        "enabled",
+        False,
+    ):
+        print("[3/6] Generating Ubuntu autoinstall seed")
+
+        seed_iso_path = build_seed_iso(
+            manifest,
+            repo_root=REPO_ROOT,
+            verbose=verbose,
+        )
+
+        print(f"      -> {seed_iso_path}")
+    else:
+        print("[3/6] Autoinstall disabled")
 
     provider = VirtualBoxProvider(
         verbose=verbose
     )
 
-    print(f"[3/5] Creating VM: {name}")
+    print(f"[4/6] Creating VM: {name}")
 
     disk_path = provider.create_vm_from_profile(
         name=name,
@@ -155,18 +157,15 @@ def create_machine(
 
     print(f"      -> disk: {disk_path}")
 
-    # ---------------------------------------------------------
-    # 4. Attach installation media and networking
-    # ---------------------------------------------------------
-
     print(
-        "[4/5] Attaching installation media "
+        "[5/6] Attaching installation media "
         "and networking"
     )
 
     provider.attach_installation_media(
         name,
         vendor_iso=iso_path,
+        seed_iso=seed_iso_path,
     )
 
     management = network.get("management", {})
@@ -188,28 +187,39 @@ def create_machine(
             f"{slot}: {interface}"
         )
 
-    # ---------------------------------------------------------
-    # 5. Start
-    # ---------------------------------------------------------
-
     if start.get("enabled", True):
         headless = bool(
             start.get("headless", False)
         )
 
-        print(
-            f"[5/5] Starting VM "
-            f"(headless={headless})"
-        )
+        if (
+            isinstance(autoinstall, dict)
+            and autoinstall.get("enabled", False)
+        ):
+            print(
+                f"[6/6] Starting unattended Ubuntu installation "
+                f"(headless={headless})"
+            )
 
-        provider.start_vm(
-            name,
-            headless=headless,
-        )
+            provider.start_ubuntu_autoinstall(
+                name,
+                headless=headless,
+            )
+
+        else:
+            print(
+                f"[6/6] Starting VM "
+                f"(headless={headless})"
+            )
+
+            provider.start_vm(
+                name,
+                headless=headless,
+            )
 
     else:
         print(
-            "[5/5] VM created; "
+            "[6/6] VM created; "
             "start disabled by manifest"
         )
 
@@ -241,7 +251,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Show VBoxManage commands.",
+        help="Show VBoxManage and seed-generation commands.",
     )
 
     return parser.parse_args()
@@ -262,11 +272,11 @@ def main() -> int:
 
     except (
         CrucibleError,
+        UbuntuAutoinstallError,
         FileNotFoundError,
         ValueError,
         KeyError,
     ) as exc:
-
         print(
             f"ERROR: {exc}",
             file=sys.stderr,

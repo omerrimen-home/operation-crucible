@@ -222,10 +222,121 @@ class VirtualBoxProvider:
 
         self._version: VBoxVersion | None = None
         self._ostype_cache: set[str] | None = None
+    
+    def start_ubuntu_autoinstall(
+        self,
+        name: str,
+        *,
+        headless: bool = False,
+        boot_delay_seconds: float = 5.0,
+    ) -> None:
+        """
+        Start an Ubuntu Server installer and automatically add the
+        'autoinstall' kernel argument at the GRUB boot menu.
 
-    # ------------------------------------------------------------------
-    # VBoxManage execution
-    # ------------------------------------------------------------------
+        This is intentionally a VirtualBox-specific boot automation
+        mechanism. The actual autoinstall configuration still comes
+        from the attached NoCloud CIDATA seed ISO.
+        """
+
+        self.start_vm(
+            name,
+            headless=headless,
+        )
+
+        # Give VirtualBox EFI enough time to reach the Ubuntu GRUB menu.
+        time.sleep(boot_delay_seconds)
+
+        # Edit the selected "Try or Install Ubuntu Server" entry.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputstring",
+                "e",
+            ]
+        )
+
+        time.sleep(0.5)
+
+        # GRUB's edit view normally contains:
+        #
+        #   setparams ...
+        #   set gfxpayload=keep
+        #   linux /casper/vmlinuz ---
+        #   initrd /casper/initrd
+        #
+        # Move to the linux line.
+        for _ in range(2):
+            self._run(
+                [
+                    "controlvm",
+                    name,
+                    "keyboardputscancode",
+                    "e0",
+                    "50",
+                    "e0",
+                    "d0",
+                ]
+            )
+
+        # Move to the end of:
+        #
+        # linux /casper/vmlinuz ---
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputscancode",
+                "e0",
+                "4f",
+                "e0",
+                "cf",
+            ]
+        )
+
+        # Delete the existing "---".
+        for _ in range(3):
+            self._run(
+                [
+                    "controlvm",
+                    name,
+                    "keyboardputscancode",
+                    "0e",
+                    "8e",
+                ]
+            )
+    
+        # Replace it with:
+        #
+        # autoinstall ---
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputstring",
+                "autoinstall ---",
+            ]
+        )
+
+        time.sleep(0.25)
+
+        # Ctrl+X tells GRUB to boot the edited entry.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputscancode",
+                "1d",  # Ctrl down
+                "2d",  # X down
+                "ad",  # X up
+                "9d",  # Ctrl up
+            ]
+        )
+
+        # ------------------------------------------------------------------
+        # VBoxManage execution
+        # ------------------------------------------------------------------
 
     def _run(
         self,
@@ -793,8 +904,8 @@ class VirtualBoxProvider:
             vbox.get(
                 "boot_order",
                 [
-                    "dvd",
                     "disk",
+                    "dvd",
                     "none",
                     "none",
                 ],

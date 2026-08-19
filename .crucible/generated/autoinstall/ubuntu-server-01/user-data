@@ -1,0 +1,41 @@
+#cloud-config
+autoinstall:
+  version: 1
+
+  refresh-installer:
+    update: false
+
+  locale: "en_CA.UTF-8"
+
+  keyboard:
+    layout: "us"
+    variant: ""
+
+  timezone: "America/Toronto"
+
+  identity:
+    hostname: "ubuntu-server-01"
+    realname: "Crucible User"
+    username: "crucible"
+    password: "$6$Z0PI7gTEQoXRWYyc$uNPpQZSaBFlqW6dwcgj74XfyLpa6JMPpKfTHb842oNwsEBK7qsCQ8eFV5f0N9cym91AViNwSJXAgc2lRp9y6O1"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+    authorized-keys:
+
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPtxehYc4rlUEPmDzAatVW2Boq3p8kCzFkRzFFHtAp4U odude83@gmail.com"
+
+
+
+  storage:
+    layout:
+      name: "direct"
+
+  updates: "security"
+  shutdown: "reboot"
+
+  reporting:
+    builtin:
+      type: print
