@@ -344,26 +344,33 @@ class VirtualBoxProvider:
     # ------------------------------------------------------------------
 
     def list_os_types(self) -> set[str]:
-        if self._ostype_cache is not None:
-            return self._ostype_cache
-
         result = self._run(
             ["list", "ostypes"]
         )
 
-        ostypes: set[str] = set()
+        os_types: set[str] = set()
 
         for line in result.stdout.splitlines():
             match = re.match(
-                r"^\s*ID:\s*(.+?)\s*$",
+                r"^\s*ID(?:\s*/\s*Description)?:\s*(.+?)\s*$",
                 line,
             )
 
-            if match:
-                ostypes.add(match.group(1))
+            if not match:
+                continue
 
-        self._ostype_cache = ostypes
-        return ostypes
+            value = match.group(1).strip()
+
+            os_type_id = (
+                value
+                .split(" -- ", 1)[0]
+                .strip()
+            )
+
+            if os_type_id:
+                os_types.add(os_type_id)
+
+        return os_types
 
     def resolve_os_type(
         self,

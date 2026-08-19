@@ -1,0 +1,15 @@
+schema_version: 1
+name: ubuntu-server-01
+profile: ubuntu-26.04-server
+image_id: ubuntu-26.04-server
+resources:
+  cpus: 2
+  memory_mb: 2048
+  disk_gb: 20
+network:
+  management:
+    enabled: true
+    slot: 1
+start:
+  enabled: true
+  headless: false

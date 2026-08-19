@@ -1,0 +1,5 @@
+schema_version: 1
+name: crucible-lab
+machines:
+- name: ubuntu-server-01
+  manifest: manifests/machines/ubuntu-server-01.yml

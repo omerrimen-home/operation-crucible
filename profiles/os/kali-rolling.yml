@@ -14,8 +14,8 @@ os:
 
 installer:
   backend: debian-preseed
-  template_directory: installers/kali/templates
-  bootstrap_script: installers/kali/bootstrap.sh
+  template_directory: installers/linux/kali/templates
+  bootstrap_script: installers/linux/common/bootstrap.sh
 
 defaults:
   cpus: 2

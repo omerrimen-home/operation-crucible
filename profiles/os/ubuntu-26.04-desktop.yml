@@ -14,13 +14,13 @@ os:
 
 installer:
   backend: ubuntu-autoinstall
-  template_directory: installers/ubuntu/templates
-  bootstrap_script: installers/ubuntu/bootstrap.sh
+  template_directory: installers/linux/ubuntu/templates
+  bootstrap_script: installers/linux/common/bootstrap.sh
 
 defaults:
   cpus: 2
-  memory_mb: 6144
-  disk_gb: 50
+  memory_mb: 4096
+  disk_gb: 40
 
 management:
   transport: ssh
