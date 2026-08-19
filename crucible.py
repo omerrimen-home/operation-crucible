@@ -10,9 +10,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
-
+import socket
 import yaml
-
+import time
 from crucible.cli.create_machine import create_machine
 
 
@@ -30,6 +30,12 @@ LAB_MANIFEST_DIR = (
     / ".crucible"
     / "manifests"
     / "labs"
+)
+
+ANSIBLE_RUNTIME_DIR = (
+    REPO_ROOT
+    / ".crucible"
+    / "ansible"
 )
 
 SUPPORTED_VM_COUNT = 1
@@ -192,7 +198,7 @@ def ask_hardware_defaults() -> dict[str, int]:
     print(f"  Memory      : {DEFAULT_HARDWARE['memory_mb']} MB")
     print(f"  Virtual disk: {DEFAULT_HARDWARE['disk_gb']} GB")
     print("  Disk type   : Dynamically allocated VDI")
-    print("  Network     : Crucible management network")
+    print("  Networks    : Crucible management network + NAT temporary internet access")
     print()
 
     while True:
@@ -477,6 +483,7 @@ def build_machine_manifest(
             "management": {
                 "enabled": True,
                 "slot": 2,
+                "address": "172.31.255.10/24",
             },
         },
         "autoinstall": autoinstall,
@@ -561,6 +568,92 @@ def generate_manifests(
 
     return lab_path, machine_path
 
+def get_machine_connection_info(
+    machine_manifest_path: Path,
+) -> tuple[str, str, str]:
+    """
+    Extract the information Crucible needs to reach the newly
+    created machine.
+    """
+
+    with machine_manifest_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        manifest = yaml.safe_load(file)
+
+    machine_name = str(
+        manifest["name"]
+    )
+
+    username = str(
+        manifest["autoinstall"]
+        ["identity"]
+        ["username"]
+    )
+
+    management_address = str(
+        manifest["network"]
+        ["management"]
+        ["address"]
+    )
+
+    # Convert:
+    #
+    # 172.31.255.10/24
+    #
+    # into:
+    #
+    # 172.31.255.10
+    management_ip = management_address.split(
+        "/",
+        1,
+    )[0]
+
+    return (
+        machine_name,
+        management_ip,
+        username,
+    )
+
+def wait_for_ssh(
+    host: str,
+    *,
+    port: int = 22,
+    timeout: int = 1800,
+    poll_interval: float = 3.0,
+) -> None:
+    """
+    Wait until the VM begins accepting TCP connections on SSH.
+    """
+
+    print()
+    print(
+        f"{CYAN}Waiting for SSH on "
+        f"{host}:{port}...{RESET}"
+    )
+
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(
+                (host, port),
+                timeout=2.0,
+            ):
+                print(
+                    f"{GREEN}[✓]{RESET} "
+                    f"SSH port is reachable."
+                )
+                return
+
+        except OSError:
+            time.sleep(poll_interval)
+
+    raise CrucibleForgeError(
+        f"Timed out waiting for SSH on "
+        f"{host}:{port}."
+    )
 
 def forge_machine(
     machine_manifest_path: Path,
@@ -588,6 +681,212 @@ def forge_machine(
         verbose=False,
     )
 
+def generate_ansible_inventory(
+    *,
+    machine_name: str,
+    host: str,
+    username: str,
+) -> Path:
+    """
+    Generate Crucible's runtime Ansible inventory.
+    """
+
+    inventory_path = (
+        ANSIBLE_RUNTIME_DIR
+        / "inventory.yml"
+    )
+
+    inventory_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    inventory = {
+        "all": {
+            "hosts": {
+                machine_name: {
+                    "ansible_host": host,
+                    "ansible_user": username,
+
+                    # Crucible v0.1 machines are ephemeral
+                    # lab machines and may reuse the same IP
+                    # with a newly generated SSH host key.
+                    "ansible_ssh_common_args": (
+                        "-o StrictHostKeyChecking=no "
+                        "-o UserKnownHostsFile=/dev/null"
+                    ),
+
+                    "ansible_python_interpreter": (
+                        "/usr/bin/python3"
+                    ),
+                }
+            }
+        }
+    }
+
+    with inventory_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        yaml.safe_dump(
+            inventory,
+            file,
+            sort_keys=False,
+        )
+
+    return inventory_path
+
+def wait_for_bootstrap(
+    *,
+    machine_name: str,
+    inventory_path: Path,
+    timeout: int = 1800,
+    poll_interval: float = 5.0,
+) -> None:
+    """
+    Wait until bootstrap.sh has completed inside the VM.
+    """
+
+    print()
+    print(
+        f"{CYAN}Waiting for Crucible bootstrap "
+        f"to complete...{RESET}"
+    )
+
+    deadline = time.monotonic() + timeout
+
+    command = [
+        "ansible",
+        machine_name,
+        "-i",
+        str(inventory_path),
+        "-m",
+        "ansible.builtin.raw",
+        "-a",
+        (
+            "test -f "
+            "/var/lib/crucible/"
+            "bootstrap-complete"
+        ),
+    ]
+
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode == 0:
+            print(
+                f"{GREEN}[✓]{RESET} "
+                f"Bootstrap complete."
+            )
+            return
+
+        time.sleep(poll_interval)
+
+    raise CrucibleForgeError(
+        "Timed out waiting for Linux bootstrap "
+        "to complete."
+    )
+
+def verify_ansible(
+    *,
+    machine_name: str,
+    inventory_path: Path,
+) -> None:
+    """
+    Perform Crucible's final Ansible connectivity test.
+    """
+
+    print()
+    print(
+        f"{CYAN}Verifying Ansible connectivity...{RESET}"
+    )
+    print()
+
+    result = subprocess.run(
+        [
+            "ansible",
+            machine_name,
+            "-i",
+            str(inventory_path),
+            "-m",
+            "ansible.builtin.ping",
+        ],
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise CrucibleForgeError(
+            "Ansible connectivity verification failed."
+        )
+
+    print()
+    print(
+        f"{GREEN}[✓]{RESET} "
+        f"Ansible connectivity verified."
+    )
+
+def verify_machine_ready(
+    machine_manifest_path: Path,
+) -> None:
+    """
+    Wait for a newly forged machine to become completely
+    manageable by Crucible.
+    """
+
+    if shutil.which("ansible") is None:
+        raise CrucibleForgeError(
+            "Ansible was not found on the controller. "
+            "Install it before forging machines."
+        )
+
+    (
+        machine_name,
+        management_ip,
+        username,
+    ) = get_machine_connection_info(
+        machine_manifest_path
+    )
+
+    print()
+    print(
+        f"{BOLD}Management target:{RESET} "
+        f"{username}@{management_ip}"
+    )
+
+    inventory_path = generate_ansible_inventory(
+        machine_name=machine_name,
+        host=management_ip,
+        username=username,
+    )
+
+    print(
+        f"{GREEN}[✓]{RESET} "
+        f"Ansible inventory generated:"
+    )
+    print(
+        f"    "
+        f"{inventory_path.relative_to(REPO_ROOT)}"
+    )
+
+    wait_for_ssh(
+        management_ip
+    )
+
+    wait_for_bootstrap(
+        machine_name=machine_name,
+        inventory_path=inventory_path,
+    )
+
+    verify_ansible(
+        machine_name=machine_name,
+        inventory_path=inventory_path,
+    )
 
 def main() -> int:
     try:
@@ -641,8 +940,28 @@ def main() -> int:
 
         forge_machine(machine_path)
 
+        verify_machine_ready(
+            machine_path
+        )
+
         print()
-        print(f"{GREEN}{BOLD}Forge complete.{RESET}")
+        print(
+            f"{GREEN}{BOLD}"
+            "=========================================="
+            f"{RESET}"
+        )
+
+        print(
+            f"{GREEN}{BOLD}"
+            "          FORGE COMPLETE"
+            f"{RESET}"
+        )
+
+        print(
+            f"{GREEN}{BOLD}"
+            "=========================================="
+            f"{RESET}"
+        )
 
         return 0
 

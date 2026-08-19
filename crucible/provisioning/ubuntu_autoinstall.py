@@ -310,6 +310,21 @@ def build_seed_iso(
         ),
     ]
 
+    network = machine_manifest.get(
+        "network",
+        {}
+    )
+
+    management_network = network.get(
+        "management",
+        {}
+    )
+
+    management_address = management_network.get(
+        "address",
+        "172.31.255.10/24",
+    )
+
     context = {
         "instance_id": f"crucible-{machine_name}",
         "hostname": autoinstall.get(
@@ -363,6 +378,7 @@ def build_seed_iso(
             "reboot",
         ),
         "late_commands": late_commands,
+        "management_address": management_address,
     }
 
     _render_template(

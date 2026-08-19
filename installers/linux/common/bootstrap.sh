@@ -53,3 +53,6 @@ echo
 echo "Crucible bootstrap complete."
 echo "SSH enabled."
 echo "Python available for Ansible."
+
+mkdir -p /var/lib/crucible
+date --iso-8601=seconds > /var/lib/crucible/bootstrap-complete
