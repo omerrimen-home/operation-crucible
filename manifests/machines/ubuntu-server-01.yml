@@ -16,7 +16,7 @@ autoinstall:
   identity:
     realname: Crucible User
     username: crucible
-    password_hash: $6$Z0PI7gTEQoXRWYyc$uNPpQZSaBFlqW6dwcgj74XfyLpa6JMPpKfTHb842oNwsEBK7qsCQ8eFV5f0N9cym91AViNwSJXAgc2lRp9y6O1
+    password_hash: $6$JVKZPad/17UiL/p6$O4mvnDreDzNcWckMsxQfn7gjBSjIbIKjkOEwSdoqnsyxA7Yygkd2iJeDnsbG6IiCpJ7ajku489NhHoZeDT8sN/
   locale: en_CA.UTF-8
   timezone: America/Toronto
   keyboard:
