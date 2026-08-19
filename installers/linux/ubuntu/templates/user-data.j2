@@ -11,6 +11,16 @@ autoinstall:
     layout: {{ keyboard_layout | yaml_string }}
     variant: {{ keyboard_variant | yaml_string }}
 
+  network:
+    version: 2
+    ethernets:
+      crucible:
+        match:
+          name: "en*"
+        dhcp4: true
+        dhcp6: false
+        optional: true
+        
   timezone: {{ timezone | yaml_string }}
 
   identity:
@@ -37,6 +47,11 @@ autoinstall:
 
   updates: {{ updates | yaml_string }}
   shutdown: {{ shutdown | yaml_string }}
+
+  late-commands:
+{% for command in late_commands %}
+    - {{ command | yaml_string }}
+{% endfor %}
 
   reporting:
     builtin:

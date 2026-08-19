@@ -228,7 +228,7 @@ class VirtualBoxProvider:
         name: str,
         *,
         headless: bool = False,
-        boot_delay_seconds: float = 5.0,
+        boot_delay_seconds: float = 3.0,
     ) -> None:
         """
         Start an Ubuntu Server installer and automatically add the
@@ -243,10 +243,10 @@ class VirtualBoxProvider:
             name,
             headless=headless,
         )
-
+        print("      -> waiting for Ubuntu GRUB")
         # Give VirtualBox EFI enough time to reach the Ubuntu GRUB menu.
         time.sleep(boot_delay_seconds)
-
+        print("      -> entering GRUB edit mode")
         # Edit the selected "Try or Install Ubuntu Server" entry.
         self._run(
             [
@@ -258,7 +258,7 @@ class VirtualBoxProvider:
         )
 
         time.sleep(0.5)
-
+        print("      -> injecting autoinstall kernel argument")
         # GRUB's edit view normally contains:
         #
         #   setparams ...
@@ -267,7 +267,7 @@ class VirtualBoxProvider:
         #   initrd /casper/initrd
         #
         # Move to the linux line.
-        for _ in range(2):
+        for _ in range(3):
             self._run(
                 [
                     "controlvm",
@@ -296,7 +296,7 @@ class VirtualBoxProvider:
         )
 
         # Delete the existing "---".
-        for _ in range(3):
+        for _ in range(4):
             self._run(
                 [
                     "controlvm",
@@ -315,7 +315,7 @@ class VirtualBoxProvider:
                 "controlvm",
                 name,
                 "keyboardputstring",
-                "autoinstall ---",
+                "autoinstall ds=nocloud",
             ]
         )
 
@@ -2005,6 +2005,27 @@ class VirtualBoxProvider:
                 in self.list_host_only_interfaces()
             ],
         }
+
+    def configure_nat_nic(
+        self,
+        name: str,
+        *,
+        slot: int = 1,
+    ) -> None:
+        """
+        Configure a VirtualBox NIC for NAT Internet access.
+        """
+
+        self._run(
+            [
+                "modifyvm",
+                name,
+                f"--nic{slot}",
+                "nat",
+                f"--cableconnected{slot}",
+                "on",
+            ]
+        )
 
 
 # ---------------------------------------------------------------------------

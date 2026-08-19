@@ -168,6 +168,23 @@ def create_machine(
         seed_iso=seed_iso_path,
     )
 
+    internet = network.get("internet", {})
+
+    if internet.get("enabled", False):
+        slot = int(
+            internet.get("slot", 1)
+        )
+
+        provider.configure_nat_nic(
+            name,
+            slot=slot,
+        )
+
+        print(
+            f"      -> internet NIC slot "
+            f"{slot}: NAT"
+        )
+
     management = network.get("management", {})
 
     if management.get("enabled", True):

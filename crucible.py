@@ -18,8 +18,19 @@ from crucible.cli.create_machine import create_machine
 
 REPO_ROOT = Path(__file__).resolve().parent
 
-MACHINE_MANIFEST_DIR = REPO_ROOT / "manifests" / "machines"
-LAB_MANIFEST_DIR = REPO_ROOT / "manifests" / "labs"
+MACHINE_MANIFEST_DIR = (
+    REPO_ROOT
+    / ".crucible"
+    / "manifests"
+    / "machines"
+)
+
+LAB_MANIFEST_DIR = (
+    REPO_ROOT
+    / ".crucible"
+    / "manifests"
+    / "labs"
+)
 
 SUPPORTED_VM_COUNT = 1
 
@@ -458,10 +469,15 @@ def build_machine_manifest(
             "disk_gb": hardware["disk_gb"],
         },
         "network": {
-            "management": {
+            "internet": {
                 "enabled": True,
                 "slot": 1,
-            }
+                "mode": "nat",
+            },
+            "management": {
+                "enabled": True,
+                "slot": 2,
+            },
         },
         "autoinstall": autoinstall,
         "start": {

@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
-
+import base64
 import yaml
 
 
@@ -270,6 +270,46 @@ def build_seed_iso(
     user_data_path = build_dir / "user-data"
     meta_data_path = build_dir / "meta-data"
 
+    bootstrap_path = (
+        repo_root
+        / "installers"
+        / "linux"
+        / "common"
+        / "bootstrap.sh"
+    )
+
+    if not bootstrap_path.is_file():
+        raise UbuntuAutoinstallError(
+            f"Linux bootstrap script not found: "
+            f"{bootstrap_path}"
+        )
+
+    bootstrap_bytes = bootstrap_path.read_bytes()
+
+    bootstrap_base64 = base64.b64encode(
+        bootstrap_bytes
+    ).decode("ascii")
+
+    late_commands = [
+        (
+            "printf '%s' "
+            f"'{bootstrap_base64}' "
+            "| base64 -d "
+            "> /target/usr/local/sbin/"
+            "crucible-bootstrap.sh"
+        ),
+        (
+            "chmod 0755 "
+            "/target/usr/local/sbin/"
+            "crucible-bootstrap.sh"
+        ),
+        (
+            "curtin in-target -- "
+            "/usr/local/sbin/"
+            "crucible-bootstrap.sh"
+        ),
+    ]
+
     context = {
         "instance_id": f"crucible-{machine_name}",
         "hostname": autoinstall.get(
@@ -322,6 +362,7 @@ def build_seed_iso(
             "shutdown",
             "reboot",
         ),
+        "late_commands": late_commands,
     }
 
     _render_template(
