@@ -63,8 +63,7 @@ group_vars/*/secrets.yml
 images/iso/*.iso
 
 # Crucible runtime state
-.crucible/image-index.json
-.crucible/vms/*.vdi
+.crucible/
 
 # VM disk formats
 *.vdi
