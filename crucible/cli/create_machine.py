@@ -11,6 +11,9 @@ from crucible.provisioning.ubuntu_autoinstall import (
     UbuntuAutoinstallError,
     build_seed_iso,
 )
+from crucible.validation.hardware import (
+    validate_machine_hardware,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +49,10 @@ def load_machine_manifest(path: Path) -> dict[str, Any]:
                 f"Manifest is missing required field: {key}"
             )
 
+    validate_machine_hardware(
+        manifest
+    )
+    
     return manifest
 
 
@@ -102,34 +109,103 @@ def create_machine(
     *,
     verbose: bool = False,
 ) -> None:
-    manifest = load_machine_manifest(manifest_path)
+    manifest = load_machine_manifest(
+        manifest_path
+    )
 
-    name = str(manifest["name"])
-    profile_name = str(manifest["profile"])
-    image_id = str(manifest["image_id"])
+    name = str(
+        manifest["name"]
+    )
 
-    resources = manifest.get("resources", {})
-    network = manifest.get("network", {})
-    start = manifest.get("start", {})
-    autoinstall = manifest.get("autoinstall", {})
+    profile_name = str(
+        manifest["profile"]
+    )
 
-    print(f"[1/6] Loading OS profile: {profile_name}")
+    image_id = str(
+        manifest["image_id"]
+    )
 
-    profile = load_os_profile(profile_name)
+    # ---------------------------------------------------------
+    # Machine manifest sections
+    # ---------------------------------------------------------
 
-    print(f"[2/6] Resolving installation ISO: {image_id}")
+    resources = manifest.get(
+        "resources",
+        {},
+    )
 
-    iso_path = resolve_iso(image_id)
+    machine_vbox = manifest.get(
+        "virtualbox",
+        {},
+    )
 
-    print(f"      -> {iso_path}")
+    machine_graphics = machine_vbox.get(
+        "graphics",
+        {},
+    )
+
+    network = manifest.get(
+        "network",
+        {},
+    )
+
+    autoinstall = manifest.get(
+        "autoinstall",
+        {},
+    )
+
+    start = manifest.get(
+        "start",
+        {},
+    )
+
+    # ---------------------------------------------------------
+    # Load OS profile
+    # ---------------------------------------------------------
+
+    print(
+        f"[1/6] Loading OS profile: "
+        f"{profile_name}"
+    )
+
+    profile = load_os_profile(
+        profile_name
+    )
+
+    # ---------------------------------------------------------
+    # Resolve installation ISO
+    # ---------------------------------------------------------
+
+    print(
+        f"[2/6] Resolving installation ISO: "
+        f"{image_id}"
+    )
+
+    iso_path = resolve_iso(
+        image_id
+    )
+
+    print(
+        f"      -> {iso_path}"
+    )
+
+    # ---------------------------------------------------------
+    # Generate unattended-install seed
+    # ---------------------------------------------------------
 
     seed_iso_path: Path | None = None
 
-    if isinstance(autoinstall, dict) and autoinstall.get(
-        "enabled",
-        False,
+    if (
+        isinstance(autoinstall, dict)
+        and autoinstall.get(
+            "enabled",
+            False,
+        )
     ):
-        print("[3/6] Generating Ubuntu autoinstall seed")
+        print(
+            "[3/6] Generating Ubuntu "
+            "autoinstall seed"
+        )
 
         seed_iso_path = build_seed_iso(
             manifest,
@@ -137,25 +213,77 @@ def create_machine(
             verbose=verbose,
         )
 
-        print(f"      -> {seed_iso_path}")
+        print(
+            f"      -> {seed_iso_path}"
+        )
+
     else:
-        print("[3/6] Autoinstall disabled")
+        print(
+            "[3/6] Autoinstall disabled"
+        )
+
+    # ---------------------------------------------------------
+    # Initialize VirtualBox provider
+    # ---------------------------------------------------------
 
     provider = VirtualBoxProvider(
         verbose=verbose
     )
 
-    print(f"[4/6] Creating VM: {name}")
+    # ---------------------------------------------------------
+    # Create VM and primary disk
+    # ---------------------------------------------------------
 
-    disk_path = provider.create_vm_from_profile(
-        name=name,
-        profile=profile,
-        cpus=resources.get("cpus"),
-        memory_mb=resources.get("memory_mb"),
-        disk_gb=resources.get("disk_gb"),
+    print(
+        f"[4/6] Creating VM: {name}"
     )
 
-    print(f"      -> disk: {disk_path}")
+    disk_path = (
+        provider.create_vm_from_profile(
+            name=name,
+            profile=profile,
+
+            cpus=resources.get(
+                "cpus"
+            ),
+
+            memory_mb=resources.get(
+                "memory_mb"
+            ),
+
+            disk_gb=resources.get(
+                "disk_gb"
+            ),
+
+            firmware=machine_vbox.get(
+                "firmware"
+            ),
+
+            graphics_controller=(
+                machine_graphics.get(
+                    "controller"
+                )
+            ),
+
+            vram_mb=machine_graphics.get(
+                "vram_mb"
+            ),
+
+            accelerate_3d=(
+                machine_graphics.get(
+                    "accelerate_3d"
+                )
+            ),
+        )
+    )
+
+    print(
+        f"      -> disk: {disk_path}"
+    )
+
+    # ---------------------------------------------------------
+    # Installation media
+    # ---------------------------------------------------------
 
     print(
         "[5/6] Attaching installation media "
@@ -168,11 +296,24 @@ def create_machine(
         seed_iso=seed_iso_path,
     )
 
-    internet = network.get("internet", {})
+    # ---------------------------------------------------------
+    # NIC 1 - temporary NAT / internet
+    # ---------------------------------------------------------
 
-    if internet.get("enabled", False):
+    internet = network.get(
+        "internet",
+        {},
+    )
+
+    if internet.get(
+        "enabled",
+        False,
+    ):
         slot = int(
-            internet.get("slot", 1)
+            internet.get(
+                "slot",
+                1,
+            )
         )
 
         provider.configure_nat_nic(
@@ -185,11 +326,24 @@ def create_machine(
             f"{slot}: NAT"
         )
 
-    management = network.get("management", {})
+    # ---------------------------------------------------------
+    # NIC 2 - Crucible management / Ansible
+    # ---------------------------------------------------------
 
-    if management.get("enabled", True):
+    management = network.get(
+        "management",
+        {},
+    )
+
+    if management.get(
+        "enabled",
+        True,
+    ):
         slot = int(
-            management.get("slot", 1)
+            management.get(
+                "slot",
+                2,
+            )
         )
 
         interface = (
@@ -201,20 +355,69 @@ def create_machine(
 
         print(
             f"      -> management NIC slot "
-            f"{slot}: {interface}"
+            f"{slot}: {interface.name}"
         )
 
-    if start.get("enabled", True):
+    # ---------------------------------------------------------
+    # NIC 3+ - user-defined internal networks
+    # ---------------------------------------------------------
+
+    internal_networks = network.get(
+        "internal",
+        [],
+    )
+
+    for index, internal in enumerate(
+        internal_networks,
+        start=3,
+    ):
+        slot = int(
+            internal.get(
+                "slot",
+                index,
+            )
+        )
+
+        network_name = str(
+            internal["name"]
+        )
+
+        provider.configure_internal_nic(
+            name,
+            slot=slot,
+            network_name=network_name,
+        )
+
+        print(
+            f"      -> internal NIC slot "
+            f"{slot}: {network_name}"
+        )
+
+    # ---------------------------------------------------------
+    # Start VM
+    # ---------------------------------------------------------
+
+    if start.get(
+        "enabled",
+        True,
+    ):
         headless = bool(
-            start.get("headless", False)
+            start.get(
+                "headless",
+                False,
+            )
         )
 
         if (
             isinstance(autoinstall, dict)
-            and autoinstall.get("enabled", False)
+            and autoinstall.get(
+                "enabled",
+                False,
+            )
         ):
             print(
-                f"[6/6] Starting unattended Ubuntu installation "
+                "[6/6] Starting unattended "
+                "Ubuntu installation "
                 f"(headless={headless})"
             )
 
@@ -225,7 +428,7 @@ def create_machine(
 
         else:
             print(
-                f"[6/6] Starting VM "
+                "[6/6] Starting VM "
                 f"(headless={headless})"
             )
 
@@ -241,7 +444,8 @@ def create_machine(
         )
 
     print(
-        f"\nMachine '{name}' created successfully."
+        f"\nMachine '{name}' "
+        "created successfully."
     )
 
 

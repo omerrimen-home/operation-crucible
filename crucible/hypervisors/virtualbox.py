@@ -643,6 +643,7 @@ class VirtualBoxProvider:
         paravirt_provider: str = "default",
         rtc_utc: bool = True,
         tpm_type: str = "none",
+        accelerate_3d: bool = False,
     ) -> None:
 
         if self.vm_exists(name):
@@ -712,6 +713,9 @@ class VirtualBoxProvider:
                     "--graphicscontroller",
                     graphics_controller,
 
+                    "--accelerate-3d",
+                    "on" if accelerate_3d else "off",
+                    
                     "--paravirtprovider",
                     paravirt_provider,
 
@@ -759,6 +763,10 @@ class VirtualBoxProvider:
         cpus: int | None = None,
         memory_mb: int | None = None,
         disk_gb: int | None = None,
+        firmware: str | None = None,
+        graphics_controller: str | None = None,
+        vram_mb: int | None = None,
+        accelerate_3d: bool | None = None,
     ) -> Path:
 
         defaults = profile.get(
@@ -805,22 +813,43 @@ class VirtualBoxProvider:
                     2048,
                 )
             ),
-            firmware=vbox.get(
-                "firmware",
-                "efi",
-            ),
             chipset=vbox.get(
                 "chipset",
                 "piix3",
             ),
-            graphics_controller=graphics.get(
-                "controller",
-                "vmsvga",
+            firmware=(
+                firmware
+                if firmware is not None
+                else vbox.get(
+                    "firmware",
+                    "efi",
+                )
             ),
+
+            graphics_controller=(
+                graphics_controller
+                if graphics_controller is not None
+                else graphics.get(
+                    "controller",
+                    "vmsvga",
+                )
+            ),
+
             vram_mb=int(
-                graphics.get(
+                vram_mb
+                if vram_mb is not None
+                else graphics.get(
                     "vram_mb",
                     32,
+                )
+            ),
+
+            accelerate_3d=bool(
+                accelerate_3d
+                if accelerate_3d is not None
+                else graphics.get(
+                    "accelerate_3d",
+                    False,
                 )
             ),
             ioapic=bool(

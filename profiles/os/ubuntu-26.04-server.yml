@@ -20,7 +20,7 @@ installer:
 defaults:
   cpus: 2
   memory_mb: 2048
-  disk_gb: 30
+  disk_gb: 20
 
 management:
   transport: ssh

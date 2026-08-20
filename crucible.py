@@ -50,11 +50,23 @@ SUPPORTED_OPERATING_SYSTEMS = {
     }
 }
 
-DEFAULT_HARDWARE = {
-    "cpus": 2,
-    "memory_mb": 2048,
-    "disk_gb": 20,
-}
+from crucible.cli.create_machine import (
+    create_machine,
+    load_os_profile,
+)
+
+from crucible.validation.hardware import (
+    CPU_MIN,
+    CPU_MAX,
+    MEMORY_MB_MIN,
+    MEMORY_MB_MAX,
+    DISK_GB_MIN,
+    DISK_GB_MAX,
+    VRAM_MB_MIN,
+    VRAM_MB_MAX,
+    GRAPHICS_CONTROLLERS,
+    MAX_INTERNAL_NICS,
+)
 
 DEFAULT_AUTOINSTALL = {
     "realname": "Crucible User",
@@ -190,31 +202,239 @@ def ask_operating_system() -> dict[str, Any]:
         )
 
 
-def ask_hardware_defaults() -> dict[str, int]:
+def ask_hardware_defaults(
+    os_info: dict[str, Any],
+) -> dict[str, Any]:
+    profile = load_os_profile(
+        str(os_info["profile"])
+    )
+
+    defaults = profile.get(
+        "defaults",
+        {},
+    )
+
+    virtualbox = profile.get(
+        "virtualbox",
+        {},
+    )
+
+    graphics = virtualbox.get(
+        "graphics",
+        {},
+    )
+
+    hardware = {
+        "cpus": int(
+            defaults.get("cpus", 2)
+        ),
+        "memory_mb": int(
+            defaults.get("memory_mb", 2048)
+        ),
+        "disk_gb": int(
+            defaults.get("disk_gb", 20)
+        ),
+        "firmware": str(
+            virtualbox.get("firmware", "efi")
+        ),
+        "graphics_controller": str(
+            graphics.get(
+                "controller",
+                "vmsvga",
+            )
+        ),
+        "vram_mb": int(
+            graphics.get("vram_mb", 32)
+        ),
+        "accelerate_3d": bool(
+            graphics.get(
+                "accelerate_3d",
+                False,
+            )
+        ),
+        "internal_networks": [],
+    }
+
     print()
     print(f"{BOLD}VM hardware defaults:{RESET}")
     print()
-    print(f"  CPUs        : {DEFAULT_HARDWARE['cpus']}")
-    print(f"  Memory      : {DEFAULT_HARDWARE['memory_mb']} MB")
-    print(f"  Virtual disk: {DEFAULT_HARDWARE['disk_gb']} GB")
-    print("  Disk type   : Dynamically allocated VDI")
-    print("  Networks    : Crucible management network + NAT temporary internet access")
+
+    print(
+        f"  CPUs               : "
+        f"{hardware['cpus']}"
+    )
+    print(
+        f"  Memory             : "
+        f"{hardware['memory_mb']} MB"
+    )
+    print(
+        f"  Virtual disk       : "
+        f"{hardware['disk_gb']} GB"
+    )
+    print(
+        f"  Video memory       : "
+        f"{hardware['vram_mb']} MB"
+    )
+    print(
+        f"  Firmware           : "
+        f"{hardware['firmware'].upper()}"
+    )
+    print(
+        f"  Graphics controller: "
+        f"{hardware['graphics_controller']}"
+    )
+    print(
+        f"  3D acceleration    : "
+        f"{'yes' if hardware['accelerate_3d'] else 'no'}"
+    )
+
+    print(
+        "  NIC 1              : "
+        "NAT provisioning/internet"
+    )
+    print(
+        "  NIC 2              : "
+        "Crucible management"
+    )
+    print(
+        "  Additional NICs    : none"
+    )
+
+    print()
+    print(
+        "  Disk type          : "
+        "Dynamically allocated VDI"
+    )
     print()
 
-    while True:
-        if ask_yes_no(
-            f"{BOLD}Use VM hardware defaults?{RESET}",
-            default=True,
-        ):
-            return dict(DEFAULT_HARDWARE)
+    if ask_yes_no(
+        f"{BOLD}Use VM hardware defaults?{RESET}",
+        default=True,
+    ):
+        return hardware
 
-        print()
-        print(
-            f"{RED}Custom VM hardware is not exposed in Crucible "
-            f"v0.1 yet.{RESET}"
+    print()
+    print(
+        f"{BOLD}Custom VM hardware{RESET}"
+    )
+    print()
+
+    hardware["cpus"] = ask_int_with_default(
+        "CPUs",
+        hardware["cpus"],
+        minimum=CPU_MIN,
+        maximum=CPU_MAX,
+    )
+
+    hardware["memory_mb"] = ask_int_with_default(
+        "Memory (MB)",
+        hardware["memory_mb"],
+        minimum=MEMORY_MB_MIN,
+        maximum=MEMORY_MB_MAX,
+    )
+
+    hardware["disk_gb"] = ask_int_with_default(
+        "Virtual disk (GB)",
+        hardware["disk_gb"],
+        minimum=DISK_GB_MIN,
+        maximum=DISK_GB_MAX,
+    )
+
+    hardware["vram_mb"] = ask_int_with_default(
+        "Video memory (MB)",
+        hardware["vram_mb"],
+        minimum=VRAM_MB_MIN,
+        maximum=VRAM_MB_MAX,
+    )
+
+    use_efi = ask_yes_no(
+        "Use EFI firmware?",
+        default=(
+            hardware["firmware"] != "bios"
+        ),
+    )
+
+    hardware["firmware"] = (
+        "efi"
+        if use_efi
+        else "bios"
+    )
+
+    hardware["graphics_controller"] = (
+        ask_choice(
+            "Graphics controller",
+            hardware["graphics_controller"],
+            GRAPHICS_CONTROLLERS,
         )
-        print("The default hardware configuration must currently be used.")
-        print()
+    )
+
+    if (
+        hardware["graphics_controller"]
+        == "vboxvga"
+    ):
+        hardware["accelerate_3d"] = False
+
+        print(
+            f"{YELLOW}"
+            "3D acceleration disabled because "
+            "VBoxVGA is the legacy controller."
+            f"{RESET}"
+        )
+
+    else:
+        hardware["accelerate_3d"] = (
+            ask_yes_no(
+                "Enable 3D acceleration?",
+                default=hardware[
+                    "accelerate_3d"
+                ],
+            )
+        )
+
+    internal_count = ask_int_with_default(
+        "Additional internal networks",
+        0,
+        minimum=0,
+        maximum=MAX_INTERNAL_NICS,
+    )
+
+    internal_networks: list[str] = []
+
+    for number in range(
+        1,
+        internal_count + 1,
+    ):
+        while True:
+            network_name = input(
+                f"Internal network {number} name: "
+            ).strip()
+
+            if not network_name:
+                print(
+                    f"{RED}"
+                    "Network name cannot be empty."
+                    f"{RESET}"
+                )
+                continue
+
+            if network_name in internal_networks:
+                print(
+                    f"{RED}"
+                    "Network names must be unique."
+                    f"{RESET}"
+                )
+                continue
+
+            internal_networks.append(
+                network_name
+            )
+            break
+
+    hardware["internal_networks"] = (
+        internal_networks
+    )
+
+    return hardware
 
 
 def detect_ssh_public_key() -> str | None:
@@ -461,7 +681,7 @@ def ask_autoinstall(
 
 def build_machine_manifest(
     os_info: dict[str, Any],
-    hardware: dict[str, int],
+    hardware: dict[str, Any],
     autoinstall: dict[str, Any],
 ) -> dict[str, Any]:
     return {
@@ -474,17 +694,43 @@ def build_machine_manifest(
             "memory_mb": hardware["memory_mb"],
             "disk_gb": hardware["disk_gb"],
         },
+
+        "virtualbox": {
+            "firmware": hardware["firmware"],
+            "graphics": {
+                "controller": hardware[
+                    "graphics_controller"
+                ],
+                "vram_mb": hardware["vram_mb"],
+                "accelerate_3d": hardware[
+                    "accelerate_3d"
+                ],
+            },
+        },
+
         "network": {
             "internet": {
                 "enabled": True,
                 "slot": 1,
                 "mode": "nat",
             },
+
             "management": {
                 "enabled": True,
                 "slot": 2,
                 "address": "172.31.255.10/24",
             },
+
+            "internal": [
+                {
+                    "name": network_name,
+                    "slot": slot,
+                }
+                for slot, network_name in enumerate(
+                    hardware["internal_networks"],
+                    start=3,
+                )
+            ],
         },
         "autoinstall": autoinstall,
         "start": {
@@ -888,13 +1134,73 @@ def verify_machine_ready(
         inventory_path=inventory_path,
     )
 
+def ask_int_with_default(
+    prompt: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    while True:
+        answer = input(
+            f"{prompt} [{default}]: "
+        ).strip()
+
+        if not answer:
+            return default
+
+        try:
+            value = int(answer)
+        except ValueError:
+            print(
+                f"{RED}Please enter a whole number.{RESET}"
+            )
+            continue
+
+        if value < minimum or value > maximum:
+            print(
+                f"{RED}Value must be between "
+                f"{minimum} and {maximum}.{RESET}"
+            )
+            continue
+
+        return value
+
+def ask_choice(
+    prompt: str,
+    default: str,
+    choices: set[str],
+) -> str:
+    choices_text = "/".join(
+        sorted(choices)
+    )
+
+    while True:
+        answer = input(
+            f"{prompt} [{default}] "
+            f"({choices_text}): "
+        ).strip().lower()
+
+        if not answer:
+            return default
+
+        if answer in choices:
+            return answer
+
+        print(
+            f"{RED}Choose one of: "
+            f"{choices_text}.{RESET}"
+        )
+
 def main() -> int:
     try:
         show_banner()
 
         vm_count = ask_vm_count()
         os_info = ask_operating_system()
-        hardware = ask_hardware_defaults()
+        hardware = ask_hardware_defaults(
+            os_info
+        )
 
         if vm_count != SUPPORTED_VM_COUNT:
             raise CrucibleForgeError(
