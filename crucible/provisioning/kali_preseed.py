@@ -263,6 +263,30 @@ def build_preseed(
         .decode("ascii")
     )
 
+    bootstrap_service = (
+        "[Unit]\n"
+        "Description=Operation Crucible First-Boot Bootstrap\n"
+        "Wants=network-online.target\n"
+        "After=network-online.target\n"
+        "ConditionPathExists=!/var/lib/crucible/bootstrap-complete\n"
+        "\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        "ExecStart=/usr/local/sbin/crucible-bootstrap.sh\n"
+        "RemainAfterExit=yes\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=multi-user.target\n"
+    )
+
+    bootstrap_service_base64 = (
+        base64.b64encode(
+            bootstrap_service.encode(
+                "utf-8"
+            )
+        )
+        .decode("ascii")
+
     nat_connection_uuid = str(
         uuid.uuid4()
     )
@@ -388,12 +412,6 @@ def build_preseed(
             "/usr/local/sbin/"
             "crucible-bootstrap.sh"
         ),
-
-        (
-            "in-target "
-            "/usr/local/sbin/"
-            "crucible-bootstrap.sh"
-        ),
     ]
 
     authorized_keys = list(
@@ -459,6 +477,50 @@ def build_preseed(
                 ),
             ]
         )
+
+    late_commands.extend(
+        [
+            (
+                "in-target ssh-keygen -A"
+            ),
+
+            (
+                "in-target systemctl enable "
+                "ssh.service"
+            ),
+
+            (
+                "in-target /bin/sh -c "
+                "\"printf '%s' "
+                f"'{bootstrap_service_base64}' "
+                "| base64 -d "
+                "> /etc/systemd/system/"
+                "crucible-bootstrap.service\""
+            ),
+
+            (
+                "in-target chmod 0644 "
+                "/etc/systemd/system/"
+                "crucible-bootstrap.service"
+            ),
+
+            (
+                "in-target systemctl enable "
+                "crucible-bootstrap.service"
+            ),
+
+            (
+                "in-target mkdir -p "
+                "/var/lib/crucible"
+            ),
+
+            (
+                "in-target touch "
+                "/var/lib/crucible/"
+                "preseed-late-command-complete"
+            ),
+        ]
+    )
 
     locale = str(
         unattended.get(

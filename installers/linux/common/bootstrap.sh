@@ -43,14 +43,13 @@ PasswordAuthentication yes
 PermitRootLogin no
 EOF
 
-systemctl enable ssh.service
+systemctl enable --now ssh.service
 
 echo "[5/5] Marking bootstrap complete..."
 
 date --iso-8601=seconds > "$MARKER_FILE"
 
 echo
-echo "Crucible bootstrap complete."
 echo "SSH enabled."
 echo "Python available for Ansible."
 
