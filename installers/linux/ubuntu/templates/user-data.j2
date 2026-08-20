@@ -1,7 +1,10 @@
 #cloud-config
 autoinstall:
   version: 1
-
+{% if source_id %}
+  source:
+    id: {{ source_id | yaml_string }}
+{% endif %}
   refresh-installer:
     update: false
 

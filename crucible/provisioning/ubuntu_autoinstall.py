@@ -327,6 +327,15 @@ def build_seed_iso(
 
     context = {
         "instance_id": f"crucible-{machine_name}",
+        "source_id": (
+            str(
+                autoinstall.get(
+                    "source_id",
+                    "",
+                )
+            ).strip()
+            or None
+        ),
         "hostname": autoinstall.get(
             "hostname",
             machine_name,

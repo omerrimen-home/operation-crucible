@@ -13,8 +13,22 @@ from typing import Any
 import socket
 import yaml
 import time
-from crucible.cli.create_machine import create_machine
-
+from crucible.cli.create_machine import (
+    create_machine,
+    load_os_profile,
+)
+from crucible.validation.hardware import (
+    CPU_MIN,
+    CPU_MAX,
+    MEMORY_MB_MIN,
+    MEMORY_MB_MAX,
+    DISK_GB_MIN,
+    DISK_GB_MAX,
+    VRAM_MB_MIN,
+    VRAM_MB_MAX,
+    GRAPHICS_CONTROLLERS,
+    MAX_INTERNAL_NICS,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -47,26 +61,16 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "profile": "ubuntu-26.04-server",
         "image_id": "ubuntu-26.04-server",
         "default_vm_name": "ubuntu-server-01",
-    }
+    },
+
+    "2": {
+        "name": "Ubuntu Desktop",
+        "version": "26.04",
+        "profile": "ubuntu-26.04-desktop",
+        "image_id": "ubuntu-26.04-desktop",
+        "default_vm_name": "ubuntu-desktop-01",
+    },
 }
-
-from crucible.cli.create_machine import (
-    create_machine,
-    load_os_profile,
-)
-
-from crucible.validation.hardware import (
-    CPU_MIN,
-    CPU_MAX,
-    MEMORY_MB_MIN,
-    MEMORY_MB_MAX,
-    DISK_GB_MIN,
-    DISK_GB_MAX,
-    VRAM_MB_MIN,
-    VRAM_MB_MAX,
-    GRAPHICS_CONTROLLERS,
-    MAX_INTERNAL_NICS,
-)
 
 DEFAULT_AUTOINSTALL = {
     "realname": "Crucible User",
@@ -684,6 +688,29 @@ def build_machine_manifest(
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
 ) -> dict[str, Any]:
+
+    profile = load_os_profile(
+        str(os_info["profile"])
+    )
+
+    installer = profile.get(
+        "installer",
+        {},
+    )
+
+    resolved_autoinstall = dict(
+        autoinstall
+    )
+
+    source_id = installer.get(
+        "source_id"
+    )
+
+    if source_id:
+        resolved_autoinstall[
+            "source_id"
+        ] = str(source_id)
+
     return {
         "schema_version": 1,
         "name": os_info["default_vm_name"],
@@ -732,7 +759,7 @@ def build_machine_manifest(
                 )
             ],
         },
-        "autoinstall": autoinstall,
+        "autoinstall": resolved_autoinstall,
         "start": {
             "enabled": True,
             "headless": False,
@@ -783,7 +810,7 @@ def write_yaml(
 
 def generate_manifests(
     os_info: dict[str, Any],
-    hardware: dict[str, int],
+    hardware: dict[str, Any],
     autoinstall: dict[str, Any],
 ) -> tuple[Path, Path]:
     vm_name = os_info["default_vm_name"]

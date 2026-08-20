@@ -229,14 +229,17 @@ class VirtualBoxProvider:
         *,
         headless: bool = False,
         boot_delay_seconds: float = 3.0,
+        flavor: str = "server",
     ) -> None:
         """
-        Start an Ubuntu Server installer and automatically add the
+        Start an Ubuntu installer and automatically add the
         'autoinstall' kernel argument at the GRUB boot menu.
 
-        This is intentionally a VirtualBox-specific boot automation
-        mechanism. The actual autoinstall configuration still comes
-        from the attached NoCloud CIDATA seed ISO.
+        Server and Desktop currently have slightly different
+        kernel command lines, so their edit sequences differ.
+
+        The actual autoinstall configuration comes from the
+        attached NoCloud CIDATA seed ISO.
         """
 
         self.start_vm(
@@ -295,29 +298,65 @@ class VirtualBoxProvider:
             ]
         )
 
-        # Delete the existing "---".
-        for _ in range(4):
+        if flavor == "server":
+
+            # Known-good Ubuntu Server path.
+            #
+            # Server's kernel line ends with:
+            #
+            #   ---
+            #
+            # Remove it and replace it with the
+            # autoinstall arguments.
+
+            for _ in range(4):
+                self._run(
+                    [
+                        "controlvm",
+                        name,
+                        "keyboardputscancode",
+                        "0e",
+                        "8e",
+                    ]
+                )
+
             self._run(
                 [
                     "controlvm",
                     name,
-                    "keyboardputscancode",
-                    "0e",
-                    "8e",
+                    "keyboardputstring",
+                    "autoinstall ds=nocloud",
                 ]
             )
-    
-        # Replace it with:
-        #
-        # autoinstall ---
-        self._run(
-            [
-                "controlvm",
-                name,
-                "keyboardputstring",
-                "autoinstall ds=nocloud",
-            ]
-        )
+
+        elif flavor == "desktop":
+
+            # Ubuntu Desktop 26.04's kernel line
+            # contains:
+            #
+            #   --- quiet splash
+            #
+            # Preserve the existing arguments and
+            # simply append the zero-touch flag.
+            #
+            # The attached CIDATA volume supplies
+            # the NoCloud configuration.
+
+            self._run(
+                [
+                    "controlvm",
+                    name,
+                    "keyboardputstring",
+                    " autoinstall",
+                ]
+            )
+
+        else:
+            raise VirtualBoxConfigurationError(
+                f"Unsupported Ubuntu flavor "
+                f"for autoinstall boot automation: "
+                f"{flavor}"
+            )
 
         time.sleep(0.25)
 

@@ -16,6 +16,7 @@ installer:
   backend: ubuntu-autoinstall
   template_directory: installers/linux/ubuntu/templates
   bootstrap_script: installers/linux/common/bootstrap.sh
+  source_id: ubuntu-desktop
 
 defaults:
   cpus: 2

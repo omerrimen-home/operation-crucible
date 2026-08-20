@@ -171,7 +171,17 @@ def create_machine(
     profile = load_os_profile(
         profile_name
     )
+    profile_os = profile.get(
+        "os",
+        {},
+    )
 
+    os_flavor = str(
+        profile_os.get(
+            "flavor",
+            "",
+        )
+    ).lower()
     # ---------------------------------------------------------
     # Resolve installation ISO
     # ---------------------------------------------------------
@@ -424,6 +434,7 @@ def create_machine(
             provider.start_ubuntu_autoinstall(
                 name,
                 headless=headless,
+                flavor=os_flavor,
             )
 
         else:
