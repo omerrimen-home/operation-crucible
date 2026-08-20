@@ -77,6 +77,13 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "image_id": "ubuntu-26.04-desktop",
         "vm_name_prefix": "ubuntu-desktop",
     },
+    "3": {
+        "name": "Kali Linux",
+        "version": "Rolling",
+        "profile": "kali-rolling",
+        "image_id": "kali-rolling",
+        "vm_name_prefix": "kali",
+    },
 }
 
 DEFAULT_AUTOINSTALL = {
@@ -669,7 +676,7 @@ def show_autoinstall_defaults(
     detected_key: str | None,
 ) -> None:
     print()
-    print(f"{BOLD}Ubuntu autoinstall defaults:{RESET}")
+    print(f"{BOLD}Autoinstall defaults:{RESET}")
     print()
     print(f"  Guest Hostname  : {vm_name}")
     print(f"  User            : {DEFAULT_AUTOINSTALL['username']}")
@@ -698,7 +705,7 @@ def ask_autoinstall(
     show_autoinstall_defaults(vm_name, detected_key)
 
     use_defaults = ask_yes_no(
-        f"{BOLD}Use Ubuntu autoinstall defaults?{RESET}",
+        f"{BOLD}Use Autoinstall Defaults?{RESET}",
         default=True,
     )
 

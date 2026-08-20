@@ -67,7 +67,12 @@ def load_os_profile(profile_name: str) -> dict[str, Any]:
     return load_yaml(profile_path)
 
 
-def resolve_iso(image_id: str) -> Path:
+def resolve_iso(
+    image_id: str,
+    *,
+    expected_media_type: str | None = None,
+) -> Path:
+    
     scan, _ = scan_images(IMAGE_CONFIG)
 
     records = (
@@ -76,11 +81,40 @@ def resolve_iso(image_id: str) -> Path:
         .get(image_id, [])
     )
 
+    if expected_media_type is not None:
+        wanted = (
+            expected_media_type
+            .strip()
+            .lower()
+        )
+
+        records = [
+            record
+            for record in records
+            if str(
+                record.get(
+                    "media_type",
+                    "",
+                )
+            ).strip().lower()
+            == wanted
+        ]
+
     if not records:
+        if expected_media_type:
+            raise CrucibleError(
+                f"No '{expected_media_type}' ISO "
+                f"recognized for image_id "
+                f"'{image_id}'."
+            )
+
         raise CrucibleError(
-            f"No ISO recognized for image_id '{image_id}'. "
+            f"No ISO recognized for image_id "
+            f"'{image_id}'. "
             "Run: "
-            "python3 -m crucible.provisioning.image_detector --json"
+            "python3 -m "
+            "crucible.provisioning.image_detector "
+            "--json"
         )
 
     if len(records) > 1:
@@ -171,6 +205,23 @@ def create_machine(
     profile = load_os_profile(
         profile_name
     )
+
+    installer = profile.get(
+        "installer",
+        {},
+    )
+
+    installer_backend = str(
+        installer.get(
+            "backend",
+            "",
+        )
+    ).strip().lower()
+
+    expected_media_type = installer.get(
+        "media_type"
+    )
+
     profile_os = profile.get(
         "os",
         {},
@@ -192,7 +243,12 @@ def create_machine(
     )
 
     iso_path = resolve_iso(
-        image_id
+        image_id,
+        expected_media_type=(
+            str(expected_media_type)
+            if expected_media_type
+            else None
+        ),
     )
 
     print(

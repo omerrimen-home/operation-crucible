@@ -1,0 +1,136 @@
+# Operation Crucible
+# Kali Linux unattended installation
+
+# ------------------------------------------------------------
+# Locale / keyboard
+# ------------------------------------------------------------
+
+d-i debian-installer/language string en
+d-i debian-installer/country string {{ country }}
+d-i debian-installer/locale string {{ locale }}
+
+d-i localechooser/shortlist select {{ country }}
+d-i localechooser/preferred-locale select {{ locale }}
+d-i localechooser/languagelist select en
+
+d-i keyboard-configuration/xkb-keymap select {{ keyboard_layout }}
+d-i console-keymaps-at/keymap select {{ keyboard_layout }}
+
+# ------------------------------------------------------------
+# Networking
+#
+# NIC 1 / eth0 is Crucible's temporary NAT interface.
+# NIC 2 / eth1 is configured by the late command for the
+# permanent Crucible management network.
+# ------------------------------------------------------------
+
+d-i netcfg/choose_interface select eth0
+
+d-i netcfg/get_hostname string {{ hostname }}
+d-i netcfg/get_domain string unassigned-domain
+
+d-i netcfg/wireless_wep string
+
+# ------------------------------------------------------------
+# Kali repository
+# ------------------------------------------------------------
+
+d-i mirror/country string manual
+d-i mirror/http/hostname string http.kali.org
+d-i mirror/http/directory string /kali
+d-i mirror/http/proxy string
+
+d-i apt-setup/use_mirror boolean true
+d-i apt-setup/non-free boolean true
+d-i apt-setup/contrib boolean true
+d-i apt-setup/disable-cdrom-entries boolean true
+d-i apt-setup/enable-source-repositories boolean false
+
+# ------------------------------------------------------------
+# Identity
+# ------------------------------------------------------------
+
+d-i passwd/root-login boolean false
+
+d-i passwd/user-fullname string {{ realname }}
+d-i passwd/username string {{ username }}
+
+d-i passwd/user-password-crypted password {{ password_hash }}
+
+d-i passwd/user-default-groups string audio cdrom video sudo netdev plugdev users
+
+# ------------------------------------------------------------
+# Clock
+# ------------------------------------------------------------
+
+d-i clock-setup/utc boolean true
+d-i time/zone string {{ timezone }}
+d-i clock-setup/ntp boolean true
+
+# ------------------------------------------------------------
+# Storage
+#
+# Crucible VMs use a dedicated disposable virtual disk.
+# ------------------------------------------------------------
+
+d-i partman-auto/disk string /dev/sda
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+
+d-i partman-partitioning/confirm_write_new_label boolean true
+
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+d-i partman-md/confirm boolean true
+
+# ------------------------------------------------------------
+# Kali package selection
+# ------------------------------------------------------------
+
+tasksel tasksel/first multiselect standard,core,desktop-xfce,meta-default
+
+d-i pkgsel/include string openssh-server python3 python3-apt sudo ca-certificates
+
+d-i pkgsel/update-policy select none
+
+popularity-contest popularity-contest/participate boolean false
+
+# Avoid interactive package configuration questions.
+
+samba-common samba-common/dhcp boolean false
+
+macchanger macchanger/automatically_run boolean false
+
+kismet-capture-common kismet-capture-common/install-users string
+kismet-capture-common kismet-capture-common/install-setuid boolean true
+
+wireshark-common wireshark-common/install-setuid boolean true
+
+sslh sslh/inetd_or_standalone select standalone
+
+atftpd atftpd/use_inetd boolean false
+
+# ------------------------------------------------------------
+# Bootloader
+# ------------------------------------------------------------
+
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean false
+d-i grub-installer/bootdev string /dev/sda
+
+# ------------------------------------------------------------
+# Crucible bootstrap
+#
+# This installs/configures SSH + Python, configures eth1,
+# and creates /var/lib/crucible/bootstrap-complete.
+# ------------------------------------------------------------
+
+d-i preseed/late_command string {{ late_command }}
+
+# ------------------------------------------------------------
+# Finish
+# ------------------------------------------------------------
+
+d-i finish-install/reboot_in_progress note

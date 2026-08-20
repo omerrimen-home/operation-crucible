@@ -16,11 +16,12 @@ installer:
   backend: debian-preseed
   template_directory: installers/linux/kali/templates
   bootstrap_script: installers/linux/common/bootstrap.sh
+  media_type: installer
 
 defaults:
   cpus: 2
   memory_mb: 4096
-  disk_gb: 50
+  disk_gb: 40
 
 management:
   transport: ssh
@@ -43,6 +44,7 @@ virtualbox:
   graphics:
     controller: vmsvga
     vram_mb: 128
+    accelerate_3d: false
 
   security:
     tpm: none

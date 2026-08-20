@@ -8,7 +8,7 @@ An iso for the latest kali linux release, the latest ubuntu desktop, the latest 
 
 ## Kali Source
 
-https://www.kali.org/get-kali/#kali-installer-images
+https://www.kali.org/get-kali/#kali-installer-images - Note: Must be Kali Rolling Installer, not Kali Rolling Live.
 
 ## Ubuntu Desktop Source
 
