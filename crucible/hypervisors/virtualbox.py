@@ -30,18 +30,19 @@ Those responsibilities belong to other Crucible layers.
 """
 
 from __future__ import annotations
-
 import ipaddress
 import os
 import re
 import shutil
 import subprocess
 import time
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
-
+from crucible.networking.management import (
+    MANAGEMENT_HOST_IP as CRUCIBLE_MANAGEMENT_HOST_IP,
+    MANAGEMENT_NETMASK as CRUCIBLE_MANAGEMENT_NETMASK,
+)
 
 # ---------------------------------------------------------------------------
 # Repository paths
@@ -176,8 +177,22 @@ class VirtualBoxProvider:
     """
 
     MANAGEMENT_NETWORK_NAME = "CRUCIBLE-MGMT"
-    MANAGEMENT_IP = "172.31.255.1"
-    MANAGEMENT_NETMASK = "255.255.255.0"
+
+    MANAGEMENT_IP = (
+        CRUCIBLE_MANAGEMENT_HOST_IP
+    )
+
+    MANAGEMENT_NETMASK = (
+        CRUCIBLE_MANAGEMENT_NETMASK
+    )
+
+    LEGACY_MANAGEMENT_IP = (
+        "172.31.255.1"
+    )
+
+    LEGACY_MANAGEMENT_NETMASK = (
+        "255.255.255.0"
+)
 
     DEFAULT_STORAGE_CONTROLLER = "SATA Controller"
     DEFAULT_STORAGE_CONTROLLER_TYPE = "IntelAHCI"
@@ -1422,9 +1437,21 @@ class VirtualBoxProvider:
         ipaddress.IPv4Address(ip_address)
         ipaddress.IPv4Address(netmask)
 
-        for interface in (
+        interfaces = (
             self.list_host_only_interfaces()
-        ):
+        )
+
+        requested_network = (
+            ipaddress.IPv4Network(
+                f"{ip_address}/{netmask}",
+                strict=False,
+            )
+        )
+
+        # First, return an already-correct
+        # Crucible management interface.
+
+        for interface in interfaces:
             if (
                 interface.ip_address
                 == ip_address
@@ -1436,6 +1463,78 @@ class VirtualBoxProvider:
                 )
 
                 return interface
+
+        # Migrate Crucible's old v0.1 management
+        # interface instead of creating an overlapping
+        # /16 host-only network.
+
+        for interface in interfaces:
+            if (
+                interface.ip_address
+                == self.LEGACY_MANAGEMENT_IP
+                and interface.network_mask
+                == self.LEGACY_MANAGEMENT_NETMASK
+            ):
+                self._run(
+                    [
+                        "hostonlyif",
+                        "ipconfig",
+                        interface.name,
+
+                        "--ip",
+                        ip_address,
+
+                        "--netmask",
+                        netmask,
+                    ]
+                )
+
+                self.disable_host_only_dhcp(
+                    interface.name
+                )
+
+                return HostOnlyInterface(
+                    name=interface.name,
+                    ip_address=ip_address,
+                    network_mask=netmask,
+                    status=interface.status,
+                )
+
+        # Refuse to create a new interface if another
+        # VirtualBox host-only network already overlaps
+        # the Crucible management /16.
+
+        for interface in interfaces:
+            if (
+                not interface.ip_address
+                or not interface.network_mask
+            ):
+                continue
+
+            try:
+                existing_network = (
+                    ipaddress.IPv4Network(
+                        (
+                            f"{interface.ip_address}/"
+                            f"{interface.network_mask}"
+                        ),
+                        strict=False,
+                    )
+                )
+            except ValueError:
+                continue
+
+            if existing_network.overlaps(
+                requested_network
+            ):
+                raise VirtualBoxConfigurationError(
+                    "Existing VirtualBox host-only "
+                    f"interface '{interface.name}' "
+                    f"uses overlapping network "
+                    f"{existing_network}. "
+                    "Crucible management requires "
+                    f"{requested_network}."
+                )
 
         before = {
             interface.name

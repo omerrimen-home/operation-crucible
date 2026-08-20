@@ -63,11 +63,7 @@ group_vars/*/secrets.yml
 images/iso/*.iso
 
 # Crucible runtime state
-<<<<<<< HEAD
 .crucible/
-=======
-.crucible
->>>>>>> 57fa412 (Upgrades, people, upgrades)
 
 # VM disk formats
 *.vdi

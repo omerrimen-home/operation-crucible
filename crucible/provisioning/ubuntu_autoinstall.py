@@ -320,10 +320,18 @@ def build_seed_iso(
         {}
     )
 
-    management_address = management_network.get(
-        "address",
-        "172.31.255.10/24",
-    )
+    management_address = str(
+        management_network.get(
+            "address",
+            "",
+        )
+    ).strip()
+
+    if not management_address:
+        raise UbuntuAutoinstallError(
+            "Machine manifest is missing "
+            "network.management.address."
+        )
 
     context = {
         "instance_id": f"crucible-{machine_name}",

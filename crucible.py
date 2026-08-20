@@ -13,6 +13,7 @@ from typing import Any
 import socket
 import yaml
 import time
+import re
 from crucible.cli.create_machine import (
     create_machine,
     load_os_profile,
@@ -28,6 +29,12 @@ from crucible.validation.hardware import (
     VRAM_MB_MAX,
     GRAPHICS_CONTROLLERS,
     MAX_INTERNAL_NICS,
+)
+from crucible.networking.management import (
+    allocate_management_address,
+)
+from crucible.hypervisors.virtualbox import (
+    VirtualBoxProvider,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -60,7 +67,7 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "version": "26.04",
         "profile": "ubuntu-26.04-server",
         "image_id": "ubuntu-26.04-server",
-        "default_vm_name": "ubuntu-server-01",
+        "vm_name_prefix": "ubuntu-server",
     },
 
     "2": {
@@ -68,7 +75,7 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "version": "26.04",
         "profile": "ubuntu-26.04-desktop",
         "image_id": "ubuntu-26.04-desktop",
-        "default_vm_name": "ubuntu-desktop-01",
+        "vm_name_prefix": "ubuntu-desktop",
     },
 }
 
@@ -205,6 +212,135 @@ def ask_operating_system() -> dict[str, Any]:
             f"by Crucible.{RESET}"
         )
 
+VM_NAME_PATTERN = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+)
+
+
+def get_reserved_vm_names() -> set[str]:
+    """
+    Return VM names that Crucible should not reuse.
+
+    Includes registered VirtualBox VMs and leftover
+    Crucible VM directories from incomplete builds.
+    """
+
+    provider = VirtualBoxProvider(
+        verbose=False
+    )
+
+    names = {
+        machine.name
+        for machine in provider.list_vms()
+    }
+
+    if provider.vm_base_folder.is_dir():
+        for path in (
+            provider.vm_base_folder.iterdir()
+        ):
+            if path.is_dir():
+                names.add(
+                    path.name
+                )
+
+    return names
+
+
+def get_default_vm_name(
+    os_info: dict[str, Any],
+    reserved_names: set[str],
+) -> str:
+    """
+    Generate the next numbered name for an OS.
+
+    Examples:
+
+        ubuntu-server-01
+        ubuntu-server-02
+        ubuntu-server-03
+    """
+
+    prefix = str(
+        os_info["vm_name_prefix"]
+    )
+
+    pattern = re.compile(
+        rf"^{re.escape(prefix)}-(\d+)$",
+        re.IGNORECASE,
+    )
+
+    highest_number = 0
+
+    for name in reserved_names:
+        match = pattern.match(
+            name
+        )
+
+        if not match:
+            continue
+
+        highest_number = max(
+            highest_number,
+            int(match.group(1)),
+        )
+
+    next_number = (
+        highest_number + 1
+    )
+
+    return (
+        f"{prefix}-"
+        f"{next_number:02d}"
+    )
+
+
+def ask_vm_name(
+    os_info: dict[str, Any],
+) -> str:
+    reserved_names = (
+        get_reserved_vm_names()
+    )
+
+    default_name = get_default_vm_name(
+        os_info,
+        reserved_names,
+    )
+
+    print()
+    print(
+        f"{BOLD}Machine identity:{RESET}"
+    )
+    print()
+
+    while True:
+        vm_name = ask_with_default(
+            "VirtualBox VM name",
+            default_name,
+        ).strip()
+
+        if not VM_NAME_PATTERN.fullmatch(
+            vm_name
+        ):
+            print(
+                f"{RED}"
+                "VM names may contain letters, "
+                "numbers, periods, underscores, "
+                "and hyphens, and must begin "
+                "with a letter or number."
+                f"{RESET}"
+            )
+            continue
+
+        if vm_name in reserved_names:
+            print(
+                f"{RED}"
+                f"A VirtualBox/Crucible machine "
+                f"named '{vm_name}' already exists."
+                f"{RESET}"
+            )
+            continue
+
+        return vm_name
 
 def ask_hardware_defaults(
     os_info: dict[str, Any],
@@ -535,22 +671,22 @@ def show_autoinstall_defaults(
     print()
     print(f"{BOLD}Ubuntu autoinstall defaults:{RESET}")
     print()
-    print(f"  Hostname        : {vm_name}")
+    print(f"  Guest Hostname  : {vm_name}")
     print(f"  User            : {DEFAULT_AUTOINSTALL['username']}")
-    print(f"  Real name       : {DEFAULT_AUTOINSTALL['realname']}")
+    print(f"  Real Name       : {DEFAULT_AUTOINSTALL['realname']}")
     print(f"  Locale          : {DEFAULT_AUTOINSTALL['locale']}")
     print(f"  Timezone        : {DEFAULT_AUTOINSTALL['timezone']}")
     print(f"  Keyboard        : {DEFAULT_AUTOINSTALL['keyboard_layout']}")
-    print(f"  Storage layout  : {DEFAULT_AUTOINSTALL['storage_layout']}")
-    print(f"  Security updates: {DEFAULT_AUTOINSTALL['updates']}")
-    print("  OpenSSH server  : yes")
-    print("  SSH password    : allowed")
-    print("  Login password  : securely generated")
+    print(f"  Storage Layout  : {DEFAULT_AUTOINSTALL['storage_layout']}")
+    print(f"  Security Updates: {DEFAULT_AUTOINSTALL['updates']}")
+    print("  OpenSSH Server  : yes")
+    print("  SSH Password    : allowed")
+    print("  Login Password  : securely generated")
 
     if detected_key:
-        print("  SSH public key  : detected and included")
+        print("  SSH Public Key  : detected and included")
     else:
-        print("  SSH public key  : none detected")
+        print("  SSH Public Key  : none detected")
 
     print()
 
@@ -609,13 +745,13 @@ def ask_autoinstall(
     print(f"{BOLD}Custom autoinstall configuration{RESET}")
     print()
 
-    hostname = ask_with_default("Hostname", vm_name)
+    hostname = ask_with_default("Guest Hostname", vm_name)
     username = ask_with_default(
         "Username",
         DEFAULT_AUTOINSTALL["username"],
     )
     realname = ask_with_default(
-        "Real name",
+        "Real Name",
         DEFAULT_AUTOINSTALL["realname"],
     )
     locale = ask_with_default(
@@ -627,7 +763,7 @@ def ask_autoinstall(
         DEFAULT_AUTOINSTALL["timezone"],
     )
     keyboard_layout = ask_with_default(
-        "Keyboard layout",
+        "Keyboard Layout",
         DEFAULT_AUTOINSTALL["keyboard_layout"],
     )
 
@@ -685,8 +821,10 @@ def ask_autoinstall(
 
 def build_machine_manifest(
     os_info: dict[str, Any],
+    machine_name: str,
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
+    management_address: str,
 ) -> dict[str, Any]:
 
     profile = load_os_profile(
@@ -713,7 +851,7 @@ def build_machine_manifest(
 
     return {
         "schema_version": 1,
-        "name": os_info["default_vm_name"],
+        "name": machine_name,
         "profile": os_info["profile"],
         "image_id": os_info["image_id"],
         "resources": {
@@ -745,7 +883,7 @@ def build_machine_manifest(
             "management": {
                 "enabled": True,
                 "slot": 2,
-                "address": "172.31.255.10/24",
+                "address": management_address,
             },
 
             "internal": [
@@ -807,21 +945,37 @@ def write_yaml(
             default_flow_style=False,
         )
 
-
 def generate_manifests(
     os_info: dict[str, Any],
+    machine_name: str,
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
 ) -> tuple[Path, Path]:
-    vm_name = os_info["default_vm_name"]
 
-    machine_path = MACHINE_MANIFEST_DIR / f"{vm_name}.yml"
-    lab_path = LAB_MANIFEST_DIR / "crucible-lab.yml"
+    management_address = (
+        allocate_management_address(
+            machine_name
+        )
+    )
 
-    machine_manifest = build_machine_manifest(
-        os_info,
-        hardware,
-        autoinstall,
+    machine_path = (
+        MACHINE_MANIFEST_DIR
+        / f"{machine_name}.yml"
+    )
+
+    lab_path = (
+        LAB_MANIFEST_DIR
+        / "crucible-lab.yml"
+    )
+
+    machine_manifest = (
+        build_machine_manifest(
+            os_info,
+            machine_name,
+            hardware,
+            autoinstall,
+            management_address,
+        )
     )
 
     write_yaml(
@@ -831,7 +985,7 @@ def generate_manifests(
 
     lab_manifest = build_lab_manifest(
         machine_path,
-        vm_name,
+        machine_name,
     )
 
     write_yaml(
@@ -839,7 +993,10 @@ def generate_manifests(
         lab_manifest,
     )
 
-    return lab_path, machine_path
+    return (
+        lab_path,
+        machine_path,
+    )
 
 def get_machine_connection_info(
     machine_manifest_path: Path,
@@ -871,13 +1028,14 @@ def get_machine_connection_info(
         ["address"]
     )
 
-    # Convert:
+    # Convert a CIDR management address such as:
     #
-    # 172.31.255.10/24
+    # 172.31.0.2/16
     #
     # into:
     #
-    # 172.31.255.10
+    # 172.31.0.2
+
     management_ip = management_address.split(
         "/",
         1,
@@ -1224,25 +1382,35 @@ def main() -> int:
         show_banner()
 
         vm_count = ask_vm_count()
+
         os_info = ask_operating_system()
+
+        vm_name = ask_vm_name(
+            os_info
+        )
+
         hardware = ask_hardware_defaults(
             os_info
         )
 
         if vm_count != SUPPORTED_VM_COUNT:
             raise CrucibleForgeError(
-                "Unsupported VM count reached orchestration layer."
+                "Unsupported VM count reached "
+                "orchestration layer."
             )
 
-        vm_name = str(os_info["default_vm_name"])
-
-        autoinstall, plaintext_password = ask_autoinstall(vm_name)
+        autoinstall, plaintext_password = (
+            ask_autoinstall(
+                vm_name
+            )
+        )
 
         print()
         print(f"{CYAN}Generating Crucible manifests...{RESET}")
 
         lab_path, machine_path = generate_manifests(
             os_info,
+            vm_name,
             hardware,
             autoinstall,
         )
