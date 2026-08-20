@@ -286,7 +286,8 @@ def build_preseed(
             )
         )
         .decode("ascii")
-
+    )
+    
     nat_connection_uuid = str(
         uuid.uuid4()
     )
