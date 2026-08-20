@@ -14,6 +14,18 @@ from crucible.provisioning.ubuntu_autoinstall import (
 from crucible.validation.hardware import (
     validate_machine_hardware,
 )
+from crucible.provisioning.ubuntu_autoinstall import (
+    UbuntuAutoinstallError,
+    build_seed_iso,
+)
+from crucible.provisioning.kali_preseed import (
+    KaliPreseedError,
+    build_preseed,
+)
+from crucible.provisioning.preseed_server import (
+    PreseedServer,
+    PreseedServerError,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -188,6 +200,19 @@ def create_machine(
         {},
     )
 
+    unattended_enabled = (
+        isinstance(
+            autoinstall,
+            dict,
+        )
+        and bool(
+            autoinstall.get(
+                "enabled",
+                False,
+            )
+        )
+    )
+
     start = manifest.get(
         "start",
         {},
@@ -217,6 +242,64 @@ def create_machine(
             "",
         )
     ).strip().lower()
+
+    if (
+        unattended_enabled
+        and installer_backend
+        == "debian-preseed"
+    ):
+        kali_internet = network.get(
+            "internet",
+            {},
+        )
+
+        kali_management = network.get(
+            "management",
+            {},
+        )
+
+        if not kali_internet.get(
+            "enabled",
+            False,
+        ):
+            raise CrucibleError(
+                "Kali unattended installation "
+                "requires the internet NAT NIC."
+            )
+
+        if int(
+            kali_internet.get(
+                "slot",
+                1,
+            )
+        ) != 1:
+            raise CrucibleError(
+                "Kali unattended installation "
+                "currently requires the NAT NIC "
+                "in VirtualBox slot 1."
+            )
+
+        if not kali_management.get(
+            "enabled",
+            True,
+        ):
+            raise CrucibleError(
+                "Kali unattended installation "
+                "requires the Crucible "
+                "management NIC."
+            )
+
+        if int(
+            kali_management.get(
+                "slot",
+                2,
+            )
+        ) != 2:
+            raise CrucibleError(
+                "Kali unattended installation "
+                "currently requires the "
+                "management NIC in slot 2."
+            )
 
     expected_media_type = installer.get(
         "media_type"
@@ -256,36 +339,56 @@ def create_machine(
     )
 
     # ---------------------------------------------------------
-    # Generate unattended-install seed
+    # Generate unattended-install configuration
     # ---------------------------------------------------------
 
     seed_iso_path: Path | None = None
+    preseed_path: Path | None = None
 
-    if (
-        isinstance(autoinstall, dict)
-        and autoinstall.get(
-            "enabled",
-            False,
-        )
-    ):
-        print(
-            "[3/6] Generating Ubuntu "
-            "autoinstall seed"
-        )
+    if unattended_enabled:
 
-        seed_iso_path = build_seed_iso(
-            manifest,
-            repo_root=REPO_ROOT,
-            verbose=verbose,
-        )
+        if installer_backend == "ubuntu-autoinstall":
+            print(
+                "[3/6] Generating Ubuntu "
+                "autoinstall seed"
+            )
 
-        print(
-            f"      -> {seed_iso_path}"
-        )
+            seed_iso_path = build_seed_iso(
+                manifest,
+                repo_root=REPO_ROOT,
+                verbose=verbose,
+            )
+
+            print(
+                f"      -> {seed_iso_path}"
+            )
+
+        elif installer_backend == "debian-preseed":
+            print(
+                "[3/6] Generating Kali "
+                "preseed configuration"
+            )
+
+            preseed_path = build_preseed(
+                manifest,
+                repo_root=REPO_ROOT,
+                verbose=verbose,
+            )
+
+            print(
+                f"      -> {preseed_path}"
+            )
+
+        else:
+            raise CrucibleError(
+                "Unsupported unattended "
+                "installer backend: "
+                f"{installer_backend or 'undefined'}"
+            )
 
     else:
         print(
-            "[3/6] Autoinstall disabled"
+            "[3/6] Unattended install disabled"
         )
 
     # ---------------------------------------------------------
@@ -387,10 +490,31 @@ def create_machine(
             slot=slot,
         )
 
+        if (
+            unattended_enabled
+            and installer_backend
+            == "debian-preseed"
+        ):
+            provider.set_nat_localhost_reachable(
+                name,
+                slot=slot,
+                enabled=True,
+            )
+
         print(
             f"      -> internet NIC slot "
             f"{slot}: NAT"
         )
+
+        if (
+            unattended_enabled
+            and installer_backend
+            == "debian-preseed"
+        ):
+            print(
+                "      -> NAT host-loopback "
+                "access enabled for preseed"
+            )
 
     # ---------------------------------------------------------
     # NIC 2 - Crucible management / Ansible
@@ -474,24 +598,76 @@ def create_machine(
             )
         )
 
-        if (
-            isinstance(autoinstall, dict)
-            and autoinstall.get(
-                "enabled",
-                False,
-            )
-        ):
-            print(
-                "[6/6] Starting unattended "
-                "Ubuntu installation "
-                f"(headless={headless})"
-            )
+        if unattended_enabled:
 
-            provider.start_ubuntu_autoinstall(
-                name,
-                headless=headless,
-                flavor=os_flavor,
-            )
+            if installer_backend == "ubuntu-autoinstall":
+                print(
+                    "[6/6] Starting unattended "
+                    "Ubuntu installation "
+                    f"(headless={headless})"
+                )
+
+                provider.start_ubuntu_autoinstall(
+                    name,
+                    headless=headless,
+                    flavor=os_flavor,
+                )
+
+            elif installer_backend == "debian-preseed":
+                if preseed_path is None:
+                    raise CrucibleError(
+                        "Kali preseed path was "
+                        "not generated."
+                    )
+
+                print(
+                    "[6/6] Starting unattended "
+                    "Kali installation "
+                    f"(headless={headless})"
+                )
+
+                with PreseedServer(
+                    preseed_path
+                ) as preseed_server:
+
+                    print(
+                        "      -> preseed available "
+                        "to guest:"
+                    )
+
+                    print(
+                        f"         "
+                        f"{preseed_server.guest_url}"
+                    )
+
+                    provider.start_kali_preseed_install(
+                        name,
+                        preseed_url=(
+                            preseed_server.guest_url
+                        ),
+                        headless=headless,
+                    )
+
+                    print(
+                        "      -> waiting for Kali "
+                        "installer to fetch preseed"
+                    )
+
+                    preseed_server.wait_for_fetch(
+                        timeout=180.0,
+                    )
+
+                    print(
+                        "      -> Kali installer "
+                        "fetched preseed successfully"
+                    )
+
+            else:
+                raise CrucibleError(
+                    "Unsupported unattended "
+                    "installer backend: "
+                    f"{installer_backend or 'undefined'}"
+                )
 
         else:
             print(
@@ -509,11 +685,6 @@ def create_machine(
             "[6/6] VM created; "
             "start disabled by manifest"
         )
-
-    print(
-        f"\nMachine '{name}' "
-        "created successfully."
-    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -561,6 +732,8 @@ def main() -> int:
     except (
         CrucibleError,
         UbuntuAutoinstallError,
+        KaliPreseedError,
+        PreseedServerError,
         FileNotFoundError,
         ValueError,
         KeyError,

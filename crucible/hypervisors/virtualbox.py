@@ -388,6 +388,175 @@ class VirtualBoxProvider:
             ]
         )
 
+    def start_kali_preseed_install(
+        self,
+        name: str,
+        *,
+        preseed_url: str,
+        headless: bool = False,
+        boot_delay_seconds: float = 3.0,
+    ) -> None:
+        """
+        Start Kali's Debian Installer and replace the
+        selected UEFI GRUB kernel command line with
+        Crucible's unattended-install parameters.
+
+        The preseed itself is supplied by a temporary
+        HTTP service reachable through VirtualBox NAT.
+        """
+
+        if not preseed_url.startswith(
+            "http://"
+        ):
+            raise VirtualBoxConfigurationError(
+                "Kali preseed URL must use HTTP."
+            )
+
+        if any(
+            character.isspace()
+            for character in preseed_url
+        ):
+            raise VirtualBoxConfigurationError(
+                "Kali preseed URL may not "
+                "contain whitespace."
+            )
+
+        kernel_command = (
+            "linux /install.amd/vmlinuz "
+            "net.ifnames=0 "
+            "auto=true "
+            "priority=critical "
+            "interface=eth0 "
+            "debconf/frontend=noninteractive "
+            f"preseed/url={preseed_url}"
+        )
+
+        self.start_vm(
+            name,
+            headless=headless,
+        )
+
+        print(
+            "      -> waiting for Kali GRUB"
+        )
+
+        time.sleep(
+            boot_delay_seconds
+        )
+
+        print(
+            "      -> entering Kali GRUB edit mode"
+        )
+
+        # Edit the currently selected Kali installer
+        # boot entry.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputstring",
+                "e",
+            ]
+        )
+
+        time.sleep(1.0)
+
+        print(
+            "      -> locating Kali kernel line"
+        )
+
+        # Kali's current UEFI GRUB entry has the linux
+        # command three lines below the initial cursor.
+        #
+        # Kali's own Packer automation performs the same
+        # three-down navigation before replacing the line.
+        for _ in range(3):
+            self._run(
+                [
+                    "controlvm",
+                    name,
+                    "keyboardputscancode",
+
+                    "e0",
+                    "50",
+
+                    "e0",
+                    "d0",
+                ]
+            )
+
+        time.sleep(0.25)
+
+        # Ctrl+A
+        #
+        # Move to the beginning of the current GRUB line.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputscancode",
+
+                "1d",  # Ctrl down
+                "1e",  # A down
+                "9e",  # A up
+                "9d",  # Ctrl up
+            ]
+        )
+
+        time.sleep(0.1)
+
+        # Ctrl+K
+        #
+        # Delete from the cursor through the end of the
+        # current line. Since Ctrl+A moved us to column
+        # zero, this replaces the whole kernel line.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputscancode",
+
+                "1d",  # Ctrl down
+                "25",  # K down
+                "a5",  # K up
+                "9d",  # Ctrl up
+            ]
+        )
+
+        time.sleep(0.1)
+
+        print(
+            "      -> injecting Kali unattended "
+            "installer arguments"
+        )
+
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputstring",
+                kernel_command,
+            ]
+        )
+
+        time.sleep(0.25)
+
+        print(
+            "      -> booting Kali installer"
+        )
+
+        # F10 boots the edited GRUB entry.
+        self._run(
+            [
+                "controlvm",
+                name,
+                "keyboardputscancode",
+
+                "44",  # F10 down
+                "c4",  # F10 up
+            ]
+        )
+
         # ------------------------------------------------------------------
         # VBoxManage execution
         # ------------------------------------------------------------------
@@ -1841,6 +2010,48 @@ class VirtualBoxProvider:
                 vm_name,
                 f"--nic{slot}",
                 "none",
+            ]
+        )
+
+    def set_nat_localhost_reachable(
+        self,
+        vm_name: str,
+        *,
+        slot: int = 1,
+        enabled: bool = True,
+    ) -> None:
+        """
+        Allow a NAT-connected guest to access services
+        bound to the host's loopback interface.
+
+        With VirtualBox's default NAT network, the host
+        loopback is exposed to the guest as 10.0.2.2.
+
+        Kali's unattended installer uses this to fetch
+        Crucible's temporary preseed.cfg.
+        """
+
+        self.require_powered_off(
+            vm_name
+        )
+
+        if slot < 1 or slot > 8:
+            raise VirtualBoxConfigurationError(
+                "NIC slot must be between 1 and 8."
+            )
+
+        self._run(
+            [
+                "modifyvm",
+                vm_name,
+
+                f"--nat-localhostreachable{slot}",
+
+                (
+                    "on"
+                    if enabled
+                    else "off"
+                ),
             ]
         )
 

@@ -36,6 +36,20 @@ from crucible.networking.management import (
 from crucible.hypervisors.virtualbox import (
     VirtualBoxProvider,
 )
+from crucible.cli.create_machine import (
+    CrucibleError,
+    create_machine,
+    load_os_profile,
+)
+from crucible.provisioning.ubuntu_autoinstall import (
+    UbuntuAutoinstallError,
+)
+from crucible.provisioning.kali_preseed import (
+    KaliPreseedError,
+)
+from crucible.provisioning.preseed_server import (
+    PreseedServerError,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -1475,6 +1489,10 @@ def main() -> int:
 
     except (
         CrucibleForgeError,
+        CrucibleError,
+        UbuntuAutoinstallError,
+        KaliPreseedError,
+        PreseedServerError,
         FileNotFoundError,
         ValueError,
         KeyError,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import ipaddress
 import re
-
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -263,24 +263,64 @@ def build_preseed(
         .decode("ascii")
     )
 
-    interfaces_text = (
-        "auto lo\n"
-        "iface lo inet loopback\n"
-        "\n"
-        "allow-hotplug eth0\n"
-        "iface eth0 inet dhcp\n"
-        "\n"
-        "allow-hotplug eth1\n"
-        "iface eth1 inet static\n"
-        f"    address "
-        f"{management_interface.ip}\n"
-        f"    netmask "
-        f"{management_interface.netmask}\n"
+    nat_connection_uuid = str(
+        uuid.uuid4()
     )
 
-    interfaces_base64 = (
+    management_connection_uuid = str(
+        uuid.uuid4()
+    )
+
+    nat_connection = (
+        "[connection]\n"
+        "id=crucible-nat\n"
+        f"uuid={nat_connection_uuid}\n"
+        "type=ethernet\n"
+        "interface-name=eth0\n"
+        "autoconnect=true\n"
+        "\n"
+        "[ethernet]\n"
+        "\n"
+        "[ipv4]\n"
+        "method=auto\n"
+        "\n"
+        "[ipv6]\n"
+        "method=disabled\n"
+    )
+
+    management_connection = (
+        "[connection]\n"
+        "id=crucible-management\n"
+        f"uuid={management_connection_uuid}\n"
+        "type=ethernet\n"
+        "interface-name=eth1\n"
+        "autoconnect=true\n"
+        "\n"
+        "[ethernet]\n"
+        "\n"
+        "[ipv4]\n"
+        "method=manual\n"
+        f"address1={management_interface.ip}/"
+        f"{management_interface.network.prefixlen}\n"
+        "never-default=true\n"
+        "\n"
+        "[ipv6]\n"
+        "method=disabled\n"
+    )
+
+    nat_connection_base64 = (
         base64.b64encode(
-            interfaces_text.encode(
+            nat_connection.encode(
+                "utf-8"
+            )
+        )
+        .decode("ascii")
+    )
+
+
+    management_connection_base64 = (
+        base64.b64encode(
+            management_connection.encode(
                 "utf-8"
             )
         )
@@ -289,12 +329,51 @@ def build_preseed(
 
     late_commands = [
         (
+            "in-target install "
+            "-d -m 0755 "
+            "/etc/NetworkManager/"
+            "system-connections"
+        ),
+
+        (
             "in-target /bin/sh -c "
             "\"printf '%s' "
-            f"'{interfaces_base64}' "
+            f"'{nat_connection_base64}' "
             "| base64 -d "
-            "> /etc/network/interfaces\""
+            "> /etc/NetworkManager/"
+            "system-connections/"
+            "crucible-nat.nmconnection\""
         ),
+
+        (
+            "in-target chmod 0600 "
+            "/etc/NetworkManager/"
+            "system-connections/"
+            "crucible-nat.nmconnection"
+        ),
+
+        (
+            "in-target /bin/sh -c "
+            "\"printf '%s' "
+            f"'{management_connection_base64}' "
+            "| base64 -d "
+            "> /etc/NetworkManager/"
+            "system-connections/"
+            "crucible-management.nmconnection\""
+        ),
+
+        (
+            "in-target chmod 0600 "
+            "/etc/NetworkManager/"
+            "system-connections/"
+            "crucible-management.nmconnection"
+        ),
+
+        (
+            "in-target systemctl enable "
+            "NetworkManager"
+        ),
+
         (
             "in-target /bin/sh -c "
             "\"printf '%s' "
@@ -303,11 +382,13 @@ def build_preseed(
             "> /usr/local/sbin/"
             "crucible-bootstrap.sh\""
         ),
+
         (
             "in-target chmod 0755 "
             "/usr/local/sbin/"
             "crucible-bootstrap.sh"
         ),
+
         (
             "in-target "
             "/usr/local/sbin/"

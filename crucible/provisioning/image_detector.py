@@ -247,24 +247,39 @@ def determine_media_type(
     definition: dict[str, Any],
 ) -> str | None:
 
+    declared_media_type = (
+        definition.get(
+            "media_type"
+        )
+    )
+
+    if declared_media_type:
+        return str(
+            declared_media_type
+        ).strip().lower()
+
     lowered = filename.lower()
 
     if image_id == "kali-rolling":
         if "-installer-" in lowered:
             return "installer"
 
-        if "-live-" in lowered:
-            return "live"
-
         if "-netinst-" in lowered:
             return "netinst"
 
+        if "-live-" in lowered:
+            return "live"
+
         return "unknown"
 
-    flavor = definition.get("flavor")
+    flavor = definition.get(
+        "flavor"
+    )
 
     if flavor:
-        return str(flavor)
+        return str(
+            flavor
+        ).strip().lower()
 
     return None
 
