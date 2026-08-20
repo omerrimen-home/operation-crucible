@@ -4,11 +4,11 @@ The purpose of Operation Crucible is automation. I have been what one of my prof
 
 ## Setup & Requirements
 
-Coming Soon
+For starters go to images/iso and read instructions there, youll have to populate that folder once you've downoladed this repo to your local filesystem. Wouldn't reccomend trying this out at the moment as it's temporarily hard coded to me while in the proof of concept phase. Very soon I am going to do my best to make this usable with minimal modifcation.
 
 ## Log
 
-Versions:<br>
+Notable Versions:<br>
 &emsp;Version 0.1:<br>
 &emsp;&emsp;Description: Create a fresh linux Virtual Machine installation, and with no user input achieve ansible.builtin.ping = pong<br>
 &emsp;&emsp;Status: Complete!<br>
