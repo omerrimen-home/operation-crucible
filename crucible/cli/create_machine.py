@@ -706,7 +706,7 @@ def create_machine(
                     f"(headless={headless})"
                 )
 
-                provider.start_vm(
+                provider.start_windows_unattended_install(
                     name,
                     headless=headless,
                 )

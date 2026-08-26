@@ -4,10 +4,6 @@
     xmlns="urn:schemas-microsoft-com:unattend"
     xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
 
-  <!-- ========================================================= -->
-  <!-- Pass 1: Windows PE / Windows Setup                         -->
-  <!-- ========================================================= -->
-
   <settings pass="windowsPE">
 
     <component
@@ -36,11 +32,6 @@
         language="neutral"
         versionScope="nonSxS">
 
-      <!-- ----------------------------------------------------- -->
-      <!-- Disk 0 is a disposable Crucible VM disk.              -->
-      <!-- It is intentionally erased completely.                -->
-      <!-- ----------------------------------------------------- -->
-
       <DiskConfiguration>
 
         <Disk wcm:action="add">
@@ -51,21 +42,18 @@
 
           <CreatePartitions>
 
-            <!-- EFI System Partition -->
             <CreatePartition wcm:action="add">
               <Order>1</Order>
               <Type>EFI</Type>
               <Size>260</Size>
             </CreatePartition>
 
-            <!-- Microsoft Reserved Partition -->
             <CreatePartition wcm:action="add">
               <Order>2</Order>
               <Type>MSR</Type>
               <Size>16</Size>
             </CreatePartition>
 
-            <!-- Windows partition consumes remaining space -->
             <CreatePartition wcm:action="add">
               <Order>3</Order>
               <Type>Primary</Type>
@@ -100,11 +88,6 @@
 
       </DiskConfiguration>
 
-
-      <!-- ----------------------------------------------------- -->
-      <!-- Select Windows 11 Pro by image NAME rather than index.-->
-      <!-- ----------------------------------------------------- -->
-
       <ImageInstall>
 
         <OSImage>
@@ -136,11 +119,6 @@
 
       </ImageInstall>
 
-
-      <!-- ----------------------------------------------------- -->
-      <!-- Required unattended-install Setup information.        -->
-      <!-- ----------------------------------------------------- -->
-
       <UserData>
 
         <AcceptEula>true</AcceptEula>
@@ -160,9 +138,6 @@
       </UserData>
 
 
-      <!-- Keep Milestone B deterministic.                       -->
-      <!-- Windows Update becomes provisioning work later.       -->
-
       <DynamicUpdate>
 
         <Enable>false</Enable>
@@ -175,10 +150,6 @@
 
   </settings>
 
-
-  <!-- ========================================================= -->
-  <!-- Pass 4: Specialize                                        -->
-  <!-- ========================================================= -->
 
   <settings pass="specialize">
 
@@ -201,8 +172,6 @@
 
     </component>
 
-
-    <!-- Suppress the per-user privacy-selection experience. -->
 
     <component
         name="Microsoft-Windows-Deployment"
@@ -239,9 +208,6 @@
   </settings>
 
 
-  <!-- ========================================================= -->
-  <!-- Pass 7: OOBE                                              -->
-  <!-- ========================================================= -->
 
   <settings pass="oobeSystem">
 
@@ -285,10 +251,6 @@
       </OOBE>
 
 
-      <!-- ----------------------------------------------------- -->
-      <!-- Create Crucible's local Windows administrator.         -->
-      <!-- ----------------------------------------------------- -->
-
       <UserAccounts>
 
         <LocalAccounts>
@@ -321,9 +283,6 @@
 
 
 {% if autologon_enabled %}
-      <!-- ----------------------------------------------------- -->
-      <!-- One automatic login proves OOBE reached the desktop.   -->
-      <!-- ----------------------------------------------------- -->
 
       <AutoLogon>
 

@@ -557,6 +557,67 @@ class VirtualBoxProvider:
             ]
         )
 
+        def start_windows_unattended_install(
+            self,
+            name: str,
+            *,
+            headless: bool = False,
+            boot_delay_seconds: float = 3.0,
+        ) -> None:
+            """
+            Start a Windows installer VM and automatically
+            acknowledge the Microsoft installation DVD's:
+
+                Press any key to boot from CD or DVD...
+
+            prompt.
+
+            The key is injected only during the initial VM start.
+            Crucible deliberately does not inject additional keys
+            after later Windows Setup reboots, allowing those DVD
+            prompts to time out and the VM to continue booting from
+            its installed virtual disk.
+            """
+
+            self.start_vm(
+                name,
+                headless=headless,
+            )
+
+            print(
+                "      -> waiting for Windows DVD boot prompt"
+            )
+
+            time.sleep(
+                boot_delay_seconds
+            )
+
+            print(
+                "      -> acknowledging Windows DVD boot prompt"
+            )
+
+            # Set-1 PC keyboard scancodes:
+            #
+            #   0x39 = Space key down
+            #   0xB9 = Space key up
+            #
+            # A raw scancode is preferable here to keyboardputstring
+            # because this input is consumed by pre-OS EFI/DVD boot
+            # code rather than by an operating system.
+            self._run(
+                [
+                    "controlvm",
+                    name,
+                    "keyboardputscancode",
+                    "39",
+                    "b9",
+                ]
+            )
+
+            print(
+                "      -> Windows installer boot requested"
+            )
+
         # ------------------------------------------------------------------
         # VBoxManage execution
         # ------------------------------------------------------------------
