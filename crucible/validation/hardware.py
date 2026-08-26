@@ -188,3 +188,161 @@ def validate_machine_hardware(
 
         used_names.add(name)
         used_slots.add(slot)
+
+def validate_profile_hardware(
+    manifest: dict[str, Any],
+    profile: dict[str, Any],
+) -> None:
+    """
+    Validate the fully-resolved machine hardware against
+    requirements imposed by its OS profile.
+    """
+
+    requirements = profile.get(
+        "requirements",
+        {},
+    )
+
+    if not requirements:
+        return
+
+    defaults = profile.get(
+        "defaults",
+        {},
+    )
+
+    profile_vbox = profile.get(
+        "virtualbox",
+        {},
+    )
+
+    profile_security = profile_vbox.get(
+        "security",
+        {},
+    )
+
+    resources = manifest.get(
+        "resources",
+        {},
+    )
+
+    machine_vbox = manifest.get(
+        "virtualbox",
+        {},
+    )
+
+    cpus = int(
+        resources.get(
+            "cpus",
+            defaults.get("cpus", CPU_MIN),
+        )
+    )
+
+    memory_mb = int(
+        resources.get(
+            "memory_mb",
+            defaults.get(
+                "memory_mb",
+                MEMORY_MB_MIN,
+            ),
+        )
+    )
+
+    disk_gb = int(
+        resources.get(
+            "disk_gb",
+            defaults.get(
+                "disk_gb",
+                DISK_GB_MIN,
+            ),
+        )
+    )
+
+    firmware = str(
+        machine_vbox.get(
+            "firmware",
+            profile_vbox.get(
+                "firmware",
+                "bios",
+            ),
+        )
+    ).lower()
+
+    min_cpus = requirements.get(
+        "min_cpus"
+    )
+
+    if (
+        min_cpus is not None
+        and cpus < int(min_cpus)
+    ):
+        raise HardwareValidationError(
+            f"This OS requires at least "
+            f"{min_cpus} CPUs; got {cpus}."
+        )
+
+    min_memory_mb = requirements.get(
+        "min_memory_mb"
+    )
+
+    if (
+        min_memory_mb is not None
+        and memory_mb < int(min_memory_mb)
+    ):
+        raise HardwareValidationError(
+            f"This OS requires at least "
+            f"{min_memory_mb} MB RAM; "
+            f"got {memory_mb} MB."
+        )
+
+    min_disk_gb = requirements.get(
+        "min_disk_gb"
+    )
+
+    if (
+        min_disk_gb is not None
+        and disk_gb < int(min_disk_gb)
+    ):
+        raise HardwareValidationError(
+            f"This OS requires at least "
+            f"{min_disk_gb} GB disk; "
+            f"got {disk_gb} GB."
+        )
+
+    required_firmware = (
+        requirements.get(
+            "firmware"
+        )
+    )
+
+    if (
+        required_firmware is not None
+        and firmware
+        != str(required_firmware).lower()
+    ):
+        raise HardwareValidationError(
+            f"This OS requires "
+            f"{required_firmware} firmware; "
+            f"got {firmware}."
+        )
+
+    required_tpm = requirements.get(
+        "tpm"
+    )
+
+    if required_tpm is not None:
+        configured_tpm = str(
+            profile_security.get(
+                "tpm",
+                "none",
+            )
+        )
+
+        if configured_tpm != str(
+            required_tpm
+        ):
+            raise HardwareValidationError(
+                f"This OS requires TPM "
+                f"{required_tpm}; profile "
+                f"configures {configured_tpm}."
+            )

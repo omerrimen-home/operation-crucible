@@ -15,12 +15,21 @@ installer:
   backend: windows-unattend
   template_directory: installers/windows/templates
   answer_file: Autounattend.xml.j2
+  image_name: "Windows 11 Pro"
+  setup_product_key: "W269N-WFGWX-YVC9B-4J6C9-T83GX"
   bootstrap_script: installers/windows/bootstrap.ps1
 
 defaults:
   cpus: 2
   memory_mb: 4096
   disk_gb: 64
+
+requirements:
+  min_cpus: 2
+  min_memory_mb: 4096
+  min_disk_gb: 64
+  firmware: efi
+  tpm: "2.0"
 
 management:
   transport: psrp
@@ -43,6 +52,7 @@ virtualbox:
   graphics:
     controller: vboxsvga
     vram_mb: 128
+    accelerate_3d: false
 
   security:
     tpm: "2.0"

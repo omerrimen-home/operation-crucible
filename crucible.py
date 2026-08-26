@@ -35,6 +35,7 @@ from crucible.networking.management import (
 )
 from crucible.hypervisors.virtualbox import (
     VirtualBoxProvider,
+    VirtualBoxError,
 )
 from crucible.cli.create_machine import (
     CrucibleError,
@@ -49,6 +50,9 @@ from crucible.provisioning.kali_preseed import (
 )
 from crucible.provisioning.preseed_server import (
     PreseedServerError,
+)
+from crucible.provisioning.windows_unattend import (
+    WindowsUnattendError,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -98,6 +102,27 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "image_id": "kali-rolling",
         "vm_name_prefix": "kali",
     },
+    "4": {
+        "name": "Windows 10",
+        "version": "64-bit",
+        "profile": "windows-10",
+        "image_id": "windows-10",
+        "vm_name_prefix": "win10",
+    },
+    "5": {
+        "name": "Windows 11",
+        "version": "64-bit",
+        "profile": "windows-11",
+        "image_id": "windows-11",
+        "vm_name_prefix": "win11",
+    },
+    "6": {
+        "name": "Windows Server 2022",
+        "version": "64-bit",
+        "profile": "windows-server-2022",
+        "image_id": "windows-server-2022",
+        "vm_name_prefix": "winserver2022",
+    },
 }
 
 DEFAULT_AUTOINSTALL = {
@@ -112,6 +137,24 @@ DEFAULT_AUTOINSTALL = {
     "shutdown": "reboot",
     "ssh_install_server": True,
     "ssh_allow_password": True,
+}
+
+DEFAULT_WINDOWS_UNATTEND = {
+    "realname": "Crucible User",
+    "username": "crucible",
+
+    # The Microsoft ISO is normally en-US media.
+    # Keep the actual Windows UI language en-US for
+    # compatibility, while using Canadian locale settings.
+    "ui_language": "en-US",
+    "input_locale": "en-US",
+    "system_locale": "en-CA",
+    "user_locale": "en-CA",
+
+    # Windows uses Windows timezone IDs, not IANA names.
+    "timezone": "Eastern Standard Time",
+
+    "organization": "Operation Crucible",
 }
 
 USE_COLOR = sys.stdout.isatty()
@@ -380,8 +423,18 @@ def ask_hardware_defaults(
         {},
     )
 
+    requirements = profile.get(
+        "requirements",
+        {},
+    )
+
     graphics = virtualbox.get(
         "graphics",
+        {},
+    )
+
+    security = virtualbox.get(
+        "security",
         {},
     )
 
@@ -441,6 +494,15 @@ def ask_hardware_defaults(
         f"{hardware['firmware'].upper()}"
     )
     print(
+        f"  TPM                : "
+        f"{security.get('tpm', 'none')}"
+    )
+
+    print(
+        f"  Secure Boot        : "
+        f"{'yes' if security.get('secure_boot', False) else 'no'}"
+    )
+    print(
         f"  Graphics controller: "
         f"{hardware['graphics_controller']}"
     )
@@ -460,8 +522,6 @@ def ask_hardware_defaults(
     print(
         "  Additional NICs    : none"
     )
-
-    print()
     print(
         "  Disk type          : "
         "Dynamically allocated VDI"
@@ -474,6 +534,36 @@ def ask_hardware_defaults(
     ):
         return hardware
 
+    cpu_minimum = max(
+        CPU_MIN,
+        int(
+            requirements.get(
+                "min_cpus",
+                CPU_MIN,
+            )
+        ),
+    )
+
+    memory_minimum = max(
+        MEMORY_MB_MIN,
+        int(
+            requirements.get(
+                "min_memory_mb",
+                MEMORY_MB_MIN,
+            )
+        ),
+    )
+
+    disk_minimum = max(
+        DISK_GB_MIN,
+        int(
+            requirements.get(
+                "min_disk_gb",
+                DISK_GB_MIN,
+            )
+        ),
+    )
+
     print()
     print(
         f"{BOLD}Custom VM hardware{RESET}"
@@ -483,21 +573,21 @@ def ask_hardware_defaults(
     hardware["cpus"] = ask_int_with_default(
         "CPUs",
         hardware["cpus"],
-        minimum=CPU_MIN,
+        minimum=cpu_minimum,
         maximum=CPU_MAX,
     )
 
     hardware["memory_mb"] = ask_int_with_default(
         "Memory (MB)",
         hardware["memory_mb"],
-        minimum=MEMORY_MB_MIN,
+        minimum=memory_minimum,
         maximum=MEMORY_MB_MAX,
     )
 
     hardware["disk_gb"] = ask_int_with_default(
         "Virtual disk (GB)",
         hardware["disk_gb"],
-        minimum=DISK_GB_MIN,
+        minimum=disk_minimum,
         maximum=DISK_GB_MAX,
     )
 
@@ -507,6 +597,36 @@ def ask_hardware_defaults(
         minimum=VRAM_MB_MIN,
         maximum=VRAM_MB_MAX,
     )
+
+    required_firmware = requirements.get(
+        "firmware"
+    )
+
+    if required_firmware:
+        hardware["firmware"] = str(
+            required_firmware
+        ).lower()
+
+        print(
+            f"Firmware fixed at "
+            f"{hardware['firmware'].upper()} "
+            f"by OS requirements."
+        )
+
+    else:
+        use_efi = ask_yes_no(
+            "Use EFI firmware?",
+            default=(
+                hardware["firmware"]
+                != "bios"
+            ),
+        )
+
+        hardware["firmware"] = (
+            "efi"
+            if use_efi
+            else "bios"
+        )
 
     use_efi = ask_yes_no(
         "Use EFI firmware?",
@@ -839,6 +959,188 @@ def ask_autoinstall(
         plaintext_password,
     )
 
+def ask_windows_unattend(
+    vm_name: str,
+) -> tuple[dict[str, Any], str]:
+    """
+    Build Windows unattended-install settings.
+
+    Milestone B deliberately generates a local administrator
+    account and performs one automatic login so Windows reaches
+    the desktop without interactive OOBE.
+    """
+
+    plaintext_password = generate_password()
+
+    print()
+    print(
+        f"{BOLD}Windows unattended-install defaults:{RESET}"
+    )
+    print()
+
+    print(
+        f"  Computer Name     : {vm_name}"
+    )
+    print(
+        f"  Edition           : Windows 11 Pro"
+    )
+    print(
+        f"  User              : "
+        f"{DEFAULT_WINDOWS_UNATTEND['username']}"
+    )
+    print(
+        f"  Display Name      : "
+        f"{DEFAULT_WINDOWS_UNATTEND['realname']}"
+    )
+    print(
+        f"  UI Language       : "
+        f"{DEFAULT_WINDOWS_UNATTEND['ui_language']}"
+    )
+    print(
+        f"  System Locale     : "
+        f"{DEFAULT_WINDOWS_UNATTEND['system_locale']}"
+    )
+    print(
+        f"  User Locale       : "
+        f"{DEFAULT_WINDOWS_UNATTEND['user_locale']}"
+    )
+    print(
+        f"  Timezone          : "
+        f"{DEFAULT_WINDOWS_UNATTEND['timezone']}"
+    )
+    print(
+        "  Disk              : wipe Disk 0"
+    )
+    print(
+        "  Partitioning      : GPT / EFI / MSR / Windows"
+    )
+    print(
+        "  Account Type      : local administrator"
+    )
+    print(
+        "  First Login       : automatic once"
+    )
+    print()
+
+    return (
+        {
+            "enabled": True,
+
+            "hostname": vm_name,
+
+            "identity": {
+                "realname": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "realname"
+                    ]
+                ),
+                "username": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "username"
+                    ]
+                ),
+
+                # Milestone B needs this value while
+                # rendering Autounattend.xml.
+                #
+                # The generated machine manifest lives
+                # under .crucible/, which is gitignored.
+                "password": plaintext_password,
+            },
+
+            "locale": {
+                "ui_language": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "ui_language"
+                    ]
+                ),
+                "input_locale": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "input_locale"
+                    ]
+                ),
+                "system_locale": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "system_locale"
+                    ]
+                ),
+                "user_locale": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "user_locale"
+                    ]
+                ),
+            },
+
+            "timezone": (
+                DEFAULT_WINDOWS_UNATTEND[
+                    "timezone"
+                ]
+            ),
+
+            "organization": (
+                DEFAULT_WINDOWS_UNATTEND[
+                    "organization"
+                ]
+            ),
+
+            "disk": {
+                "id": 0,
+            },
+
+            "autologon": {
+                "enabled": True,
+                "count": 1,
+            },
+        },
+        plaintext_password,
+    )
+
+def ask_installation_configuration(
+    os_info: dict[str, Any],
+    vm_name: str,
+) -> tuple[dict[str, Any], str | None]:
+    """
+    Dispatch installation configuration according to the
+    selected OS profile.
+
+    Windows unattended installation is intentionally
+    disabled during Milestone A. The VM is created and
+    booted from the vendor ISO only.
+    """
+
+    profile = load_os_profile(
+        str(os_info["profile"])
+    )
+
+    installer = profile.get(
+        "installer",
+        {},
+    )
+
+    backend = str(
+        installer.get(
+            "backend",
+            "",
+        )
+    ).strip().lower()
+
+    if backend in {
+        "ubuntu-autoinstall",
+        "debian-preseed",
+    }:
+        return ask_autoinstall(
+            vm_name
+        )
+
+    if backend == "windows-unattend":
+        return ask_windows_unattend(
+            vm_name
+        )
+
+    raise CrucibleForgeError(
+        "Unsupported installer backend: "
+        f"{backend or 'undefined'}"
+    )
 
 def build_machine_manifest(
     os_info: dict[str, Any],
@@ -1421,7 +1723,8 @@ def main() -> int:
             )
 
         autoinstall, plaintext_password = (
-            ask_autoinstall(
+            ask_installation_configuration(
+                os_info,
                 vm_name
             )
         )
@@ -1447,24 +1750,95 @@ def main() -> int:
         if plaintext_password:
             print()
             print(
-                f"{YELLOW}{BOLD}Generated login credentials{RESET}"
+                f"{YELLOW}{BOLD}"
+                "Generated login credentials"
+                f"{RESET}"
             )
+
             print(
                 f"  Username: "
                 f"{autoinstall['identity']['username']}"
             )
-            print(f"  Password: {plaintext_password}")
+
             print(
-                f"{DIM}"
-                "The plaintext password is not written to the manifest."
-                f"{RESET}"
+                f"  Password: "
+                f"{plaintext_password}"
             )
+
+            profile = load_os_profile(
+                str(os_info["profile"])
+            )
+
+            guest_family = str(
+                profile.get(
+                    "os",
+                    {},
+                ).get(
+                    "family",
+                    "",
+                )
+            ).strip().lower()
+
+            if guest_family == "windows":
+                print(
+                    f"{DIM}"
+                    "The Windows password exists only "
+                    "in Crucible runtime state and the "
+                    "generated unattended media. "
+                    ".crucible/ is ignored by Git."
+                    f"{RESET}"
+                )
+
+            else:
+                print(
+                    f"{DIM}"
+                    "The plaintext password is not "
+                    "written to the manifest."
+                    f"{RESET}"
+                )
 
         forge_machine(machine_path)
 
-        verify_machine_ready(
-            machine_path
+        profile = load_os_profile(
+            str(os_info["profile"])
         )
+
+        guest_os = profile.get(
+            "os",
+            {},
+        )
+
+        guest_family = str(
+            guest_os.get(
+                "family",
+                "",
+            )
+        ).strip().lower()
+
+        if guest_family == "linux":
+            verify_machine_ready(
+                machine_path
+            )
+
+        elif guest_family == "windows":
+            print()
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "Windows VM created and started."
+            )
+            print(
+                f"{DIM}"
+                "Windows management verification are "
+                "deferred to later milestones."
+                f"{RESET}"
+            )
+
+        else:
+            raise CrucibleForgeError(
+                "No readiness verification path "
+                f"exists for guest family: "
+                f"{guest_family or 'undefined'}"
+            )
 
         print()
         print(
@@ -1496,6 +1870,8 @@ def main() -> int:
         FileNotFoundError,
         ValueError,
         KeyError,
+        VirtualBoxError,
+        WindowsUnattendError,
     ) as exc:
         print(
             f"\n{RED}ERROR: {exc}{RESET}",

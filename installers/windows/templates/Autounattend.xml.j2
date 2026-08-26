@@ -1,1 +1,353 @@
+<?xml version="1.0" encoding="utf-8"?>
 
+<unattend
+    xmlns="urn:schemas-microsoft-com:unattend"
+    xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+  <!-- ========================================================= -->
+  <!-- Pass 1: Windows PE / Windows Setup                         -->
+  <!-- ========================================================= -->
+
+  <settings pass="windowsPE">
+
+    <component
+        name="Microsoft-Windows-International-Core-WinPE"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <SetupUILanguage>
+        <UILanguage>{{ ui_language|xml }}</UILanguage>
+      </SetupUILanguage>
+
+      <InputLocale>{{ input_locale|xml }}</InputLocale>
+      <SystemLocale>{{ system_locale|xml }}</SystemLocale>
+      <UILanguage>{{ ui_language|xml }}</UILanguage>
+      <UserLocale>{{ user_locale|xml }}</UserLocale>
+
+    </component>
+
+
+    <component
+        name="Microsoft-Windows-Setup"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <!-- ----------------------------------------------------- -->
+      <!-- Disk 0 is a disposable Crucible VM disk.              -->
+      <!-- It is intentionally erased completely.                -->
+      <!-- ----------------------------------------------------- -->
+
+      <DiskConfiguration>
+
+        <Disk wcm:action="add">
+
+          <DiskID>{{ disk_id }}</DiskID>
+
+          <WillWipeDisk>true</WillWipeDisk>
+
+          <CreatePartitions>
+
+            <!-- EFI System Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>260</Size>
+            </CreatePartition>
+
+            <!-- Microsoft Reserved Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+
+            <!-- Windows partition consumes remaining space -->
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+
+          </CreatePartitions>
+
+
+          <ModifyPartitions>
+
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Label>System</Label>
+              <Format>FAT32</Format>
+            </ModifyPartition>
+
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>3</PartitionID>
+              <Label>Windows</Label>
+              <Letter>C</Letter>
+              <Format>NTFS</Format>
+            </ModifyPartition>
+
+          </ModifyPartitions>
+
+        </Disk>
+
+        <WillShowUI>OnError</WillShowUI>
+
+      </DiskConfiguration>
+
+
+      <!-- ----------------------------------------------------- -->
+      <!-- Select Windows 11 Pro by image NAME rather than index.-->
+      <!-- ----------------------------------------------------- -->
+
+      <ImageInstall>
+
+        <OSImage>
+
+          <InstallFrom>
+
+            <MetaData wcm:action="add">
+
+              <Key>/IMAGE/NAME</Key>
+
+              <Value>{{ image_name|xml }}</Value>
+
+            </MetaData>
+
+          </InstallFrom>
+
+
+          <InstallTo>
+
+            <DiskID>{{ disk_id }}</DiskID>
+
+            <PartitionID>3</PartitionID>
+
+          </InstallTo>
+
+          <WillShowUI>OnError</WillShowUI>
+
+        </OSImage>
+
+      </ImageInstall>
+
+
+      <!-- ----------------------------------------------------- -->
+      <!-- Required unattended-install Setup information.        -->
+      <!-- ----------------------------------------------------- -->
+
+      <UserData>
+
+        <AcceptEula>true</AcceptEula>
+
+        <FullName>{{ realname|xml }}</FullName>
+
+        <Organization>{{ organization|xml }}</Organization>
+
+        <ProductKey>
+
+          <Key>{{ setup_product_key|xml }}</Key>
+
+          <WillShowUI>Never</WillShowUI>
+
+        </ProductKey>
+
+      </UserData>
+
+
+      <!-- Keep Milestone B deterministic.                       -->
+      <!-- Windows Update becomes provisioning work later.       -->
+
+      <DynamicUpdate>
+
+        <Enable>false</Enable>
+
+        <WillShowUI>Never</WillShowUI>
+
+      </DynamicUpdate>
+
+    </component>
+
+  </settings>
+
+
+  <!-- ========================================================= -->
+  <!-- Pass 4: Specialize                                        -->
+  <!-- ========================================================= -->
+
+  <settings pass="specialize">
+
+    <component
+        name="Microsoft-Windows-Shell-Setup"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <ComputerName>{{ computer_name|xml }}</ComputerName>
+
+      <RegisteredOwner>{{ realname|xml }}</RegisteredOwner>
+
+      <RegisteredOrganization>
+        {{ organization|xml }}
+      </RegisteredOrganization>
+
+      <TimeZone>{{ timezone|xml }}</TimeZone>
+
+    </component>
+
+
+    <!-- Suppress the per-user privacy-selection experience. -->
+
+    <component
+        name="Microsoft-Windows-Deployment"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <RunSynchronous>
+
+        <RunSynchronousCommand wcm:action="add">
+
+          <Order>1</Order>
+
+          <Description>
+            Disable Windows first-logon privacy experience
+          </Description>
+
+          <Path>
+            reg.exe add
+            HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE
+            /v DisablePrivacyExperience
+            /t REG_DWORD
+            /d 1
+            /f
+          </Path>
+
+        </RunSynchronousCommand>
+
+      </RunSynchronous>
+
+    </component>
+
+  </settings>
+
+
+  <!-- ========================================================= -->
+  <!-- Pass 7: OOBE                                              -->
+  <!-- ========================================================= -->
+
+  <settings pass="oobeSystem">
+
+    <component
+        name="Microsoft-Windows-International-Core"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <InputLocale>{{ input_locale|xml }}</InputLocale>
+
+      <SystemLocale>{{ system_locale|xml }}</SystemLocale>
+
+      <UILanguage>{{ ui_language|xml }}</UILanguage>
+
+      <UserLocale>{{ user_locale|xml }}</UserLocale>
+
+    </component>
+
+
+    <component
+        name="Microsoft-Windows-Shell-Setup"
+        processorArchitecture="amd64"
+        publicKeyToken="31bf3856ad364e35"
+        language="neutral"
+        versionScope="nonSxS">
+
+      <OOBE>
+
+        <HideEULAPage>true</HideEULAPage>
+
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+
+        <ProtectYourPC>3</ProtectYourPC>
+
+      </OOBE>
+
+
+      <!-- ----------------------------------------------------- -->
+      <!-- Create Crucible's local Windows administrator.         -->
+      <!-- ----------------------------------------------------- -->
+
+      <UserAccounts>
+
+        <LocalAccounts>
+
+          <LocalAccount wcm:action="add">
+
+            <Name>{{ username|xml }}</Name>
+
+            <DisplayName>{{ realname|xml }}</DisplayName>
+
+            <Description>
+              Operation Crucible local administrator
+            </Description>
+
+            <Group>Administrators</Group>
+
+            <Password>
+
+              <Value>{{ password|xml }}</Value>
+
+              <PlainText>true</PlainText>
+
+            </Password>
+
+          </LocalAccount>
+
+        </LocalAccounts>
+
+      </UserAccounts>
+
+
+{% if autologon_enabled %}
+      <!-- ----------------------------------------------------- -->
+      <!-- One automatic login proves OOBE reached the desktop.   -->
+      <!-- ----------------------------------------------------- -->
+
+      <AutoLogon>
+
+        <Password>
+
+          <Value>{{ password|xml }}</Value>
+
+          <PlainText>true</PlainText>
+
+        </Password>
+
+        <Domain />
+
+        <Enabled>true</Enabled>
+
+        <LogonCount>{{ autologon_count }}</LogonCount>
+
+        <Username>{{ username|xml }}</Username>
+
+      </AutoLogon>
+{% endif %}
+
+    </component>
+
+  </settings>
+
+</unattend>

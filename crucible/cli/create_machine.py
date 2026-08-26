@@ -13,6 +13,7 @@ from crucible.provisioning.ubuntu_autoinstall import (
 )
 from crucible.validation.hardware import (
     validate_machine_hardware,
+    validate_profile_hardware,
 )
 from crucible.provisioning.ubuntu_autoinstall import (
     UbuntuAutoinstallError,
@@ -26,7 +27,10 @@ from crucible.provisioning.preseed_server import (
     PreseedServer,
     PreseedServerError,
 )
-
+from crucible.provisioning.windows_unattend import (
+    WindowsUnattendError,
+    build_unattend_iso,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -231,6 +235,11 @@ def create_machine(
         profile_name
     )
 
+    validate_profile_hardware(
+        manifest,
+        profile
+    )
+
     installer = profile.get(
         "installer",
         {},
@@ -348,6 +357,7 @@ def create_machine(
     if unattended_enabled:
 
         if installer_backend == "ubuntu-autoinstall":
+
             print(
                 "[3/6] Generating Ubuntu "
                 "autoinstall seed"
@@ -363,7 +373,9 @@ def create_machine(
                 f"      -> {seed_iso_path}"
             )
 
+
         elif installer_backend == "debian-preseed":
+
             print(
                 "[3/6] Generating Kali "
                 "preseed configuration"
@@ -379,7 +391,30 @@ def create_machine(
                 f"      -> {preseed_path}"
             )
 
+
+        elif installer_backend == "windows-unattend":
+
+            print(
+                "[3/6] Generating Windows "
+                "unattended-install media"
+            )
+
+            seed_iso_path = (
+                build_unattend_iso(
+                    manifest,
+                    profile,
+                    repo_root=REPO_ROOT,
+                    verbose=verbose,
+                )
+            )
+
+            print(
+                f"      -> {seed_iso_path}"
+            )
+
+
         else:
+
             raise CrucibleError(
                 "Unsupported unattended "
                 "installer backend: "
@@ -387,6 +422,7 @@ def create_machine(
             )
 
     else:
+
         print(
             "[3/6] Unattended install disabled"
         )
@@ -662,6 +698,19 @@ def create_machine(
                         "fetched preseed successfully"
                     )
 
+            elif installer_backend == "windows-unattend":
+
+                print(
+                    "[6/6] Starting unattended "
+                    "Windows installation "
+                    f"(headless={headless})"
+                )
+
+                provider.start_vm(
+                    name,
+                    headless=headless,
+                )
+                
             else:
                 raise CrucibleError(
                     "Unsupported unattended "
