@@ -628,19 +628,6 @@ def ask_hardware_defaults(
             else "bios"
         )
 
-    use_efi = ask_yes_no(
-        "Use EFI firmware?",
-        default=(
-            hardware["firmware"] != "bios"
-        ),
-    )
-
-    hardware["firmware"] = (
-        "efi"
-        if use_efi
-        else "bios"
-    )
-
     hardware["graphics_controller"] = (
         ask_choice(
             "Graphics controller",

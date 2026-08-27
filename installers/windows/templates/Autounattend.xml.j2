@@ -172,39 +172,6 @@
 
     </component>
 
-
-    <component
-        name="Microsoft-Windows-Deployment"
-        processorArchitecture="amd64"
-        publicKeyToken="31bf3856ad364e35"
-        language="neutral"
-        versionScope="nonSxS">
-
-      <RunSynchronous>
-
-        <RunSynchronousCommand wcm:action="add">
-
-          <Order>1</Order>
-
-          <Description>
-            Disable Windows first-logon privacy experience
-          </Description>
-
-          <Path>
-            reg.exe add
-            HKLM\SOFTWARE\Policies\Microsoft\Windows\OOBE
-            /v DisablePrivacyExperience
-            /t REG_DWORD
-            /d 1
-            /f
-          </Path>
-
-        </RunSynchronousCommand>
-
-      </RunSynchronous>
-
-    </component>
-
   </settings>
 
 

@@ -706,9 +706,22 @@ def create_machine(
                     f"(headless={headless})"
                 )
 
+                windows_boot = installer.get(
+                    "boot",
+                    {},
+                )
+
+                boot_delay_seconds = float(
+                    windows_boot.get(
+                        "dvd_prompt_delay_seconds",
+                        3.0,
+                    )
+                )
+
                 provider.start_windows_unattended_install(
                     name,
                     headless=headless,
+                    boot_delay_seconds=boot_delay_seconds,
                 )
                 
             else:

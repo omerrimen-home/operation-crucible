@@ -557,7 +557,7 @@ class VirtualBoxProvider:
             ]
         )
 
-        def start_windows_unattended_install(
+    def start_windows_unattended_install(
             self,
             name: str,
             *,
