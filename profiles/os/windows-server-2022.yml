@@ -21,20 +21,20 @@ installer:
 
   image_choices:
     - id: datacenter-desktop
-      label: Windows Server 2022 Datacenter Evaluation (Desktop Experience)
-      image_name: "Windows Server 2022 Datacenter Evaluation (Desktop Experience)"
+      label: Windows Server 2022 Datacenter (Desktop Experience)
+      image_index: 4
 
     - id: standard-desktop
-      label: Windows Server 2022 Standard Evaluation (Desktop Experience)
-      image_name: "Windows Server 2022 Standard Evaluation (Desktop Experience)"
+      label: Windows Server 2022 Standard (Desktop Experience)
+      image_index: 2
 
     - id: datacenter-core
-      label: Windows Server 2022 Datacenter Evaluation (Server Core)
-      image_name: "Windows Server 2022 Datacenter Evaluation"
+      label: Windows Server 2022 Datacenter (Server Core)
+      image_index: 3
 
     - id: standard-core
-      label: Windows Server 2022 Standard Evaluation (Server Core)
-      image_name: "Windows Server 2022 Standard Evaluation"
+      label: Windows Server 2022 Standard (Server Core)
+      image_index: 1
 
   set_administrator_password: true
 
