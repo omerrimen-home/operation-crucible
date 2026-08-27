@@ -986,6 +986,253 @@ def ask_autoinstall(
         plaintext_password,
     )
 
+def ask_windows_install_image(
+    profile: dict[str, Any],
+) -> dict[str, str]:
+    """
+    Resolve the Windows installation image for this machine.
+
+    Most Windows client profiles expose one fixed image.
+    Windows Server profiles may expose multiple installable
+    editions / installation modes through image_choices.
+    """
+
+    installer = profile.get(
+        "installer",
+        {},
+    )
+
+    image_choices = installer.get(
+        "image_choices"
+    )
+
+    # ---------------------------------------------------------
+    # Fixed-image Windows profile
+    #
+    # Windows 10 / 11 continue to use this path.
+    # ---------------------------------------------------------
+
+    if not image_choices:
+
+        image_name = str(
+            installer.get(
+                "image_name",
+                "",
+            )
+        ).strip()
+
+        if not image_name:
+            raise CrucibleForgeError(
+                "Windows OS profile defines neither "
+                "installer.image_name nor "
+                "installer.image_choices."
+            )
+
+        return {
+            "id": "profile-default",
+            "label": image_name,
+            "image_name": image_name,
+            "setup_product_key": str(
+                installer.get(
+                    "setup_product_key",
+                    "",
+                )
+            ).strip(),
+        }
+
+    # ---------------------------------------------------------
+    # Multi-image Windows profile
+    # ---------------------------------------------------------
+
+    if not isinstance(
+        image_choices,
+        list,
+    ):
+        raise CrucibleForgeError(
+            "installer.image_choices must be a list."
+        )
+
+    normalized_choices: list[
+        dict[str, str]
+    ] = []
+
+    seen_ids: set[str] = set()
+
+    for raw_choice in image_choices:
+
+        if not isinstance(
+            raw_choice,
+            dict,
+        ):
+            raise CrucibleForgeError(
+                "Every installer.image_choices entry "
+                "must be a mapping."
+            )
+
+        choice_id = str(
+            raw_choice.get(
+                "id",
+                "",
+            )
+        ).strip()
+
+        image_name = str(
+            raw_choice.get(
+                "image_name",
+                "",
+            )
+        ).strip()
+
+        label = str(
+            raw_choice.get(
+                "label",
+                image_name,
+            )
+        ).strip()
+
+        if not choice_id:
+            raise CrucibleForgeError(
+                "Windows image choice has no id."
+            )
+
+        if choice_id in seen_ids:
+            raise CrucibleForgeError(
+                "Duplicate Windows image choice id: "
+                f"{choice_id}"
+            )
+
+        if not image_name:
+            raise CrucibleForgeError(
+                "Windows image choice "
+                f"{choice_id} has no image_name."
+            )
+
+        if not label:
+            label = image_name
+
+        seen_ids.add(
+            choice_id
+        )
+
+        normalized_choices.append(
+            {
+                "id": choice_id,
+                "label": label,
+                "image_name": image_name,
+                "setup_product_key": str(
+                    raw_choice.get(
+                        "setup_product_key",
+                        installer.get(
+                            "setup_product_key",
+                            "",
+                        ),
+                    )
+                ).strip(),
+            }
+        )
+
+    if not normalized_choices:
+        raise CrucibleForgeError(
+            "installer.image_choices is empty."
+        )
+
+    default_choice_id = str(
+        installer.get(
+            "default_image_choice",
+            normalized_choices[0]["id"],
+        )
+    ).strip()
+
+    default_index = None
+
+    for index, choice in enumerate(
+        normalized_choices,
+        start=1,
+    ):
+        if (
+            choice["id"]
+            == default_choice_id
+        ):
+            default_index = index
+            break
+
+    if default_index is None:
+        raise CrucibleForgeError(
+            "installer.default_image_choice does "
+            "not match an image_choices id: "
+            f"{default_choice_id}"
+        )
+
+    print()
+    print(
+        f"{BOLD}"
+        "Windows installation image:"
+        f"{RESET}"
+    )
+    print()
+
+    for index, choice in enumerate(
+        normalized_choices,
+        start=1,
+    ):
+
+        default_marker = (
+            " [default]"
+            if index == default_index
+            else ""
+        )
+
+        print(
+            f"  [{index}] "
+            f"{choice['label']}"
+            f"{default_marker}"
+        )
+
+    print()
+
+    while True:
+
+        answer = input(
+            f"Selection [{default_index}]: "
+        ).strip()
+
+        if not answer:
+            selected_index = (
+                default_index
+            )
+
+        else:
+
+            try:
+                selected_index = int(
+                    answer
+                )
+
+            except ValueError:
+                print(
+                    f"{RED}"
+                    "Enter one of the listed numbers."
+                    f"{RESET}"
+                )
+                continue
+
+        if (
+            1
+            <= selected_index
+            <= len(normalized_choices)
+        ):
+            return dict(
+                normalized_choices[
+                    selected_index - 1
+                ]
+            )
+
+        print(
+            f"{RED}"
+            "Enter one of the listed numbers."
+            f"{RESET}"
+        )
+
 def show_windows_unattend_defaults(
     *,
     vm_name: str,
@@ -1086,9 +1333,12 @@ def ask_windows_unattend(
     The user may accept Crucible's defaults or customize
     machine-specific identity and regional settings.
 
-    OS edition, disk layout, administrator membership and
-    the single bootstrap autologon remain controlled by the
-    selected OS profile / Crucible provisioning design.
+    The available Windows installation images are controlled
+    by the OS profile. Profiles with multiple images allow the
+    Forge to select the desired edition / installation mode.
+
+    Disk layout, administrator membership and the single
+    bootstrap autologon remain controlled by Crucible.
     """
 
     profile = load_os_profile(
@@ -1104,14 +1354,16 @@ def ask_windows_unattend(
         {},
     )
 
-    edition = str(
-        installer.get(
-            "image_name",
-            profile.get(
-                "display_name",
-                "Windows",
-            ),
+    install_image = (
+        ask_windows_install_image(
+            profile
         )
+    )
+
+    edition = str(
+        install_image[
+            "label"
+        ]
     ).strip()
 
     show_windows_unattend_defaults(
@@ -1137,6 +1389,26 @@ def ask_windows_unattend(
                 "enabled": True,
 
                 "hostname": vm_name,
+
+                "install_image": {
+                    "id": (
+                        install_image[
+                            "id"
+                        ]
+                    ),
+
+                    "name": (
+                        install_image[
+                            "image_name"
+                        ]
+                    ),
+
+                    "setup_product_key": (
+                        install_image[
+                            "setup_product_key"
+                        ]
+                    ),
+                },
 
                 "identity": {
                     "realname": (
@@ -1285,10 +1557,9 @@ def ask_windows_unattend(
         ask_windows_password()
     )
 
-    print()
     print(
         f"{DIM}"
-        f"Windows edition remains fixed by profile: "
+        f"Windows installation image: "
         f"{edition}"
         f"{RESET}"
     )
@@ -1306,6 +1577,26 @@ def ask_windows_unattend(
             "enabled": True,
 
             "hostname": hostname,
+
+            "install_image": {
+                "id": (
+                    install_image[
+                        "id"
+                    ]
+                ),
+
+                "name": (
+                    install_image[
+                        "image_name"
+                    ]
+                ),
+
+                "setup_product_key": (
+                    install_image[
+                        "setup_product_key"
+                    ]
+                ),
+            },
 
             "identity": {
                 "realname": realname,

@@ -127,13 +127,15 @@
 
         <Organization>{{ organization|xml }}</Organization>
 
-        <ProductKey>
+        {% if setup_product_key %}
+                <ProductKey>
 
-          <Key>{{ setup_product_key|xml }}</Key>
+                  <Key>{{ setup_product_key|xml }}</Key>
 
-          <WillShowUI>Never</WillShowUI>
+                  <WillShowUI>Never</WillShowUI>
 
-        </ProductKey>
+                </ProductKey>
+        {% endif %}
 
       </UserData>
 
@@ -219,6 +221,16 @@
 
 
       <UserAccounts>
+
+      {% if set_administrator_password %}
+          <AdministratorPassword>
+
+            <Value>{{ password|xml }}</Value>
+
+            <PlainText>true</PlainText>
+
+          </AdministratorPassword>
+      {% endif %}
 
         <LocalAccounts>
 

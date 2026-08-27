@@ -17,6 +17,27 @@ installer:
   answer_file: Autounattend.xml.j2
   bootstrap_script: installers/windows/bootstrap.ps1
 
+  default_image_choice: datacenter-desktop
+
+  image_choices:
+    - id: datacenter-desktop
+      label: Windows Server 2022 Datacenter Evaluation (Desktop Experience)
+      image_name: "Windows Server 2022 Datacenter Evaluation (Desktop Experience)"
+
+    - id: standard-desktop
+      label: Windows Server 2022 Standard Evaluation (Desktop Experience)
+      image_name: "Windows Server 2022 Standard Evaluation (Desktop Experience)"
+
+    - id: datacenter-core
+      label: Windows Server 2022 Datacenter Evaluation (Server Core)
+      image_name: "Windows Server 2022 Datacenter Evaluation"
+
+    - id: standard-core
+      label: Windows Server 2022 Standard Evaluation (Server Core)
+      image_name: "Windows Server 2022 Standard Evaluation"
+
+  set_administrator_password: true
+
 defaults:
   cpus: 2
   memory_mb: 4096
@@ -24,9 +45,18 @@ defaults:
 
 management:
   transport: psrp
+  protocol: https
   port: 5986
+  auth: ntlm
+  cert_validation: ignore
   user: crucible
   python_required: false
+
+  readiness:
+    port_timeout_seconds: 3600
+    connection_timeout_seconds: 900
+    bootstrap_timeout_seconds: 600
+    poll_interval_seconds: 5
 
 virtualbox:
   ostype_candidates:
@@ -44,6 +74,7 @@ virtualbox:
   graphics:
     controller: vboxsvga
     vram_mb: 128
+    accelerate_3d: false
 
   security:
     tpm: none

@@ -347,12 +347,35 @@ def build_unattend_iso(
             f"not found: {bootstrap_script}"
         )
 
+    install_image = autoinstall.get(
+        "install_image",
+        {},
+    )
+
+    if not isinstance(
+        install_image,
+        dict,
+    ):
+        raise WindowsUnattendError(
+            "autoinstall.install_image "
+            "must be a mapping."
+        )
+
     image_name = str(
-        installer.get(
-            "image_name",
-            "",
+        install_image.get(
+            "name",
+            installer.get(
+                "image_name",
+                "",
+            ),
         )
     ).strip()
+
+    if not image_name:
+        raise WindowsUnattendError(
+            "No Windows installation "
+            "image name was selected."
+        )
 
     if not image_name:
         raise WindowsUnattendError(
@@ -361,17 +384,14 @@ def build_unattend_iso(
         )
 
     setup_product_key = str(
-        installer.get(
+        install_image.get(
             "setup_product_key",
-            "",
+            installer.get(
+                "setup_product_key",
+                "",
+            ),
         )
     ).strip()
-
-    if not setup_product_key:
-        raise WindowsUnattendError(
-            "Windows OS profile does not "
-            "define installer.setup_product_key."
-        )
 
     template_directory = str(
         installer.get(
@@ -571,6 +591,13 @@ def build_unattend_iso(
             setup_product_key
         ),
 
+        "set_administrator_password": bool(
+            installer.get(
+                "set_administrator_password",
+                False,
+            )
+        ),
+        
         "realname": realname,
         "username": username,
         "password": password,
