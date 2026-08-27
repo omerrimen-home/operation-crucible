@@ -988,13 +988,15 @@ def ask_autoinstall(
 
 def ask_windows_install_image(
     profile: dict[str, Any],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """
     Resolve the Windows installation image for this machine.
 
-    Most Windows client profiles expose one fixed image.
-    Windows Server profiles may expose multiple installable
-    editions / installation modes through image_choices.
+    Client Windows profiles normally expose one fixed image
+    selected by WIM image name.
+
+    Windows Server profiles may expose multiple images and
+    select them by WIM image index.
     """
 
     installer = profile.get(
@@ -1009,7 +1011,7 @@ def ask_windows_install_image(
     # ---------------------------------------------------------
     # Fixed-image Windows profile
     #
-    # Windows 10 / 11 continue to use this path.
+    # Windows 10 / Windows 11 use this path.
     # ---------------------------------------------------------
 
     if not image_choices:
@@ -1032,6 +1034,7 @@ def ask_windows_install_image(
             "id": "profile-default",
             "label": image_name,
             "image_name": image_name,
+            "image_index": None,
             "setup_product_key": str(
                 installer.get(
                     "setup_product_key",
@@ -1042,6 +1045,8 @@ def ask_windows_install_image(
 
     # ---------------------------------------------------------
     # Multi-image Windows profile
+    #
+    # Windows Server uses this path.
     # ---------------------------------------------------------
 
     if not isinstance(
@@ -1053,7 +1058,7 @@ def ask_windows_install_image(
         )
 
     normalized_choices: list[
-        dict[str, str]
+        dict[str, Any]
     ] = []
 
     seen_ids: set[str] = set()
@@ -1076,20 +1081,6 @@ def ask_windows_install_image(
             )
         ).strip()
 
-        image_name = str(
-            raw_choice.get(
-                "image_name",
-                "",
-            )
-        ).strip()
-
-        label = str(
-            raw_choice.get(
-                "label",
-                image_name,
-            )
-        ).strip()
-
         if not choice_id:
             raise CrucibleForgeError(
                 "Windows image choice has no id."
@@ -1101,24 +1092,101 @@ def ask_windows_install_image(
                 f"{choice_id}"
             )
 
-        if not image_name:
-            raise CrucibleForgeError(
-                "Windows image choice "
-                f"{choice_id} has no image_name."
-            )
-
-        if not label:
-            label = image_name
-
         seen_ids.add(
             choice_id
         )
+
+        # -----------------------------------------------------
+        # Image name is optional.
+        #
+        # Win10 / Win11 normally select by name.
+        # Server 2022 normally selects by WIM index.
+        # -----------------------------------------------------
+
+        image_name = str(
+            raw_choice.get(
+                "image_name",
+                "",
+            )
+        ).strip()
+
+        # -----------------------------------------------------
+        # Image index is optional, but when present must be
+        # a positive integer.
+        # -----------------------------------------------------
+
+        image_index_raw = raw_choice.get(
+            "image_index"
+        )
+
+        image_index = None
+
+        if image_index_raw not in {
+            None,
+            "",
+        }:
+
+            try:
+                image_index = int(
+                    image_index_raw
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ) as exc:
+
+                raise CrucibleForgeError(
+                    "Windows image choice "
+                    f"{choice_id} has an invalid "
+                    "image_index."
+                ) from exc
+
+            if image_index < 1:
+                raise CrucibleForgeError(
+                    "Windows image choice "
+                    f"{choice_id} has an invalid "
+                    "image_index."
+                )
+
+        # Every choice needs at least one mechanism by which
+        # Windows Setup can identify its WIM image.
+
+        if (
+            image_index is None
+            and
+            not image_name
+        ):
+            raise CrucibleForgeError(
+                "Windows image choice "
+                f"{choice_id} defines neither "
+                "image_index nor image_name."
+            )
+
+        label = str(
+            raw_choice.get(
+                "label",
+                "",
+            )
+        ).strip()
+
+        if not label:
+
+            if image_name:
+                label = image_name
+
+            else:
+                label = (
+                    f"Windows image index "
+                    f"{image_index}"
+                )
 
         normalized_choices.append(
             {
                 "id": choice_id,
                 "label": label,
                 "image_name": image_name,
+                "image_index": image_index,
                 "setup_product_key": str(
                     raw_choice.get(
                         "setup_product_key",
@@ -1149,6 +1217,7 @@ def ask_windows_install_image(
         normalized_choices,
         start=1,
     ):
+
         if (
             choice["id"]
             == default_choice_id

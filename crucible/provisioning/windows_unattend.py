@@ -361,6 +361,65 @@ def build_unattend_iso(
             "must be a mapping."
         )
 
+    # ---------------------------------------------------------
+    # Resolve selected Windows installation image
+    #
+    # Client Windows normally selects by image name.
+    # Windows Server may select by WIM image index.
+    # ---------------------------------------------------------
+
+    install_image = autoinstall.get(
+        "install_image",
+        {},
+    )
+
+    if not isinstance(
+        install_image,
+        dict,
+    ):
+        raise WindowsUnattendError(
+            "autoinstall.install_image "
+            "must be a mapping."
+        )
+
+    # Optional WIM image index.
+
+    image_index_raw = install_image.get(
+        "index"
+    )
+
+    image_index = None
+
+    if image_index_raw not in {
+        None,
+        "",
+    }:
+
+        try:
+            image_index = int(
+                image_index_raw
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise WindowsUnattendError(
+                "Selected Windows image index "
+                "is invalid."
+            ) from exc
+
+        if image_index < 1:
+            raise WindowsUnattendError(
+                "Selected Windows image index "
+                "must be at least 1."
+            )
+
+    # Optional WIM image name.
+    #
+    # Fall back to the OS profile for Windows 10/11,
+    # which still use fixed image names.
+
     image_name = str(
         install_image.get(
             "name",
@@ -371,16 +430,16 @@ def build_unattend_iso(
         )
     ).strip()
 
-    if not image_name:
-        raise WindowsUnattendError(
-            "No Windows installation "
-            "image name was selected."
-        )
+    # At least one selector must exist.
 
-    if not image_name:
+    if (
+        image_index is None
+        and
+        not image_name
+    ):
         raise WindowsUnattendError(
-            "Windows OS profile does not "
-            "define installer.image_name."
+            "No Windows installation image "
+            "index or name was selected."
         )
 
     setup_product_key = str(
@@ -586,6 +645,10 @@ def build_unattend_iso(
         "computer_name": machine_name,
 
         "image_name": image_name,
+
+        "image_index": (
+            image_index
+        ),
 
         "setup_product_key": (
             setup_product_key
