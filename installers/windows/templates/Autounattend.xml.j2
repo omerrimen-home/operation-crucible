@@ -96,9 +96,15 @@
 
             <MetaData wcm:action="add">
 
+          {% if image_index is not none %}
+              <Key>/IMAGE/INDEX</Key>
+
+              <Value>{{ image_index }}</Value>
+          {% else %}
               <Key>/IMAGE/NAME</Key>
 
               <Value>{{ image_name|xml }}</Value>
+          {% endif %}
 
             </MetaData>
 
@@ -113,7 +119,7 @@
 
           </InstallTo>
 
-          <WillShowUI>OnError</WillShowUI>
+          <WillShowUI>Never</WillShowUI>
 
         </OSImage>
 
