@@ -40,6 +40,12 @@ management:
   user: crucible
   python_required: false
 
+  readiness:
+    port_timeout_seconds: 3600
+    connection_timeout_seconds: 900
+    bootstrap_timeout_seconds: 600
+    poll_interval_seconds: 5
+
 virtualbox:
   ostype_candidates:
     - Windows11_64

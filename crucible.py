@@ -78,6 +78,14 @@ ANSIBLE_RUNTIME_DIR = (
     / "ansible"
 )
 
+WINDOWS_BOOTSTRAP_COMPLETE_PATH = (
+    r"C:\ProgramData\Crucible\bootstrap-complete"
+)
+
+WINDOWS_BOOTSTRAP_FAILED_PATH = (
+    r"C:\ProgramData\Crucible\bootstrap-failed"
+)
+
 SUPPORTED_VM_COUNT = 1
 
 SUPPORTED_OPERATING_SYSTEMS = {
@@ -792,6 +800,37 @@ def ask_password() -> tuple[str, str]:
 
     return first, hash_password(first)
 
+def ask_windows_password() -> str:
+    """
+    Ask for a Windows local-account password.
+
+    Pressing Enter causes Crucible to generate a strong
+    password automatically.
+    """
+
+    print()
+    print(
+        "Press Enter at the password prompt to have "
+        "Crucible generate a strong password."
+    )
+
+    first = getpass.getpass(
+        "Login password [generate]: "
+    )
+
+    if not first:
+        return generate_password()
+
+    second = getpass.getpass(
+        "Confirm password: "
+    )
+
+    if first != second:
+        raise CrucibleForgeError(
+            "The two passwords did not match."
+        )
+
+    return first
 
 def show_autoinstall_defaults(
     vm_name: str,
@@ -947,129 +986,356 @@ def ask_autoinstall(
         plaintext_password,
     )
 
+def show_windows_unattend_defaults(
+    *,
+    vm_name: str,
+    edition: str,
+) -> None:
+    """
+    Display the effective Windows unattended-install
+    defaults before allowing the user to customize them.
+    """
+
+    print()
+    print(
+        f"{BOLD}"
+        "Windows unattended-install defaults:"
+        f"{RESET}"
+    )
+    print()
+
+    print(
+        f"  Computer Name     : "
+        f"{vm_name}"
+    )
+
+    print(
+        f"  Edition           : "
+        f"{edition}"
+    )
+
+    print(
+        f"  User              : "
+        f"{DEFAULT_WINDOWS_UNATTEND['username']}"
+    )
+
+    print(
+        f"  Display Name      : "
+        f"{DEFAULT_WINDOWS_UNATTEND['realname']}"
+    )
+
+    print(
+        f"  UI Language       : "
+        f"{DEFAULT_WINDOWS_UNATTEND['ui_language']}"
+    )
+
+    print(
+        f"  Input Locale      : "
+        f"{DEFAULT_WINDOWS_UNATTEND['input_locale']}"
+    )
+
+    print(
+        f"  System Locale     : "
+        f"{DEFAULT_WINDOWS_UNATTEND['system_locale']}"
+    )
+
+    print(
+        f"  User Locale       : "
+        f"{DEFAULT_WINDOWS_UNATTEND['user_locale']}"
+    )
+
+    print(
+        f"  Timezone          : "
+        f"{DEFAULT_WINDOWS_UNATTEND['timezone']}"
+    )
+
+    print(
+        f"  Organization      : "
+        f"{DEFAULT_WINDOWS_UNATTEND['organization']}"
+    )
+
+    print(
+        "  Login Password    : securely generated"
+    )
+
+    print(
+        "  Disk              : wipe Disk 0"
+    )
+
+    print(
+        "  Partitioning      : GPT / EFI / MSR / Windows"
+    )
+
+    print(
+        "  Account Type      : local administrator"
+    )
+
+    print(
+        "  First Login       : automatic once"
+    )
+
+    print()
+
 def ask_windows_unattend(
+    os_info: dict[str, Any],
     vm_name: str,
 ) -> tuple[dict[str, Any], str]:
     """
     Build Windows unattended-install settings.
 
-    Milestone B deliberately generates a local administrator
-    account and performs one automatic login so Windows reaches
-    the desktop without interactive OOBE.
+    The user may accept Crucible's defaults or customize
+    machine-specific identity and regional settings.
+
+    OS edition, disk layout, administrator membership and
+    the single bootstrap autologon remain controlled by the
+    selected OS profile / Crucible provisioning design.
     """
 
-    plaintext_password = generate_password()
+    profile = load_os_profile(
+        str(
+            os_info[
+                "profile"
+            ]
+        )
+    )
+
+    installer = profile.get(
+        "installer",
+        {},
+    )
+
+    edition = str(
+        installer.get(
+            "image_name",
+            profile.get(
+                "display_name",
+                "Windows",
+            ),
+        )
+    ).strip()
+
+    show_windows_unattend_defaults(
+        vm_name=vm_name,
+        edition=edition,
+    )
+
+    use_defaults = ask_yes_no(
+        f"{BOLD}"
+        "Use Windows unattended-install defaults?"
+        f"{RESET}",
+        default=True,
+    )
+
+    if use_defaults:
+
+        plaintext_password = (
+            generate_password()
+        )
+
+        return (
+            {
+                "enabled": True,
+
+                "hostname": vm_name,
+
+                "identity": {
+                    "realname": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "realname"
+                        ]
+                    ),
+
+                    "username": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "username"
+                        ]
+                    ),
+
+                    "password": (
+                        plaintext_password
+                    ),
+                },
+
+                "locale": {
+                    "ui_language": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "ui_language"
+                        ]
+                    ),
+
+                    "input_locale": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "input_locale"
+                        ]
+                    ),
+
+                    "system_locale": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "system_locale"
+                        ]
+                    ),
+
+                    "user_locale": (
+                        DEFAULT_WINDOWS_UNATTEND[
+                            "user_locale"
+                        ]
+                    ),
+                },
+
+                "timezone": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "timezone"
+                    ]
+                ),
+
+                "organization": (
+                    DEFAULT_WINDOWS_UNATTEND[
+                        "organization"
+                    ]
+                ),
+
+                "disk": {
+                    "id": 0,
+                },
+
+                "autologon": {
+                    "enabled": True,
+                    "count": 1,
+                },
+            },
+
+            plaintext_password,
+        )
+
+
+    # ---------------------------------------------------------
+    # Custom Windows unattended-install configuration
+    # ---------------------------------------------------------
 
     print()
     print(
-        f"{BOLD}Windows unattended-install defaults:{RESET}"
+        f"{BOLD}"
+        "Custom Windows unattended-install configuration"
+        f"{RESET}"
     )
     print()
 
-    print(
-        f"  Computer Name     : {vm_name}"
+    hostname = ask_with_default(
+        "Computer Name",
+        vm_name,
     )
-    print(
-        f"  Edition           : Windows 11 Pro"
+
+    username = ask_with_default(
+        "Username",
+        DEFAULT_WINDOWS_UNATTEND[
+            "username"
+        ],
     )
-    print(
-        f"  User              : "
-        f"{DEFAULT_WINDOWS_UNATTEND['username']}"
+
+    realname = ask_with_default(
+        "Display Name",
+        DEFAULT_WINDOWS_UNATTEND[
+            "realname"
+        ],
     )
-    print(
-        f"  Display Name      : "
-        f"{DEFAULT_WINDOWS_UNATTEND['realname']}"
+
+    ui_language = ask_with_default(
+        "UI Language",
+        DEFAULT_WINDOWS_UNATTEND[
+            "ui_language"
+        ],
     )
-    print(
-        f"  UI Language       : "
-        f"{DEFAULT_WINDOWS_UNATTEND['ui_language']}"
+
+    input_locale = ask_with_default(
+        "Input Locale",
+        DEFAULT_WINDOWS_UNATTEND[
+            "input_locale"
+        ],
     )
-    print(
-        f"  System Locale     : "
-        f"{DEFAULT_WINDOWS_UNATTEND['system_locale']}"
+
+    system_locale = ask_with_default(
+        "System Locale",
+        DEFAULT_WINDOWS_UNATTEND[
+            "system_locale"
+        ],
     )
-    print(
-        f"  User Locale       : "
-        f"{DEFAULT_WINDOWS_UNATTEND['user_locale']}"
+
+    user_locale = ask_with_default(
+        "User Locale",
+        DEFAULT_WINDOWS_UNATTEND[
+            "user_locale"
+        ],
     )
-    print(
-        f"  Timezone          : "
-        f"{DEFAULT_WINDOWS_UNATTEND['timezone']}"
+
+    timezone = ask_with_default(
+        "Timezone",
+        DEFAULT_WINDOWS_UNATTEND[
+            "timezone"
+        ],
     )
-    print(
-        "  Disk              : wipe Disk 0"
+
+    organization = ask_with_default(
+        "Organization",
+        DEFAULT_WINDOWS_UNATTEND[
+            "organization"
+        ],
     )
-    print(
-        "  Partitioning      : GPT / EFI / MSR / Windows"
+
+    plaintext_password = (
+        ask_windows_password()
     )
-    print(
-        "  Account Type      : local administrator"
-    )
-    print(
-        "  First Login       : automatic once"
-    )
+
     print()
+    print(
+        f"{DIM}"
+        f"Windows edition remains fixed by profile: "
+        f"{edition}"
+        f"{RESET}"
+    )
+
+    print(
+        f"{DIM}"
+        "Disk 0 will be wiped and the Crucible "
+        "administrator will automatically log in once "
+        "so bootstrap.ps1 can run."
+        f"{RESET}"
+    )
 
     return (
         {
             "enabled": True,
 
-            "hostname": vm_name,
+            "hostname": hostname,
 
             "identity": {
-                "realname": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "realname"
-                    ]
+                "realname": realname,
+                "username": username,
+                "password": (
+                    plaintext_password
                 ),
-                "username": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "username"
-                    ]
-                ),
-
-                # Milestone B needs this value while
-                # rendering Autounattend.xml.
-                #
-                # The generated machine manifest lives
-                # under .crucible/, which is gitignored.
-                "password": plaintext_password,
             },
 
             "locale": {
                 "ui_language": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "ui_language"
-                    ]
+                    ui_language
                 ),
+
                 "input_locale": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "input_locale"
-                    ]
+                    input_locale
                 ),
+
                 "system_locale": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "system_locale"
-                    ]
+                    system_locale
                 ),
+
                 "user_locale": (
-                    DEFAULT_WINDOWS_UNATTEND[
-                        "user_locale"
-                    ]
+                    user_locale
                 ),
             },
 
-            "timezone": (
-                DEFAULT_WINDOWS_UNATTEND[
-                    "timezone"
-                ]
-            ),
+            "timezone": timezone,
 
-            "organization": (
-                DEFAULT_WINDOWS_UNATTEND[
-                    "organization"
-                ]
-            ),
+            "organization": organization,
 
             "disk": {
                 "id": 0,
@@ -1080,6 +1346,7 @@ def ask_windows_unattend(
                 "count": 1,
             },
         },
+
         plaintext_password,
     )
 
@@ -1089,11 +1356,11 @@ def ask_installation_configuration(
 ) -> tuple[dict[str, Any], str | None]:
     """
     Dispatch installation configuration according to the
-    selected OS profile.
+    selected OS profile and installer backend.
 
-    Windows unattended installation is intentionally
-    disabled during Milestone A. The VM is created and
-    booted from the vendor ISO only.
+    Linux and Windows installers expose their normal
+    Crucible defaults and allow machine-specific
+    customization where appropriate.
     """
 
     profile = load_os_profile(
@@ -1122,7 +1389,8 @@ def ask_installation_configuration(
 
     if backend == "windows-unattend":
         return ask_windows_unattend(
-            vm_name
+            os_info,
+            vm_name,
         )
 
     raise CrucibleForgeError(
@@ -1363,6 +1631,271 @@ def get_machine_connection_info(
         username,
     )
 
+def get_windows_connection_info(
+    machine_manifest_path: Path,
+) -> dict[str, Any]:
+    """
+    Extract controller-side Windows management information
+    from the generated runtime manifest and OS profile.
+    """
+
+    with machine_manifest_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        manifest = yaml.safe_load(
+            file
+        )
+
+    if not isinstance(
+        manifest,
+        dict,
+    ):
+        raise CrucibleForgeError(
+            "Windows machine manifest is not valid YAML."
+        )
+
+    profile_name = str(
+        manifest.get(
+            "profile",
+            "",
+        )
+    ).strip()
+
+    if not profile_name:
+        raise CrucibleForgeError(
+            "Windows machine manifest has no profile."
+        )
+
+    profile = load_os_profile(
+        profile_name
+    )
+
+    management_profile = profile.get(
+        "management",
+        {},
+    )
+
+    transport = str(
+        management_profile.get(
+            "transport",
+            "",
+        )
+    ).strip().lower()
+
+    if transport != "psrp":
+        raise CrucibleForgeError(
+            "Windows management currently requires "
+            f"PSRP; profile specifies "
+            f"{transport or 'nothing'}."
+        )
+
+    autoinstall = manifest.get(
+        "autoinstall",
+        {},
+    )
+
+    identity = autoinstall.get(
+        "identity",
+        {},
+    )
+
+    username = str(
+        identity.get(
+            "username",
+            management_profile.get(
+                "user",
+                "",
+            ),
+        )
+    ).strip()
+
+    password = str(
+        identity.get(
+            "password",
+            "",
+        )
+    )
+
+    if not username:
+        raise CrucibleForgeError(
+            "Windows runtime manifest does not "
+            "contain a management username."
+        )
+
+    if not password:
+        raise CrucibleForgeError(
+            "Windows runtime manifest does not "
+            "contain the generated management password."
+        )
+
+    network = manifest.get(
+        "network",
+        {},
+    )
+
+    management_network = network.get(
+        "management",
+        {},
+    )
+
+    management_address = str(
+        management_network.get(
+            "address",
+            "",
+        )
+    ).strip()
+
+    if not management_address:
+        raise CrucibleForgeError(
+            "Windows runtime manifest does not "
+            "contain a management address."
+        )
+
+    management_ip = (
+        management_address.split(
+            "/",
+            1,
+        )[0]
+    )
+
+    readiness = management_profile.get(
+        "readiness",
+        {},
+    )
+
+    return {
+        "machine_name": str(
+            manifest["name"]
+        ),
+
+        "management_ip": (
+            management_ip
+        ),
+
+        "username": username,
+
+        "password": password,
+
+        "transport": transport,
+
+        "protocol": str(
+            management_profile.get(
+                "protocol",
+                "https",
+            )
+        ).strip().lower(),
+
+        "port": int(
+            management_profile.get(
+                "port",
+                5986,
+            )
+        ),
+
+        "auth": str(
+            management_profile.get(
+                "auth",
+                "ntlm",
+            )
+        ).strip().lower(),
+
+        "cert_validation": str(
+            management_profile.get(
+                "cert_validation",
+                "ignore",
+            )
+        ).strip().lower(),
+
+        "port_timeout_seconds": int(
+            readiness.get(
+                "port_timeout_seconds",
+                3600,
+            )
+        ),
+
+        "connection_timeout_seconds": int(
+            readiness.get(
+                "connection_timeout_seconds",
+                900,
+            )
+        ),
+
+        "bootstrap_timeout_seconds": int(
+            readiness.get(
+                "bootstrap_timeout_seconds",
+                600,
+            )
+        ),
+
+        "poll_interval_seconds": float(
+            readiness.get(
+                "poll_interval_seconds",
+                5,
+            )
+        ),
+    }
+
+def wait_for_tcp_port(
+    host: str,
+    *,
+    port: int,
+    service_name: str,
+    timeout: int,
+    poll_interval: float = 3.0,
+) -> None:
+    """
+    Wait until a TCP service begins accepting connections.
+    """
+
+    print()
+    print(
+        f"{CYAN}Waiting for "
+        f"{service_name} on "
+        f"{host}:{port}..."
+        f"{RESET}"
+    )
+
+    deadline = (
+        time.monotonic()
+        + timeout
+    )
+
+    while (
+        time.monotonic()
+        < deadline
+    ):
+        try:
+
+            with socket.create_connection(
+                (
+                    host,
+                    port,
+                ),
+                timeout=2.0,
+            ):
+
+                print(
+                    f"{GREEN}[✓]{RESET} "
+                    f"{service_name} port "
+                    f"is reachable."
+                )
+
+                return
+
+        except OSError:
+
+            time.sleep(
+                poll_interval
+            )
+
+    raise CrucibleForgeError(
+        f"Timed out waiting for "
+        f"{service_name} on "
+        f"{host}:{port}."
+    )
+
+
 def wait_for_ssh(
     host: str,
     *,
@@ -1371,35 +1904,16 @@ def wait_for_ssh(
     poll_interval: float = 3.0,
 ) -> None:
     """
-    Wait until the VM begins accepting TCP connections on SSH.
+    Linux compatibility wrapper around the generic
+    TCP-service readiness check.
     """
 
-    print()
-    print(
-        f"{CYAN}Waiting for SSH on "
-        f"{host}:{port}...{RESET}"
-    )
-
-    deadline = time.monotonic() + timeout
-
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(
-                (host, port),
-                timeout=2.0,
-            ):
-                print(
-                    f"{GREEN}[✓]{RESET} "
-                    f"SSH port is reachable."
-                )
-                return
-
-        except OSError:
-            time.sleep(poll_interval)
-
-    raise CrucibleForgeError(
-        f"Timed out waiting for SSH on "
-        f"{host}:{port}."
+    wait_for_tcp_port(
+        host,
+        port=port,
+        service_name="SSH",
+        timeout=timeout,
+        poll_interval=poll_interval,
     )
 
 def forge_machine(
@@ -1480,6 +1994,103 @@ def generate_ansible_inventory(
             file,
             sort_keys=False,
         )
+
+    return inventory_path
+
+def generate_windows_ansible_inventory(
+    *,
+    machine_name: str,
+    host: str,
+    username: str,
+    password: str,
+    protocol: str,
+    port: int,
+    auth: str,
+    cert_validation: str,
+) -> Path:
+    """
+    Generate Crucible's runtime Ansible inventory for a
+    Windows machine managed through PSRP.
+
+    This inventory contains the generated Windows password,
+    so it remains exclusively under .crucible/.
+    """
+
+    inventory_path = (
+        ANSIBLE_RUNTIME_DIR
+        / "inventory.yml"
+    )
+
+    inventory_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    inventory = {
+        "all": {
+            "hosts": {
+                machine_name: {
+
+                    "ansible_host": (
+                        host
+                    ),
+
+                    "ansible_connection": (
+                        "psrp"
+                    ),
+
+                    "ansible_user": (
+                        username
+                    ),
+
+                    "ansible_password": (
+                        password
+                    ),
+
+                    "ansible_psrp_protocol": (
+                        protocol
+                    ),
+
+                    "ansible_psrp_port": (
+                        port
+                    ),
+
+                    "ansible_psrp_auth": (
+                        auth
+                    ),
+
+                    "ansible_psrp_cert_validation": (
+                        cert_validation
+                    ),
+
+                    # This is an isolated host-only
+                    # management network. Do not let
+                    # controller proxy environment settings
+                    # interfere with the direct connection.
+                    "ansible_psrp_ignore_proxy": (
+                        True
+                    ),
+                }
+            }
+        }
+    }
+
+    with inventory_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+
+        yaml.safe_dump(
+            inventory,
+            file,
+            sort_keys=False,
+        )
+
+    # The Windows runtime inventory contains the plaintext
+    # generated local-administrator password.
+    inventory_path.chmod(
+        0o600
+    )
 
     return inventory_path
 
@@ -1578,7 +2189,7 @@ def verify_ansible(
         f"Ansible connectivity verified."
     )
 
-def verify_machine_ready(
+def verify_linux_machine_ready(
     machine_manifest_path: Path,
 ) -> None:
     """
@@ -1634,6 +2245,274 @@ def verify_machine_ready(
         machine_name=machine_name,
         inventory_path=inventory_path,
     )
+
+def verify_windows_machine_ready(
+    machine_manifest_path: Path,
+) -> None:
+    """
+    Wait for a newly forged Windows machine to become
+    completely manageable by Crucible through PSRP.
+    """
+
+    verify_windows_ansible_prerequisites()
+
+    connection = (
+        get_windows_connection_info(
+            machine_manifest_path
+        )
+    )
+
+    machine_name = str(
+        connection[
+            "machine_name"
+        ]
+    )
+
+    management_ip = str(
+        connection[
+            "management_ip"
+        ]
+    )
+
+    username = str(
+        connection[
+            "username"
+        ]
+    )
+
+    print()
+    print(
+        f"{BOLD}Management target:{RESET} "
+        f"{username}@{management_ip} "
+        f"via PSRP/"
+        f"{connection['protocol'].upper()}:"
+        f"{connection['port']}"
+    )
+
+    inventory_path = (
+        generate_windows_ansible_inventory(
+            machine_name=machine_name,
+            host=management_ip,
+            username=username,
+            password=str(
+                connection[
+                    "password"
+                ]
+            ),
+            protocol=str(
+                connection[
+                    "protocol"
+                ]
+            ),
+            port=int(
+                connection[
+                    "port"
+                ]
+            ),
+            auth=str(
+                connection[
+                    "auth"
+                ]
+            ),
+            cert_validation=str(
+                connection[
+                    "cert_validation"
+                ]
+            ),
+        )
+    )
+
+    print(
+        f"{GREEN}[✓]{RESET} "
+        "Windows Ansible inventory generated:"
+    )
+
+    print(
+        "    "
+        f"{inventory_path.relative_to(REPO_ROOT)}"
+    )
+
+    print(
+        f"{DIM}"
+        "    Runtime inventory contains the "
+        "generated Windows password and is "
+        "mode 0600 under .crucible/."
+        f"{RESET}"
+    )
+
+    wait_for_tcp_port(
+        management_ip,
+        port=int(
+            connection[
+                "port"
+            ]
+        ),
+        service_name="WinRM HTTPS",
+        timeout=int(
+            connection[
+                "port_timeout_seconds"
+            ]
+        ),
+        poll_interval=float(
+            connection[
+                "poll_interval_seconds"
+            ]
+        ),
+    )
+
+    wait_for_windows_psrp(
+        machine_name=machine_name,
+        inventory_path=inventory_path,
+        timeout=int(
+            connection[
+                "connection_timeout_seconds"
+            ]
+        ),
+        poll_interval=float(
+            connection[
+                "poll_interval_seconds"
+            ]
+        ),
+    )
+
+    wait_for_windows_bootstrap(
+        machine_name=machine_name,
+        inventory_path=inventory_path,
+        timeout=int(
+            connection[
+                "bootstrap_timeout_seconds"
+            ]
+        ),
+        poll_interval=float(
+            connection[
+                "poll_interval_seconds"
+            ]
+        ),
+    )
+
+    verify_windows_ansible(
+        machine_name=machine_name,
+        inventory_path=inventory_path,
+    )
+
+def verify_machine_ready(
+    machine_manifest_path: Path,
+) -> None:
+    """
+    Dispatch controller-side readiness verification according
+    to the guest operating-system family.
+    """
+
+    with machine_manifest_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+
+        manifest = yaml.safe_load(
+            file
+        )
+
+    if not isinstance(
+        manifest,
+        dict,
+    ):
+        raise CrucibleForgeError(
+            "Machine manifest is not valid YAML."
+        )
+
+    profile_name = str(
+        manifest.get(
+            "profile",
+            "",
+        )
+    ).strip()
+
+    if not profile_name:
+        raise CrucibleForgeError(
+            "Machine manifest has no OS profile."
+        )
+
+    profile = load_os_profile(
+        profile_name
+    )
+
+    guest_family = str(
+        profile.get(
+            "os",
+            {},
+        ).get(
+            "family",
+            "",
+        )
+    ).strip().lower()
+
+    if guest_family == "linux":
+
+        verify_linux_machine_ready(
+            machine_manifest_path
+        )
+
+        return
+
+    if guest_family == "windows":
+
+        verify_windows_machine_ready(
+            machine_manifest_path
+        )
+
+        return
+
+    raise CrucibleForgeError(
+        "No readiness verification path exists "
+        "for guest family: "
+        f"{guest_family or 'undefined'}"
+    )
+
+def verify_windows_ansible_prerequisites() -> None:
+    """
+    Verify the controller has the Ansible pieces required
+    for Windows PSRP management.
+    """
+
+    if shutil.which(
+        "ansible"
+    ) is None:
+
+        raise CrucibleForgeError(
+            "Ansible was not found on the controller."
+        )
+
+    ansible_doc = shutil.which(
+        "ansible-doc"
+    )
+
+    if ansible_doc is None:
+
+        raise CrucibleForgeError(
+            "ansible-doc was not found on the controller."
+        )
+
+    result = subprocess.run(
+        [
+            ansible_doc,
+            "-t",
+            "module",
+            "ansible.windows.win_ping",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+
+        raise CrucibleForgeError(
+            "The ansible.windows collection is not "
+            "available on the controller. Install the "
+            "repository's Ansible requirements with:\n"
+            "  ansible-galaxy collection install "
+            "-r ansible/requirements.yml"
+        )
 
 def ask_int_with_default(
     prompt: str,
@@ -1692,6 +2571,267 @@ def ask_choice(
             f"{RED}Choose one of: "
             f"{choices_text}.{RESET}"
         )
+
+def wait_for_windows_psrp(
+    *,
+    machine_name: str,
+    inventory_path: Path,
+    timeout: int,
+    poll_interval: float,
+) -> None:
+    """
+    Wait until Ansible can establish a complete usable PSRP
+    session with the Windows guest.
+
+    ansible.builtin.wait_for_connection automatically uses
+    the target's configured connection plugin and Windows
+    ping implementation.
+    """
+
+    print()
+    print(
+        f"{CYAN}"
+        "Waiting for Windows PSRP management "
+        "to become usable..."
+        f"{RESET}"
+    )
+
+    sleep_seconds = max(
+        1,
+        int(
+            poll_interval
+        ),
+    )
+
+    result = subprocess.run(
+        [
+            "ansible",
+            machine_name,
+            "-i",
+            str(
+                inventory_path
+            ),
+            "-m",
+            (
+                "ansible.builtin."
+                "wait_for_connection"
+            ),
+            "-a",
+            (
+                f"timeout={timeout} "
+                "connect_timeout=10 "
+                f"sleep={sleep_seconds}"
+            ),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+
+        details = (
+            result.stdout.strip()
+            or
+            result.stderr.strip()
+            or
+            "No Ansible diagnostic output."
+        )
+
+        raise CrucibleForgeError(
+            "Windows PSRP did not become usable.\n"
+            f"{details}"
+        )
+
+    print(
+        f"{GREEN}[✓]{RESET} "
+        "Windows PSRP connection is usable."
+    )
+
+def wait_for_windows_bootstrap(
+    *,
+    machine_name: str,
+    inventory_path: Path,
+    timeout: int,
+    poll_interval: float = 5.0,
+) -> None:
+    """
+    Wait until bootstrap.ps1 reports completion.
+
+    If bootstrap.ps1 created bootstrap-failed, surface that
+    failure immediately instead of waiting for the full
+    timeout.
+    """
+
+    print()
+    print(
+        f"{CYAN}"
+        "Waiting for Crucible Windows bootstrap "
+        "to complete..."
+        f"{RESET}"
+    )
+
+    deadline = (
+        time.monotonic()
+        + timeout
+    )
+
+    failed_path = (
+        WINDOWS_BOOTSTRAP_FAILED_PATH
+    )
+
+    complete_path = (
+        WINDOWS_BOOTSTRAP_COMPLETE_PATH
+    )
+
+    probe_script = (
+        f"$failed = '{failed_path}'; "
+        f"$complete = '{complete_path}'; "
+
+        "if (Test-Path $failed) { "
+        "Write-Output "
+        "'CRUCIBLE_BOOTSTRAP_FAILED'; "
+        "Get-Content $failed -Raw; "
+        "exit 2 "
+        "}; "
+
+        "if (Test-Path $complete) { "
+        "Write-Output "
+        "'CRUCIBLE_BOOTSTRAP_COMPLETE'; "
+        "exit 0 "
+        "}; "
+
+        "exit 1"
+    )
+
+    command = [
+        "ansible",
+        machine_name,
+        "-i",
+        str(
+            inventory_path
+        ),
+        "-m",
+        "ansible.windows.win_shell",
+        "-a",
+        probe_script,
+    ]
+
+    while (
+        time.monotonic()
+        < deadline
+    ):
+
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        combined_output = (
+            result.stdout
+            + "\n"
+            + result.stderr
+        )
+
+        if (
+            "CRUCIBLE_BOOTSTRAP_FAILED"
+            in combined_output
+        ):
+
+            raise CrucibleForgeError(
+                "Windows bootstrap reported failure:\n"
+                + combined_output.strip()
+            )
+
+        if (
+            result.returncode == 0
+            and
+            "CRUCIBLE_BOOTSTRAP_COMPLETE"
+            in combined_output
+        ):
+
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "Windows bootstrap complete."
+            )
+
+            return
+
+        time.sleep(
+            poll_interval
+        )
+
+    raise CrucibleForgeError(
+        "Timed out waiting for Windows "
+        "bootstrap to complete."
+    )
+
+def verify_windows_ansible(
+    *,
+    machine_name: str,
+    inventory_path: Path,
+) -> None:
+    """
+    Perform Crucible's final Windows Ansible connectivity
+    verification.
+    """
+
+    print()
+    print(
+        f"{CYAN}"
+        "Verifying Windows Ansible connectivity..."
+        f"{RESET}"
+    )
+    print()
+
+    result = subprocess.run(
+        [
+            "ansible",
+            machine_name,
+            "-i",
+            str(
+                inventory_path
+            ),
+            "-m",
+            "ansible.windows.win_ping",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.stdout:
+        print(
+            result.stdout.rstrip()
+        )
+
+    if result.stderr:
+        print(
+            result.stderr.rstrip(),
+            file=sys.stderr,
+        )
+
+    if result.returncode != 0:
+
+        raise CrucibleForgeError(
+            "Windows Ansible connectivity "
+            "verification failed."
+        )
+
+    if "pong" not in result.stdout:
+
+        raise CrucibleForgeError(
+            "Windows Ansible command returned success "
+            "but did not return the expected pong."
+        )
+
+    print()
+    print(
+        f"{GREEN}[✓]{RESET} "
+        "Windows Ansible connectivity verified."
+    )
 
 def main() -> int:
     try:
@@ -1792,46 +2932,9 @@ def main() -> int:
 
         forge_machine(machine_path)
 
-        profile = load_os_profile(
-            str(os_info["profile"])
-        )
-
-        guest_os = profile.get(
-            "os",
-            {},
-        )
-
-        guest_family = str(
-            guest_os.get(
-                "family",
-                "",
-            )
-        ).strip().lower()
-
-        if guest_family == "linux":
-            verify_machine_ready(
-                machine_path
-            )
-
-        elif guest_family == "windows":
-            print()
-            print(
-                f"{GREEN}[✓]{RESET} "
-                "Windows VM created and started."
-            )
-            print(
-                f"{DIM}"
-                "Windows management verification are "
-                "deferred to later milestones."
-                f"{RESET}"
-            )
-
-        else:
-            raise CrucibleForgeError(
-                "No readiness verification path "
-                f"exists for guest family: "
-                f"{guest_family or 'undefined'}"
-            )
+        verify_machine_ready(
+                    machine_path
+                )
 
         print()
         print(

@@ -5,26 +5,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$StateRoot = Join-Path -Path $env:ProgramData -ChildPath "Crucible"
+$LogPath = Join-Path -Path $StateRoot -ChildPath "bootstrap.log"
+$CompletePath = Join-Path -Path $StateRoot -ChildPath "bootstrap-complete"
+$FailurePath = Join-Path -Path $StateRoot -ChildPath "bootstrap-failed"
 
-$StateRoot = Join-Path `
-    $env:ProgramData `
-    "Crucible"
-
-New-Item `
-    -ItemType Directory `
-    -Path $StateRoot `
-    -Force `
-    | Out-Null
-
-
-$LogPath = Join-Path `
-    $StateRoot `
-    "bootstrap.log"
-
-Start-Transcript `
-    -Path $LogPath `
-    -Append `
-    | Out-Null
+$TranscriptStarted = $false
+$BootstrapExitCode = 0
 
 
 function Write-CrucibleLog {
@@ -33,22 +20,70 @@ function Write-CrucibleLog {
         [string] $Message
     )
 
-    $timestamp = (
-        Get-Date
-    ).ToString("o")
+    $Timestamp = (Get-Date).ToString("o")
 
-    Write-Host (
-        "[{0}] {1}" -f
-        $timestamp,
-        $Message
+    Write-Host ("[{0}] {1}" -f $Timestamp, $Message)
+}
+
+
+function Normalize-MacAddress {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $MacAddress
     )
+
+    return $MacAddress.Replace(":", "").Replace("-", "").ToUpperInvariant()
 }
 
 
 try {
 
-    Write-CrucibleLog `
-        "Starting Windows bootstrap."
+    # ---------------------------------------------------------
+    # Initialize Crucible state and logging
+    # ---------------------------------------------------------
+
+    New-Item `
+        -ItemType Directory `
+        -Path $StateRoot `
+        -Force |
+        Out-Null
+
+    Remove-Item `
+        -Path $CompletePath `
+        -Force `
+        -ErrorAction SilentlyContinue
+
+    Remove-Item `
+        -Path $FailurePath `
+        -Force `
+        -ErrorAction SilentlyContinue
+
+    Start-Transcript `
+        -Path $LogPath `
+        -Append |
+        Out-Null
+
+    $TranscriptStarted = $true
+
+    Write-CrucibleLog "Starting Windows bootstrap."
+
+
+    # ---------------------------------------------------------
+    # Verify administrator context
+    # ---------------------------------------------------------
+
+    $CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+
+    $CurrentPrincipal = New-Object `
+        Security.Principal.WindowsPrincipal($CurrentIdentity)
+
+    $AdministratorRole = [Security.Principal.WindowsBuiltInRole]::Administrator
+
+    if (-not $CurrentPrincipal.IsInRole($AdministratorRole)) {
+        throw "Crucible Windows bootstrap requires an elevated administrator context."
+    }
+
+    Write-CrucibleLog "Administrator context confirmed."
 
 
     # ---------------------------------------------------------
@@ -56,162 +91,110 @@ try {
     # ---------------------------------------------------------
 
     $ConfigPath = Join-Path `
-        $PSScriptRoot `
-        "crucible-bootstrap.json"
+        -Path $PSScriptRoot `
+        -ChildPath "crucible-bootstrap.json"
 
-    if (-not (
-        Test-Path $ConfigPath
-    )) {
-        throw (
-            "Bootstrap configuration not found: "
-            + $ConfigPath
-        )
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw "Bootstrap configuration not found: $ConfigPath"
     }
 
+    Write-CrucibleLog "Loading bootstrap configuration from $ConfigPath."
 
-    $Config = (
-        Get-Content `
-            -Path $ConfigPath `
-            -Raw
-        | ConvertFrom-Json
-    )
+    $ConfigText = Get-Content `
+        -LiteralPath $ConfigPath `
+        -Raw
 
+    $Config = $ConfigText | ConvertFrom-Json
+
+    $StoredConfigPath = Join-Path `
+        -Path $StateRoot `
+        -ChildPath "bootstrap-config.json"
 
     Copy-Item `
-        -Path $ConfigPath `
-        -Destination (
-            Join-Path `
-                $StateRoot `
-                "bootstrap-config.json"
-        ) `
+        -LiteralPath $ConfigPath `
+        -Destination $StoredConfigPath `
         -Force
+
+    Write-CrucibleLog "Bootstrap configuration loaded."
 
 
     # ---------------------------------------------------------
     # Resolve management settings
     # ---------------------------------------------------------
 
-    $ManagementIp = [string] (
-        $Config.management.address
-    )
-
-    $PrefixLength = [int] (
-        $Config.management.prefix_length
-    )
-
-    $ManagementNetwork = [string] (
-        $Config.management.network
-    )
-
-    $TargetMac = (
-        [string] (
-            $Config.management.mac_address
-        )
-    ).Replace(
-        ":",
-        ""
-    ).Replace(
-        "-",
-        ""
-    ).ToUpperInvariant()
-
-
-    $WinRmPort = [int] (
-        $Config.winrm.port
-    )
-
+    $ManagementIp = [string]$Config.management.address
+    $PrefixLength = [int]$Config.management.prefix_length
+    $ManagementNetwork = [string]$Config.management.network
+    $TargetMac = Normalize-MacAddress ([string]$Config.management.mac_address)
+    $WinRmPort = [int]$Config.winrm.port
 
     Write-CrucibleLog (
-        "Management target: {0}/{1}" -f
-        $ManagementIp,
+        "Management target: {0}/{1}" -f `
+        $ManagementIp, `
         $PrefixLength
     )
 
     Write-CrucibleLog (
-        "Management MAC: {0}" -f
-        $TargetMac
+        "Management MAC: {0}" -f $TargetMac
+    )
+
+    Write-CrucibleLog (
+        "WinRM HTTPS port: {0}" -f $WinRmPort
     )
 
 
     # ---------------------------------------------------------
-    # Locate management NIC by MAC
+    # Locate management NIC by deterministic MAC
     # ---------------------------------------------------------
 
     $ManagementAdapter = $null
 
+    for ($Attempt = 1; $Attempt -le 30; $Attempt++) {
 
-    for (
-        $Attempt = 1;
-        $Attempt -le 30;
-        $Attempt++
-    ) {
+        $Adapters = Get-NetAdapter `
+            -ErrorAction SilentlyContinue
 
-        $ManagementAdapter = (
-            Get-NetAdapter `
-                -ErrorAction SilentlyContinue
-            | Where-Object {
+        foreach ($Adapter in $Adapters) {
 
-                $AdapterMac = (
-                    [string] $_.MacAddress
-                ).Replace(
-                    ":",
-                    ""
-                ).Replace(
-                    "-",
-                    ""
-                ).ToUpperInvariant()
+            $AdapterMac = Normalize-MacAddress ([string]$Adapter.MacAddress)
 
-                $AdapterMac -eq $TargetMac
+            if ($AdapterMac -eq $TargetMac) {
+                $ManagementAdapter = $Adapter
+                break
             }
-            | Select-Object -First 1
-        )
-
+        }
 
         if ($null -ne $ManagementAdapter) {
             break
         }
 
-
         Write-CrucibleLog (
-            "Waiting for management NIC "
-            + "(attempt $Attempt/30)."
+            "Waiting for management NIC (attempt {0}/30)." -f $Attempt
         )
 
         Start-Sleep -Seconds 2
     }
 
-
     if ($null -eq $ManagementAdapter) {
-        throw (
-            "Could not locate Crucible management "
-            + "NIC with MAC "
-            + $TargetMac
-        )
+        throw "Could not locate Crucible management NIC with MAC $TargetMac"
     }
 
-
-    $InterfaceIndex = (
-        $ManagementAdapter.ifIndex
-    )
-
+    $InterfaceIndex = [int]$ManagementAdapter.ifIndex
 
     Write-CrucibleLog (
-        "Management NIC found: "
-        + $ManagementAdapter.Name
-        + " (ifIndex "
-        + $InterfaceIndex
-        + ")"
+        "Management NIC found: {0} (ifIndex {1})" -f `
+        $ManagementAdapter.Name, `
+        $InterfaceIndex
     )
 
 
     # ---------------------------------------------------------
-    # Enable adapter if necessary
+    # Enable adapter if required
     # ---------------------------------------------------------
 
-    if (
-        $ManagementAdapter.Status
-        -eq "Disabled"
-    ) {
+    if ($ManagementAdapter.Status -eq "Disabled") {
+
+        Write-CrucibleLog "Enabling management NIC."
 
         Enable-NetAdapter `
             -InterfaceIndex $InterfaceIndex `
@@ -225,84 +208,91 @@ try {
     # Configure static management IPv4 address
     # ---------------------------------------------------------
 
+    Write-CrucibleLog "Configuring management IPv4 address."
+
     Set-NetIPInterface `
         -InterfaceIndex $InterfaceIndex `
         -AddressFamily IPv4 `
         -Dhcp Disabled
 
-
-    Get-NetIPAddress `
-        -InterfaceIndex $InterfaceIndex `
-        -AddressFamily IPv4 `
-        -ErrorAction SilentlyContinue `
-    | Where-Object {
-        $_.IPAddress -ne $ManagementIp
-    } `
-    | Remove-NetIPAddress `
-        -Confirm:$false `
-        -ErrorAction SilentlyContinue
-
-
-    Get-NetRoute `
-        -InterfaceIndex $InterfaceIndex `
-        -AddressFamily IPv4 `
-        -ErrorAction SilentlyContinue `
-    | Where-Object {
-        $_.DestinationPrefix -eq "0.0.0.0/0"
-    } `
-    | Remove-NetRoute `
-        -Confirm:$false `
-        -ErrorAction SilentlyContinue
-
-
-    $ExistingAddress = (
+    $ExistingAddresses = @(
         Get-NetIPAddress `
             -InterfaceIndex $InterfaceIndex `
             -AddressFamily IPv4 `
             -ErrorAction SilentlyContinue
-        | Where-Object {
-            $_.IPAddress -eq $ManagementIp
-        }
-        | Select-Object -First 1
     )
 
+    foreach ($Address in $ExistingAddresses) {
 
-    if ($null -eq $ExistingAddress) {
+        if ($Address.IPAddress -ne $ManagementIp) {
+
+            Write-CrucibleLog (
+                "Removing existing management NIC address: {0}" -f `
+                $Address.IPAddress
+            )
+
+            Remove-NetIPAddress `
+                -InterfaceIndex $InterfaceIndex `
+                -IPAddress $Address.IPAddress `
+                -Confirm:$false `
+                -ErrorAction SilentlyContinue
+        }
+    }
+
+
+    # The Crucible management interface must never become
+    # Windows' default Internet route. NAT NIC 1 owns that.
+    $DefaultRoutes = @(
+        Get-NetRoute `
+            -InterfaceIndex $InterfaceIndex `
+            -AddressFamily IPv4 `
+            -DestinationPrefix "0.0.0.0/0" `
+            -ErrorAction SilentlyContinue
+    )
+
+    foreach ($Route in $DefaultRoutes) {
+
+        Remove-NetRoute `
+            -InterfaceIndex $InterfaceIndex `
+            -DestinationPrefix "0.0.0.0/0" `
+            -Confirm:$false `
+            -ErrorAction SilentlyContinue
+    }
+
+
+    $ExistingManagementAddress = Get-NetIPAddress `
+        -InterfaceIndex $InterfaceIndex `
+        -AddressFamily IPv4 `
+        -IPAddress $ManagementIp `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $ExistingManagementAddress) {
 
         New-NetIPAddress `
             -InterfaceIndex $InterfaceIndex `
             -IPAddress $ManagementIp `
-            -PrefixLength $PrefixLength `
-            | Out-Null
+            -PrefixLength $PrefixLength |
+            Out-Null
     }
-
 
     Set-DnsClientServerAddress `
         -InterfaceIndex $InterfaceIndex `
         -ResetServerAddresses `
         -ErrorAction SilentlyContinue
 
-
-    Write-CrucibleLog `
-        "Management IPv4 configuration complete."
+    Write-CrucibleLog "Management IPv4 configuration complete."
 
 
     # ---------------------------------------------------------
-    # Mark management network Private where possible
+    # Mark management network as Private
     # ---------------------------------------------------------
 
-    for (
-        $Attempt = 1;
-        $Attempt -le 15;
-        $Attempt++
-    ) {
+    for ($Attempt = 1; $Attempt -le 15; $Attempt++) {
 
-        $ConnectionProfile = (
-            Get-NetConnectionProfile `
-                -InterfaceIndex $InterfaceIndex `
-                -ErrorAction SilentlyContinue
-        )
-
+        $ConnectionProfile = Get-NetConnectionProfile `
+            -InterfaceIndex $InterfaceIndex `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
 
         if ($null -ne $ConnectionProfile) {
 
@@ -310,131 +300,115 @@ try {
                 -InterfaceIndex $InterfaceIndex `
                 -NetworkCategory Private
 
+            Write-CrucibleLog "Management network marked Private."
+
             break
         }
-
 
         Start-Sleep -Seconds 1
     }
 
 
     # ---------------------------------------------------------
-    # Allow local Crucible administrator through remote UAC
+    # Permit remote administration using local Crucible admin
     # ---------------------------------------------------------
 
+    $TokenFilterPath = (
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+    )
+
     $TokenFilterParams = @{
-
-        Path = (
-            "HKLM:\SOFTWARE\Microsoft\Windows\"
-            + "CurrentVersion\Policies\System"
-        )
-
-        Name = (
-            "LocalAccountTokenFilterPolicy"
-        )
-
+        Path = $TokenFilterPath
+        Name = "LocalAccountTokenFilterPolicy"
         Value = 1
-
         PropertyType = "DWORD"
-
         Force = $true
     }
 
+    New-ItemProperty @TokenFilterParams |
+        Out-Null
 
-    New-ItemProperty `
-        @TokenFilterParams `
-        | Out-Null
+    Write-CrucibleLog "Local administrator remote token policy configured."
 
 
     # ---------------------------------------------------------
     # Enable PowerShell remoting / WinRM
     # ---------------------------------------------------------
 
-    Write-CrucibleLog `
-        "Enabling PowerShell remoting."
-
+    Write-CrucibleLog "Enabling PowerShell remoting."
 
     Enable-PSRemoting `
         -Force `
         -SkipNetworkProfileCheck
 
-
     Set-Service `
         -Name WinRM `
         -StartupType Automatic
 
+    Write-CrucibleLog "WinRM service enabled."
+
 
     # ---------------------------------------------------------
-    # Create self-signed TLS certificate
+    # Create or locate TLS certificate
     # ---------------------------------------------------------
 
-    $Certificate = (
-        Get-ChildItem `
-            "Cert:\LocalMachine\My"
-        | Where-Object {
+    $Certificate = $null
 
-            $_.Subject -eq (
-                "CN="
-                + $env:COMPUTERNAME
-            )
+    $Certificates = Get-ChildItem `
+        -Path "Cert:\LocalMachine\My" `
+        -ErrorAction SilentlyContinue
 
-            -and
+    foreach ($Candidate in $Certificates) {
 
-            $_.NotAfter -gt (
-                Get-Date
-            )
+        if (
+            $Candidate.Subject -eq "CN=$env:COMPUTERNAME" -and
+            $Candidate.NotAfter -gt (Get-Date)
+        ) {
+            $Certificate = $Candidate
+            break
         }
-        | Sort-Object `
-            NotAfter `
-            -Descending
-        | Select-Object -First 1
-    )
-
+    }
 
     if ($null -eq $Certificate) {
 
-        Write-CrucibleLog `
-            "Creating WinRM TLS certificate."
+        Write-CrucibleLog "Creating WinRM TLS certificate."
 
+        $CertificateParams = @{
+            DnsName = $env:COMPUTERNAME
+            Subject = "CN=$env:COMPUTERNAME"
+            CertStoreLocation = "Cert:\LocalMachine\My"
+            Type = "SSLServerAuthentication"
+            NotAfter = (Get-Date).AddYears(2)
+        }
 
-        $Certificate = (
-            New-SelfSignedCertificate `
-                -DnsName $env:COMPUTERNAME `
-                -Subject (
-                    "CN="
-                    + $env:COMPUTERNAME
-                ) `
-                -CertStoreLocation (
-                    "Cert:\LocalMachine\My"
-                ) `
-                -Type SSLServerAuthentication `
-                -NotAfter (
-                    Get-Date
-                ).AddYears(2)
-        )
+        $Certificate = New-SelfSignedCertificate @CertificateParams
     }
+
+    if ($null -eq $Certificate) {
+        throw "Failed to create or locate the WinRM TLS certificate."
+    }
+
+    Write-CrucibleLog (
+        "Using TLS certificate: {0}" -f $Certificate.Thumbprint
+    )
 
 
     # ---------------------------------------------------------
-    # Create HTTPS WinRM listener
+    # Replace existing HTTPS WinRM listeners
     # ---------------------------------------------------------
 
     $ExistingHttpsListeners = @(
         Get-ChildItem `
-            "WSMan:\localhost\Listener" `
-            -ErrorAction SilentlyContinue
-        | Where-Object {
-            $_.Keys -contains (
-                "Transport=HTTPS"
-            )
-        }
+            -Path "WSMan:\localhost\Listener" `
+            -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.Keys -contains "Transport=HTTPS"
+            }
     )
 
+    foreach ($Listener in $ExistingHttpsListeners) {
 
-    foreach (
-        $Listener
-        in $ExistingHttpsListeners
-    ) {
+        Write-CrucibleLog "Removing existing WinRM HTTPS listener."
 
         Remove-Item `
             -Path $Listener.PSPath `
@@ -443,187 +417,157 @@ try {
     }
 
 
-    $HttpsListenerParams = @{
-
-        Path = (
-            "WSMan:\localhost\Listener"
-        )
-
-        Address = "*"
-
-        Transport = "HTTPS"
-
-        CertificateThumbprint = (
-            $Certificate.Thumbprint
-        )
-
-        Enabled = $true
-
-        Port = $WinRmPort
-
-        Force = $true
-    }
-
+    Write-CrucibleLog (
+        "Creating WinRM HTTPS listener on port {0}." -f $WinRmPort
+    )
 
     New-Item `
-        @HttpsListenerParams `
-        | Out-Null
+        -Path "WSMan:\localhost\Listener" `
+        -Address "*" `
+        -Transport HTTPS `
+        -CertificateThumbprint $Certificate.Thumbprint `
+        -Port $WinRmPort `
+        -Force |
+        Out-Null
+
+    # The WSMan provider supports creation of listeners with
+    # Transport, CertificateThumbprint and Port parameters.
 
 
     # ---------------------------------------------------------
-    # Restrict Crucible WinRM firewall access to mgmt network
+    # Restrict WinRM HTTPS firewall access to mgmt network
     # ---------------------------------------------------------
 
-    $FirewallRuleName = (
-        "Crucible-WinRM-HTTPS"
-    )
+    $FirewallRuleName = "Crucible-WinRM-HTTPS"
 
+    $ExistingFirewallRule = Get-NetFirewallRule `
+        -Name $FirewallRuleName `
+        -ErrorAction SilentlyContinue
 
-    $ExistingFirewallRule = (
-        Get-NetFirewallRule `
-            -Name $FirewallRuleName `
-            -ErrorAction SilentlyContinue
-    )
-
-
-    if (
-        $null -ne $ExistingFirewallRule
-    ) {
+    if ($null -ne $ExistingFirewallRule) {
 
         Remove-NetFirewallRule `
             -Name $FirewallRuleName
     }
 
+    $FirewallParams = @{
+        Name = $FirewallRuleName
+        DisplayName = "Operation Crucible WinRM HTTPS"
+        Description = "Allow WinRM HTTPS from the Crucible management network."
+        Direction = "Inbound"
+        Action = "Allow"
+        Protocol = "TCP"
+        LocalPort = $WinRmPort
+        RemoteAddress = $ManagementNetwork
+        Profile = "Any"
+    }
 
-    New-NetFirewallRule `
-        -Name $FirewallRuleName `
-        -DisplayName (
-            "Operation Crucible WinRM HTTPS"
-        ) `
-        -Description (
-            "Allow WinRM HTTPS from the "
-            + "Crucible management network."
-        ) `
-        -Direction Inbound `
-        -Action Allow `
-        -Protocol TCP `
-        -LocalPort $WinRmPort `
-        -RemoteAddress $ManagementNetwork `
-        -Profile Any `
-        | Out-Null
+    New-NetFirewallRule @FirewallParams |
+        Out-Null
 
+    Write-CrucibleLog "WinRM HTTPS firewall rule configured."
+
+
+    # ---------------------------------------------------------
+    # Restart WinRM and wait for the HTTPS socket
+    # ---------------------------------------------------------
 
     Restart-Service `
         -Name WinRM `
         -Force
 
-
-    # ---------------------------------------------------------
-    # Wait for WinRM HTTPS listener
-    # ---------------------------------------------------------
-
     $WinRmReady = $false
 
+    for ($Attempt = 1; $Attempt -le 30; $Attempt++) {
 
-    for (
-        $Attempt = 1;
-        $Attempt -le 30;
-        $Attempt++
-    ) {
-
-        $ListenerSocket = (
-            Get-NetTCPConnection `
-                -State Listen `
-                -LocalPort $WinRmPort `
-                -ErrorAction SilentlyContinue
-        )
-
+        $ListenerSocket = Get-NetTCPConnection `
+            -State Listen `
+            -LocalPort $WinRmPort `
+            -ErrorAction SilentlyContinue |
+            Select-Object -First 1
 
         if ($null -ne $ListenerSocket) {
 
             $WinRmReady = $true
-
             break
         }
 
-
         Write-CrucibleLog (
-            "Waiting for WinRM HTTPS "
-            + "(attempt $Attempt/30)."
+            "Waiting for WinRM HTTPS (attempt {0}/30)." -f $Attempt
         )
 
         Start-Sleep -Seconds 1
     }
 
-
     if (-not $WinRmReady) {
-
-        throw (
-            "WinRM did not begin listening "
-            + "on port "
-            + $WinRmPort
-        )
+        throw "WinRM did not begin listening on port $WinRmPort"
     }
 
-
     Write-CrucibleLog (
-        "WinRM HTTPS is listening on port "
-        + $WinRmPort
+        "WinRM HTTPS is listening on port {0}." -f $WinRmPort
     )
 
 
     # ---------------------------------------------------------
-    # Signal Crucible completion
+    # Signal successful bootstrap completion
     # ---------------------------------------------------------
 
-    $MarkerPath = Join-Path `
-        $StateRoot `
-        "bootstrap-complete"
-
-
     Set-Content `
-        -Path $MarkerPath `
-        -Value (
-            Get-Date
-        ).ToString("o") `
+        -Path $CompletePath `
+        -Value (Get-Date).ToString("o") `
         -Encoding ASCII
 
-
-    Write-CrucibleLog `
-        "Windows bootstrap completed successfully."
-
+    Write-CrucibleLog "Windows bootstrap completed successfully."
 
 }
 catch {
 
-    $FailurePath = Join-Path `
-        $StateRoot `
-        "bootstrap-failed"
+    $BootstrapExitCode = 1
 
+    $FailureMessage = ($_ | Out-String)
 
-    $FailureMessage = (
-        $_
-        | Out-String
+    try {
+
+        if (-not (Test-Path -LiteralPath $StateRoot)) {
+
+            New-Item `
+                -ItemType Directory `
+                -Path $StateRoot `
+                -Force |
+                Out-Null
+        }
+
+        Set-Content `
+            -Path $FailurePath `
+            -Value $FailureMessage `
+            -Encoding UTF8
+    }
+    catch {
+        # Do not hide the original bootstrap failure if
+        # writing the failure marker itself fails.
+    }
+
+    [Console]::Error.WriteLine(
+        "Operation Crucible Windows bootstrap failed."
     )
 
-
-    Set-Content `
-        -Path $FailurePath `
-        -Value $FailureMessage `
-        -Encoding UTF8
-
-
-    Write-Error $_
-
-    exit 1
+    [Console]::Error.WriteLine(
+        $FailureMessage
+    )
 }
 finally {
 
-    try {
-        Stop-Transcript |
-            Out-Null
-    }
-    catch {
-        # Ignore transcript shutdown errors.
+    if ($TranscriptStarted) {
+
+        try {
+            Stop-Transcript |
+                Out-Null
+        }
+        catch {
+            # Ignore transcript shutdown errors.
+        }
     }
 }
+
+
+exit $BootstrapExitCode
