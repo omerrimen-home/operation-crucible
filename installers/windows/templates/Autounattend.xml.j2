@@ -271,7 +271,24 @@
 
       </AutoLogon>
 {% endif %}
+      <FirstLogonCommands>
 
+        <SynchronousCommand wcm:action="add">
+
+          <Order>1</Order>
+
+          <Description>
+            Operation Crucible Windows bootstrap
+          </Description>
+
+          <RequiresUserInput>false</RequiresUserInput>
+
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$v = Get-Volume -FileSystemLabel 'CRUCIBLE_WIN' -ErrorAction Stop | Select-Object -First 1; &amp; ($v.DriveLetter + ':\bootstrap.ps1')"</CommandLine>
+
+        </SynchronousCommand>
+
+      </FirstLogonCommands>
+      
     </component>
 
   </settings>

@@ -3,7 +3,8 @@ from __future__ import annotations
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
-
+import ipaddress
+import json
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
@@ -149,6 +150,8 @@ def _find_iso_builder() -> str:
 def _build_answer_iso(
     *,
     answer_file: Path,
+    bootstrap_script: Path,
+    bootstrap_config: Path,
     output_iso: Path,
     verbose: bool = False,
 ) -> None:
@@ -182,6 +185,16 @@ def _build_answer_iso(
         (
             "Autounattend.xml="
             f"{answer_file}"
+        ),
+
+        (
+            "bootstrap.ps1="
+            f"{bootstrap_script}"
+        ),
+
+        (
+            "crucible-bootstrap.json="
+            f"{bootstrap_config}"
         ),
     ]
 
@@ -310,6 +323,30 @@ def build_unattend_iso(
         {},
     )
 
+    bootstrap_script_setting = str(
+        installer.get(
+            "bootstrap_script",
+            "",
+        )
+    ).strip()
+
+    if not bootstrap_script_setting:
+        raise WindowsUnattendError(
+            "Windows OS profile does not define "
+            "installer.bootstrap_script."
+        )
+
+    bootstrap_script = (
+        repo_root
+        / bootstrap_script_setting
+    )
+
+    if not bootstrap_script.is_file():
+        raise WindowsUnattendError(
+            "Windows bootstrap script "
+            f"not found: {bootstrap_script}"
+        )
+
     image_name = str(
         installer.get(
             "image_name",
@@ -387,6 +424,60 @@ def build_unattend_iso(
         {},
     )
 
+    network = machine_manifest.get(
+        "network",
+        {},
+    )
+
+    management_network = network.get(
+        "management",
+        {},
+    )
+
+    management_address = str(
+        management_network.get(
+            "address",
+            "",
+        )
+    ).strip()
+
+    management_mac = str(
+        management_network.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    if not management_address:
+        raise WindowsUnattendError(
+            "Windows machine manifest is missing "
+            "network.management.address."
+        )
+
+    if not management_mac:
+        raise WindowsUnattendError(
+            "Windows machine manifest is missing "
+            "network.management.mac_address."
+        )
+
+    try:
+        management_interface = (
+            ipaddress.ip_interface(
+                management_address
+            )
+        )
+
+    except ValueError as exc:
+        raise WindowsUnattendError(
+            "Invalid Windows management address: "
+            f"{management_address}"
+        ) from exc
+
+    profile_management = profile.get(
+        "management",
+        {},
+    )
+
     build_dir = (
         repo_root
         / ".crucible"
@@ -398,6 +489,72 @@ def build_unattend_iso(
     build_dir.mkdir(
         parents=True,
         exist_ok=True,
+    )
+
+    bootstrap_config = (
+        build_dir
+        / "crucible-bootstrap.json"
+    )
+
+    bootstrap_config_data = {
+        "schema_version": 1,
+
+        "machine_name": machine_name,
+
+        "management": {
+            "address": str(
+                management_interface.ip
+            ),
+
+            "prefix_length": int(
+                management_interface.network.prefixlen
+            ),
+
+            "network": str(
+                management_interface.network
+            ),
+
+            "mac_address": management_mac,
+        },
+
+        "winrm": {
+            "transport": str(
+                profile_management.get(
+                    "transport",
+                    "psrp",
+                )
+            ),
+
+            "protocol": str(
+                profile_management.get(
+                    "protocol",
+                    "https",
+                )
+            ),
+
+            "port": int(
+                profile_management.get(
+                    "port",
+                    5986,
+                )
+            ),
+
+            "auth": str(
+                profile_management.get(
+                    "auth",
+                    "ntlm",
+                )
+            ),
+        },
+    }
+
+    bootstrap_config.write_text(
+        json.dumps(
+            bootstrap_config_data,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
     answer_file = (
@@ -500,6 +657,8 @@ def build_unattend_iso(
 
     _build_answer_iso(
         answer_file=answer_file,
+        bootstrap_script=bootstrap_script,
+        bootstrap_config=bootstrap_config,
         output_iso=output_iso,
         verbose=verbose,
     )

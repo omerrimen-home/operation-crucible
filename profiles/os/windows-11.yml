@@ -33,7 +33,10 @@ requirements:
 
 management:
   transport: psrp
+  protocol: https
   port: 5986
+  auth: ntlm
+  cert_validation: ignore
   user: crucible
   python_required: false
 

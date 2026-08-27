@@ -4,7 +4,7 @@ import ipaddress
 import os
 from pathlib import Path
 from typing import Any
-
+import hashlib
 import yaml
 
 
@@ -368,3 +368,46 @@ def release_management_address(
     )
 
     return True
+
+def management_mac_for_machine(
+    machine_name: str,
+) -> str:
+    """
+    Generate a deterministic locally-administered MAC
+    address for a machine's Crucible management NIC.
+
+    The first octet 02 marks this as a locally administered
+    unicast address.
+
+    A machine with the same Crucible name will receive the
+    same management MAC on subsequent builds.
+    """
+
+    name = machine_name.strip()
+
+    if not name:
+        raise ManagementIPAMError(
+            "Cannot generate a management MAC "
+            "without a machine name."
+        )
+
+    digest = hashlib.sha256(
+        (
+            "operation-crucible:"
+            + name
+        ).encode("utf-8")
+    ).digest()
+
+    octets = [
+        0x02,
+        digest[0],
+        digest[1],
+        digest[2],
+        digest[3],
+        digest[4],
+    ]
+
+    return ":".join(
+        f"{octet:02X}"
+        for octet in octets
+    )

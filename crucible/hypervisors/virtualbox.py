@@ -2017,6 +2017,7 @@ class VirtualBoxProvider:
         *,
         slot: int = 1,
         nic_type: str = "82540EM",
+        mac_address: str | None = None,
     ) -> HostOnlyInterface:
 
         interface = (
@@ -2029,6 +2030,7 @@ class VirtualBoxProvider:
             mode="hostonly",
             adapter=interface.name,
             nic_type=nic_type,
+            mac_address=mac_address,
         )
 
         return interface

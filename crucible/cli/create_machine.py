@@ -572,10 +572,21 @@ def create_machine(
             )
         )
 
+        management_mac = str(
+            management.get(
+                "mac_address",
+                "",
+            )
+        ).strip()
+
         interface = (
             provider.configure_management_nic(
                 name,
                 slot=slot,
+                mac_address=(
+                    management_mac
+                    or None
+                ),
             )
         )
 
@@ -584,6 +595,12 @@ def create_machine(
             f"{slot}: {interface.name}"
         )
 
+        if management_mac:
+            print(
+                f"      -> management MAC: "
+                f"{management_mac}"
+            )
+            
     # ---------------------------------------------------------
     # NIC 3+ - user-defined internal networks
     # ---------------------------------------------------------

@@ -32,6 +32,7 @@ from crucible.validation.hardware import (
 )
 from crucible.networking.management import (
     allocate_management_address,
+    management_mac_for_machine,
 )
 from crucible.hypervisors.virtualbox import (
     VirtualBoxProvider,
@@ -1194,6 +1195,11 @@ def build_machine_manifest(
                 "enabled": True,
                 "slot": 2,
                 "address": management_address,
+                "mac_address": (
+                    management_mac_for_machine(
+                        machine_name
+                    )
+                ),
             },
 
             "internal": [
