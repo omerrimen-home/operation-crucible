@@ -7,10 +7,7 @@ from typing import Any
 
 from crucible.hypervisors.virtualbox import VirtualBoxProvider
 from crucible.provisioning.image_detector import load_yaml, scan_images
-from crucible.provisioning.ubuntu_autoinstall import (
-    UbuntuAutoinstallError,
-    build_seed_iso,
-)
+
 from crucible.validation.hardware import (
     validate_machine_hardware,
     validate_profile_hardware,
@@ -33,13 +30,6 @@ from crucible.provisioning.windows_unattend import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-DEFAULT_MANIFEST = (
-    REPO_ROOT
-    / "manifests"
-    / "machines"
-    / "ubuntu-server.yml"
-)
 
 IMAGE_CONFIG = REPO_ROOT / "config" / "images.yml"
 PROFILE_DIR = REPO_ROOT / "profiles" / "os"
@@ -776,14 +766,8 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "manifest",
-        nargs="?",
         type=Path,
-        default=DEFAULT_MANIFEST,
-        help=(
-            "Machine manifest "
-            f"(default: "
-            f"{DEFAULT_MANIFEST.relative_to(REPO_ROOT)})"
-        ),
+        help="Machine manifest path.",
     )
 
     parser.add_argument(
@@ -816,6 +800,7 @@ def main() -> int:
         FileNotFoundError,
         ValueError,
         KeyError,
+        WindowsUnattendError,
     ) as exc:
         print(
             f"ERROR: {exc}",

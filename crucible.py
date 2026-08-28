@@ -259,7 +259,7 @@ def ask_vm_count() -> int:
 
         print()
         print(
-            f"{RED}Crucible v0.1 currently supports exactly one VM.{RESET}"
+            f"{RED}Crucible currently supports exactly one VM.{RESET}"
         )
         print()
 
@@ -289,6 +289,39 @@ VM_NAME_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
 )
 
+WINDOWS_COMPUTER_NAME_PATTERN = re.compile(
+        r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,13}[A-Za-z0-9])?$"
+    )
+
+def validate_windows_computer_name(name: str) -> None:
+        if not name:
+            raise CrucibleForgeError(
+                "Windows computer name may not be empty."
+            )
+
+        try:
+            encoded = name.encode("ascii")
+        except UnicodeEncodeError as exc:
+            raise CrucibleForgeError(
+                "Windows computer names must use ASCII characters."
+            ) from exc
+
+        if len(encoded) > 15:
+            raise CrucibleForgeError(
+                "Windows computer names may not exceed 15 characters."
+            )
+
+        if not WINDOWS_COMPUTER_NAME_PATTERN.fullmatch(name):
+            raise CrucibleForgeError(
+                "Windows computer names may contain only letters, "
+                "numbers, and hyphens, and must begin and end "
+                "with a letter or number."
+            )
+
+        if name.isdigit():
+            raise CrucibleForgeError(
+                "Windows computer names may not contain only numbers."
+            )
 
 def get_reserved_vm_names() -> set[str]:
     """
@@ -1453,6 +1486,8 @@ def ask_windows_unattend(
             generate_password()
         )
 
+        validate_windows_computer_name(vm_name)
+
         return (
             {
                 "enabled": True,
@@ -1573,10 +1608,17 @@ def ask_windows_unattend(
     )
     print()
 
-    hostname = ask_with_default(
-        "Computer Name",
-        vm_name,
-    )
+    while True:
+        hostname = ask_with_default(
+            "Computer Name",
+            vm_name,
+        )
+
+        try:
+            validate_windows_computer_name(hostname)
+            break
+        except CrucibleForgeError as exc:
+            print(f"{RED}{exc}{RESET}")
 
     username = ask_with_default(
         "Username",
@@ -2353,7 +2395,7 @@ def generate_ansible_inventory(
                     "ansible_host": host,
                     "ansible_user": username,
 
-                    # Crucible v0.1 machines are ephemeral
+                    # Crucible machines are ephemeral
                     # lab machines and may reuse the same IP
                     # with a newly generated SSH host key.
                     "ansible_ssh_common_args": (

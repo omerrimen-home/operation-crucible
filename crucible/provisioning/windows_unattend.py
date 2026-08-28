@@ -347,20 +347,6 @@ def build_unattend_iso(
             f"not found: {bootstrap_script}"
         )
 
-    install_image = autoinstall.get(
-        "install_image",
-        {},
-    )
-
-    if not isinstance(
-        install_image,
-        dict,
-    ):
-        raise WindowsUnattendError(
-            "autoinstall.install_image "
-            "must be a mapping."
-        )
-
     # ---------------------------------------------------------
     # Resolve selected Windows installation image
     #
