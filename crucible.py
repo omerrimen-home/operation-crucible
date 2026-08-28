@@ -130,7 +130,7 @@ SUPPORTED_OPERATING_SYSTEMS = {
         "version": "64-bit",
         "profile": "windows-server-2022",
         "image_id": "windows-server-2022",
-        "vm_name_prefix": "winserver2022",
+        "vm_name_prefix": "ws2022",
     },
 }
 
@@ -1466,6 +1466,18 @@ def ask_windows_unattend(
                         ]
                     ),
 
+                    "label": (
+                        install_image[
+                            "label"
+                        ]
+                    ),
+
+                    "index": (
+                        install_image[
+                            "image_index"
+                        ]
+                    ),
+
                     "name": (
                         install_image[
                             "image_name"
@@ -1651,6 +1663,18 @@ def ask_windows_unattend(
                 "id": (
                     install_image[
                         "id"
+                    ]
+                ),
+
+                "label": (
+                    install_image[
+                        "label"
+                    ]
+                ),
+
+                "index": (
+                    install_image[
+                        "image_index"
                     ]
                 ),
 
