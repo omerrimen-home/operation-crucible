@@ -351,7 +351,6 @@ def get_reserved_vm_names() -> set[str]:
 
     return names
 
-
 def get_default_vm_name(
     os_info: dict[str, Any],
     reserved_names: set[str],
@@ -765,6 +764,25 @@ def detect_ssh_public_key() -> str | None:
 
     return None
 
+def remove_stale_ssh_host_key(host: str) -> None:
+    """Forget the SSH host key for a disposable/rebuilt Crucible guest."""
+    known_hosts = Path.home() / ".ssh" / "known_hosts"
+
+    if not known_hosts.exists():
+        return
+
+    subprocess.run(
+        [
+            "ssh-keygen",
+            "-f",
+            str(known_hosts),
+            "-R",
+            host,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
 
 def generate_password(length: int = 20) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#%^*-_"
@@ -2051,6 +2069,8 @@ def get_machine_connection_info(
         1,
     )[0]
 
+    remove_stale_ssh_host_key(management_ip)
+
     return (
         machine_name,
         management_ip,
@@ -2326,7 +2346,7 @@ def wait_for_ssh(
     host: str,
     *,
     port: int = 22,
-    timeout: int = 1800,
+    timeout: int = 3000,
     poll_interval: float = 3.0,
 ) -> None:
     """
@@ -2399,8 +2419,7 @@ def generate_ansible_inventory(
                     # lab machines and may reuse the same IP
                     # with a newly generated SSH host key.
                     "ansible_ssh_common_args": (
-                        "-o StrictHostKeyChecking=no "
-                        "-o UserKnownHostsFile=/dev/null"
+                        "-o StrictHostKeyChecking=accept-new ",
                     ),
 
                     "ansible_python_interpreter": (
@@ -2524,7 +2543,7 @@ def wait_for_bootstrap(
     *,
     machine_name: str,
     inventory_path: Path,
-    timeout: int = 1800,
+    timeout: int = 3000,
     poll_interval: float = 5.0,
 ) -> None:
     """
@@ -2548,9 +2567,7 @@ def wait_for_bootstrap(
         "ansible.builtin.raw",
         "-a",
         (
-            "test -f "
-            "/var/lib/crucible/"
-            "bootstrap-complete"
+            "test -f /var/lib/crucible/bootstrap-complete"
         ),
     ]
 
@@ -2568,6 +2585,19 @@ def wait_for_bootstrap(
                 f"Bootstrap complete."
             )
             return
+
+        print(
+            f"[DEBUG] Bootstrap probe failed "
+            f"(rc={result.returncode})"
+        )
+
+        if result.stdout.strip():
+            print("[DEBUG stdout]")
+            print(result.stdout.strip())
+
+        if result.stderr.strip():
+            print("[DEBUG stderr]")
+            print(result.stderr.strip())
 
         time.sleep(poll_interval)
 
