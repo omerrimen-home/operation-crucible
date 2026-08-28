@@ -2419,7 +2419,7 @@ def generate_ansible_inventory(
                     # lab machines and may reuse the same IP
                     # with a newly generated SSH host key.
                     "ansible_ssh_common_args": (
-                        "-o StrictHostKeyChecking=accept-new ",
+                        "-o StrictHostKeyChecking=accept-new "
                     ),
 
                     "ansible_python_interpreter": (
