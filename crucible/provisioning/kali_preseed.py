@@ -148,7 +148,7 @@ def _build_topology_nmconnection(
         f"uuid={connection_uuid}\n",
         "type=ethernet\n",
         "autoconnect=true\n",
-        "autoconnect-retries=1\n",
+        "autoconnect-retries=0\n",
         "\n",
         "[ethernet]\n",
         f"mac-address={mac_address}\n",
