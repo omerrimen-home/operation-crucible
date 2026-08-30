@@ -393,6 +393,7 @@ class VirtualBoxProvider:
         name: str,
         *,
         preseed_url: str,
+        installer_interface: str,
         headless: bool = False,
         boot_delay_seconds: float = 3.0,
     ) -> None:
@@ -426,7 +427,7 @@ class VirtualBoxProvider:
             "net.ifnames=0 "
             "auto=true "
             "priority=critical "
-            "interface=eth0 "
+            f"interface={installer_interface} "
             "debconf/frontend=noninteractive "
             f"preseed/url={preseed_url}"
         )
@@ -1656,6 +1657,44 @@ class VirtualBoxProvider:
 
         return interfaces
 
+    def list_bridged_interface_names(
+        self,
+    ) -> list[str]:
+        """
+        Return host interfaces VirtualBox exposes for
+        bridged networking.
+        """
+
+        result = self._run(
+            [
+                "list",
+                "bridgedifs",
+            ]
+        )
+
+        names: list[str] = []
+
+        for block in self._parse_blocks(
+            result.stdout
+        ):
+            name = str(
+                block.get(
+                    "Name",
+                    "",
+                )
+            ).strip()
+
+            if (
+                name
+                and
+                name not in names
+            ):
+                names.append(
+                    name
+                )
+
+        return names
+
     def ensure_management_interface(
         self,
         *,
@@ -2011,29 +2050,70 @@ class VirtualBoxProvider:
 
         self._run(args)
 
-    def configure_management_nic(
+    def configure_topology_nic(
         self,
         vm_name: str,
         *,
-        slot: int = 1,
+        slot: int,
+        attachment_type: str,
+        mac_address: str,
+        network_name: str | None = None,
+        host_adapter: str | None = None,
         nic_type: str = "82540EM",
-        mac_address: str | None = None,
-    ) -> HostOnlyInterface:
+    ) -> None:
+        """
+        Configure one persistent user topology NIC.
 
-        interface = (
-            self.ensure_management_interface()
+        Crucible NAT and management adapters are not handled
+        here; this method is for topology interfaces only.
+        """
+
+        attachment_type = (
+            attachment_type
+            .strip()
+            .lower()
         )
 
-        self.configure_nic(
-            vm_name,
-            slot=slot,
-            mode="hostonly",
-            adapter=interface.name,
-            nic_type=nic_type,
-            mac_address=mac_address,
-        )
+        if attachment_type == "intnet":
+            if not network_name:
+                raise VirtualBoxConfigurationError(
+                    "Internal topology NIC "
+                    "requires network_name."
+                )
 
-        return interface
+            self.configure_nic(
+                vm_name,
+                slot=slot,
+                mode="intnet",
+                network=network_name,
+                nic_type=nic_type,
+                mac_address=mac_address,
+            )
+
+            return
+
+        if attachment_type == "bridged":
+            if not host_adapter:
+                raise VirtualBoxConfigurationError(
+                    "Bridged topology NIC "
+                    "requires host_adapter."
+                )
+
+            self.configure_nic(
+                vm_name,
+                slot=slot,
+                mode="bridged",
+                adapter=host_adapter,
+                nic_type=nic_type,
+                mac_address=mac_address,
+            )
+
+            return
+
+        raise VirtualBoxConfigurationError(
+            "Unsupported topology NIC type: "
+            f"{attachment_type}"
+        )
 
     def configure_internal_nic(
         self,
@@ -2058,6 +2138,54 @@ class VirtualBoxProvider:
             promiscuous_mode=promiscuous_mode,
         )
 
+    def configure_nat_nic(
+        self,
+        name: str,
+        *,
+        slot: int,
+        mac_address: str | None = None,
+        nic_type: str = "82540EM",
+    ) -> None:
+        """
+        Configure Crucible's temporary NAT/Internet NIC.
+
+        Slot assignment is resolved by the orchestration layer;
+        the provider must not assume that NAT is NIC 1.
+        """
+
+        self.configure_nic(
+            name,
+            slot=slot,
+            mode="nat",
+            nic_type=nic_type,
+            mac_address=mac_address,
+        )
+
+
+    def configure_management_nic(
+        self,
+        vm_name: str,
+        *,
+        slot: int,
+        nic_type: str = "82540EM",
+        mac_address: str | None = None,
+    ) -> HostOnlyInterface:
+
+        interface = (
+            self.ensure_management_interface()
+        )
+
+        self.configure_nic(
+            vm_name,
+            slot=slot,
+            mode="hostonly",
+            adapter=interface.name,
+            nic_type=nic_type,
+            mac_address=mac_address,
+        )
+
+        return interface
+
     def disable_nic(
         self,
         vm_name: str,
@@ -2080,7 +2208,7 @@ class VirtualBoxProvider:
         self,
         vm_name: str,
         *,
-        slot: int = 1,
+        slot: int,
         enabled: bool = True,
     ) -> None:
         """
@@ -2446,28 +2574,6 @@ class VirtualBoxProvider:
                 in self.list_host_only_interfaces()
             ],
         }
-
-    def configure_nat_nic(
-        self,
-        name: str,
-        *,
-        slot: int = 1,
-    ) -> None:
-        """
-        Configure a VirtualBox NIC for NAT Internet access.
-        """
-
-        self._run(
-            [
-                "modifyvm",
-                name,
-                f"--nic{slot}",
-                "nat",
-                f"--cableconnected{slot}",
-                "on",
-            ]
-        )
-
 
 # ---------------------------------------------------------------------------
 # Development smoke test

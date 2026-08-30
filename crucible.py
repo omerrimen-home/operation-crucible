@@ -28,11 +28,16 @@ from crucible.validation.hardware import (
     VRAM_MB_MIN,
     VRAM_MB_MAX,
     GRAPHICS_CONTROLLERS,
-    MAX_INTERNAL_NICS,
+    MAX_TOPOLOGY_NICS,
 )
 from crucible.networking.management import (
     allocate_management_address,
     management_mac_for_machine,
+    internet_mac_for_machine,
+)
+
+from crucible.networking.layout import (
+    build_network_slot_layout,
 )
 from crucible.hypervisors.virtualbox import (
     VirtualBoxProvider,
@@ -54,6 +59,21 @@ from crucible.provisioning.preseed_server import (
 )
 from crucible.provisioning.windows_unattend import (
     WindowsUnattendError,
+)
+from crucible.networking.topology import (
+    TOPOLOGY_ATTACHMENT_TYPES,
+    TOPOLOGY_LABEL_PATTERN,
+    TopologyConfigurationError,
+    build_dhcp_ipv4_configuration,
+    build_static_ipv4_configuration,
+    topology_mac_for_machine,
+)
+from crucible.ssh.identity import (
+    SshIdentity,
+    SshIdentityError,
+    create_machine_ssh_identity,
+    generate_instance_serial,
+    load_machine_ssh_identity,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -285,6 +305,112 @@ def ask_operating_system() -> dict[str, Any]:
             f"by Crucible.{RESET}"
         )
 
+def show_network_slot_plan(
+    topology_interfaces: (
+        list[dict[str, Any]]
+    ),
+) -> None:
+
+    layout = (
+        build_network_slot_layout(
+            len(
+                topology_interfaces
+            ),
+            internet_enabled=True,
+            management_enabled=True,
+        )
+    )
+
+    print()
+    print(
+        f"{BOLD}"
+        "Network interface layout:"
+        f"{RESET}"
+    )
+    print()
+
+    for interface, slot in zip(
+        topology_interfaces,
+        layout.topology_slots,
+    ):
+        label = str(
+            interface["label"]
+        )
+
+        attachment = (
+            interface[
+                "attachment"
+            ]
+        )
+
+        attachment_type = str(
+            attachment["type"]
+        )
+
+        type_label = (
+            TOPOLOGY_ATTACHMENT_TYPES[
+                attachment_type
+            ]
+        )
+
+        ipv4 = interface[
+            "ipv4"
+        ]
+
+        method = str(
+            ipv4["method"]
+        )
+
+        print(
+            f"  NIC {slot:<2} : "
+            f"{label} "
+            f"({type_label})"
+        )
+
+        if method == "dhcp":
+            print(
+                "           IPv4: DHCP"
+            )
+
+        else:
+            print(
+                "           IPv4: "
+                f"{ipv4['address']}"
+            )
+
+            gateway = (
+                ipv4.get(
+                    "gateway"
+                )
+            )
+
+            print(
+                "           Gateway: "
+                f"{gateway or 'none'}"
+            )
+
+    if (
+        layout.internet_slot
+        is not None
+    ):
+        print(
+            f"  NIC "
+            f"{layout.internet_slot:<2} : "
+            "Crucible NAT / Internet"
+        )
+
+    if (
+        layout.management_slot
+        is not None
+    ):
+        print(
+            f"  NIC "
+            f"{layout.management_slot:<2} : "
+            "Crucible management"
+        )
+
+    print()
+
 VM_NAME_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
 )
@@ -398,6 +524,57 @@ def get_default_vm_name(
         f"{next_number:02d}"
     )
 
+def get_machine_instance_serial(
+    machine_manifest_path: Path,
+) -> str:
+    with machine_manifest_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+        manifest = yaml.safe_load(
+            file
+        )
+
+    instance = manifest.get(
+        "instance",
+        {},
+    )
+
+    serial = str(
+        instance.get(
+            "serial",
+            "",
+        )
+    ).strip()
+
+    if not serial:
+        raise CrucibleForgeError(
+            "Machine manifest is missing "
+            "instance.serial."
+        )
+
+    return serial
+
+def get_guest_family(
+    os_info: dict[str, Any],
+) -> str:
+    profile = load_os_profile(
+        str(
+            os_info[
+                "profile"
+            ]
+        )
+    )
+
+    return str(
+        profile.get(
+            "os",
+            {},
+        ).get(
+            "family",
+            "",
+        )
+    ).strip().lower()
 
 def ask_vm_name(
     os_info: dict[str, Any],
@@ -507,7 +684,7 @@ def ask_hardware_defaults(
                 False,
             )
         ),
-        "internal_networks": [],
+        "topology_interfaces": [],
     }
 
     print()
@@ -551,17 +728,16 @@ def ask_hardware_defaults(
         f"  3D acceleration    : "
         f"{'yes' if hardware['accelerate_3d'] else 'no'}"
     )
-
     print(
-        "  NIC 1              : "
-        "NAT provisioning/internet"
+    "  Internal networks  : none"
     )
     print(
-        "  NIC 2              : "
-        "Crucible management"
+        "  Crucible Internet  : NIC 1 "
+        "(appended after internal NICs)"
     )
     print(
-        "  Additional NICs    : none"
+        "  Crucible management: NIC 2 "
+        "(appended after Internet NIC)"
     )
     print(
         "  Disk type          : "
@@ -700,51 +876,375 @@ def ask_hardware_defaults(
             )
         )
 
-    internal_count = ask_int_with_default(
-        "Additional internal networks",
-        0,
-        minimum=0,
-        maximum=MAX_INTERNAL_NICS,
-    )
-
-    internal_networks: list[str] = []
-
-    for number in range(
-        1,
-        internal_count + 1,
-    ):
-        while True:
-            network_name = input(
-                f"Internal network {number} name: "
-            ).strip()
-
-            if not network_name:
-                print(
-                    f"{RED}"
-                    "Network name cannot be empty."
-                    f"{RESET}"
-                )
-                continue
-
-            if network_name in internal_networks:
-                print(
-                    f"{RED}"
-                    "Network names must be unique."
-                    f"{RESET}"
-                )
-                continue
-
-            internal_networks.append(
-                network_name
-            )
-            break
-
-    hardware["internal_networks"] = (
-        internal_networks
-    )
-
     return hardware
 
+def ask_topology_attachment_type(
+) -> str:
+    print()
+    print(
+        f"{BOLD}"
+        "Interface type:"
+        f"{RESET}"
+    )
+    print()
+    print(
+        "  [1] Internal Network "
+        "(VirtualBox intnet)"
+    )
+    print(
+        "  [2] Bridged Adapter "
+        "(host LAN/WLAN)"
+    )
+    print()
+
+    while True:
+        answer = input(
+            "Selection [1]: "
+        ).strip() or "1"
+
+        if answer == "1":
+            return "intnet"
+
+        if answer == "2":
+            return "bridged"
+
+        print(
+            f"{RED}"
+            "Choose 1 or 2."
+            f"{RESET}"
+        )
+
+def ask_bridged_adapter(
+) -> str:
+    provider = VirtualBoxProvider(
+        verbose=False
+    )
+
+    adapters = (
+        provider
+        .list_bridged_interface_names()
+    )
+
+    if not adapters:
+        raise CrucibleForgeError(
+            "VirtualBox did not report any "
+            "bridged host interfaces."
+        )
+
+    print()
+    print(
+        f"{BOLD}"
+        "Available host adapters:"
+        f"{RESET}"
+    )
+    print()
+
+    for number, adapter in enumerate(
+        adapters,
+        start=1,
+    ):
+        print(
+            f"  [{number}] {adapter}"
+        )
+
+    print()
+
+    while True:
+        answer = input(
+            "Host adapter [1]: "
+        ).strip() or "1"
+
+        try:
+            index = (
+                int(answer) - 1
+            )
+
+        except ValueError:
+            print(
+                f"{RED}"
+                "Enter an adapter number."
+                f"{RESET}"
+            )
+            continue
+
+        if (
+            0
+            <= index
+            < len(adapters)
+        ):
+            return adapters[
+                index
+            ]
+
+        print(
+            f"{RED}"
+            "That adapter number "
+            "is not available."
+            f"{RESET}"
+        )
+
+def ask_topology_ipv4_configuration(
+) -> dict[str, Any]:
+    print()
+
+    use_dhcp = ask_yes_no(
+        "Use DHCP on this interface?",
+        default=True,
+    )
+
+    if use_dhcp:
+        return (
+            build_dhcp_ipv4_configuration()
+        )
+
+    while True:
+        print()
+
+        address = input(
+            "IPv4 address: "
+        ).strip()
+
+        if not address:
+            print(
+                f"{RED}"
+                "A static interface requires "
+                "an IPv4 address."
+                f"{RESET}"
+            )
+            continue
+
+        subnet_mask = (
+            ask_with_default(
+                "Subnet mask",
+                "255.255.255.0",
+            )
+        )
+
+        gateway = input(
+            "Default gateway "
+            "[none]: "
+        ).strip()
+
+        try:
+            return (
+                build_static_ipv4_configuration(
+                    address=address,
+                    subnet_mask=subnet_mask,
+                    gateway=(
+                        gateway
+                        if gateway
+                        else None
+                    ),
+                )
+            )
+
+        except (
+            TopologyConfigurationError
+        ) as exc:
+            print()
+            print(
+                f"{RED}"
+                f"{exc}"
+                f"{RESET}"
+            )
+            print(
+                f"{YELLOW}"
+                "Please enter the static "
+                "IPv4 configuration again."
+                f"{RESET}"
+            )
+
+def ask_topology_interfaces(
+) -> list[dict[str, Any]]:
+    """
+    Ask the user for persistent topology NICs.
+
+    These interfaces become NIC 1..N.
+
+    Crucible Internet and management interfaces are
+    appended afterward.
+    """
+
+    print()
+    print(
+        f"{BOLD}"
+        "Persistent topology interfaces"
+        f"{RESET}"
+    )
+    print()
+
+    print(
+        "These interfaces remain part of the "
+        "lab topology. Crucible's temporary "
+        "Internet and management adapters will "
+        "be appended afterward."
+    )
+    print()
+
+    count = ask_int_with_default(
+        "Number of topology interfaces",
+        0,
+        minimum=0,
+        maximum=MAX_TOPOLOGY_NICS,
+    )
+
+    interfaces: list[
+        dict[str, Any]
+    ] = []
+
+    used_labels: set[str] = set()
+    used_topology_networks: (
+        set[str]
+    ) = set()
+
+    for slot in range(
+        1,
+        count + 1,
+    ):
+        print()
+        print(
+            f"{CYAN}"
+            "------------------------------------------"
+            f"{RESET}"
+        )
+        print(
+            f"{BOLD}"
+            f"Topology NIC {slot}"
+            f"{RESET}"
+        )
+        print(
+            f"{CYAN}"
+            "------------------------------------------"
+            f"{RESET}"
+        )
+
+        default_label = (
+            f"net{slot}"
+        )
+
+        while True:
+            label = ask_with_default(
+                "Interface label",
+                default_label,
+            ).strip()
+
+            if not (
+                TOPOLOGY_LABEL_PATTERN
+                .fullmatch(
+                    label
+                )
+            ):
+                print(
+                    f"{RED}"
+                    "Interface labels may contain "
+                    "letters, numbers, periods, "
+                    "underscores and hyphens."
+                    f"{RESET}"
+                )
+                continue
+
+            if label in used_labels:
+                print(
+                    f"{RED}"
+                    "Interface labels must "
+                    "be unique."
+                    f"{RESET}"
+                )
+                continue
+
+            break
+
+        attachment_type = (
+            ask_topology_attachment_type()
+        )
+
+        if (
+            attachment_type
+            == "intnet"
+        ):
+            while True:
+                network_name = (
+                    ask_with_default(
+                        "Internal network name",
+                        label,
+                    )
+                ).strip()
+
+                if not network_name:
+                    print(
+                        f"{RED}"
+                        "Internal network name "
+                        "may not be empty."
+                        f"{RESET}"
+                    )
+                    continue
+
+                if (
+                    network_name
+                    in used_topology_networks
+                ):
+                    print(
+                        f"{RED}"
+                        "This VM is already "
+                        "attached to that internal "
+                        "network."
+                        f"{RESET}"
+                    )
+                    continue
+
+                break
+
+            attachment = {
+                "type": "intnet",
+                "network": (
+                    network_name
+                ),
+            }
+
+            used_topology_networks.add(
+                network_name
+            )
+
+        elif (
+            attachment_type
+            == "bridged"
+        ):
+            host_adapter = (
+                ask_bridged_adapter()
+            )
+
+            attachment = {
+                "type": "bridged",
+                "adapter": (
+                    host_adapter
+                ),
+            }
+
+        else:
+            raise CrucibleForgeError(
+                "Unsupported topology "
+                "attachment type reached "
+                f"Forge logic: "
+                f"{attachment_type}"
+            )
+
+        ipv4 = (
+            ask_topology_ipv4_configuration()
+        )
+
+        interfaces.append(
+            {
+                "label": label,
+                "attachment": attachment,
+                "ipv4": ipv4,
+            }
+        )
+
+        used_labels.add(
+            label
+        )
+
+    return interfaces
 
 def detect_ssh_public_key() -> str | None:
     candidates = (
@@ -763,26 +1263,6 @@ def detect_ssh_public_key() -> str | None:
             return value
 
     return None
-
-def remove_stale_ssh_host_key(host: str) -> None:
-    """Forget the SSH host key for a disposable/rebuilt Crucible guest."""
-    known_hosts = Path.home() / ".ssh" / "known_hosts"
-
-    if not known_hosts.exists():
-        return
-
-    subprocess.run(
-        [
-            "ssh-keygen",
-            "-f",
-            str(known_hosts),
-            "-R",
-            host,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
 
 def generate_password(length: int = 20) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#%^*-_"
@@ -885,8 +1365,7 @@ def ask_windows_password() -> str:
 
 def show_autoinstall_defaults(
     vm_name: str,
-    detected_key: str | None,
-) -> None:
+    ) -> None:
     print()
     print(f"{BOLD}Autoinstall defaults:{RESET}")
     print()
@@ -902,19 +1381,34 @@ def show_autoinstall_defaults(
     print("  SSH Password    : allowed")
     print("  Login Password  : securely generated")
 
-    if detected_key:
-        print("  SSH Public Key  : detected and included")
-    else:
-        print("  SSH Public Key  : none detected")
-
+    print(
+    "  Crucible SSH Key: unique per-VM key"
+    )
+    print(
+    "  SSH Key Storage : .crucible/ssh/machines/"
+    )
     print()
 
 
 def ask_autoinstall(
     vm_name: str,
-) -> tuple[dict[str, Any], str | None]:
-    detected_key = detect_ssh_public_key()
-    show_autoinstall_defaults(vm_name, detected_key)
+    *,
+    crucible_public_key: str,
+) -> tuple[
+    dict[str, Any],
+    str | None,
+]:
+    if not crucible_public_key.strip():
+        raise CrucibleForgeError(
+            "Linux autoinstall requires a "
+            "Crucible management public key."
+        )
+
+    authorized_keys = [
+        crucible_public_key
+    ]
+    
+    show_autoinstall_defaults(vm_name)
 
     use_defaults = ask_yes_no(
         f"{BOLD}Use Autoinstall Defaults?{RESET}",
@@ -924,8 +1418,6 @@ def ask_autoinstall(
     if use_defaults:
         plaintext_password = generate_password()
         password_hash = hash_password(plaintext_password)
-
-        authorized_keys = [detected_key] if detected_key else []
 
         return (
             {
@@ -1797,7 +2289,9 @@ def ask_windows_unattend(
 def ask_installation_configuration(
     os_info: dict[str, Any],
     vm_name: str,
-) -> tuple[dict[str, Any], str | None]:
+    *,
+    crucible_public_key: str | None = None,
+):
     """
     Dispatch installation configuration according to the
     selected OS profile and installer backend.
@@ -1827,8 +2321,17 @@ def ask_installation_configuration(
         "ubuntu-autoinstall",
         "debian-preseed",
     }:
+        if not crucible_public_key:
+            raise CrucibleForgeError(
+                "Linux installation requires "
+                "a Crucible SSH identity."
+            )
+
         return ask_autoinstall(
-            vm_name
+            vm_name,
+            crucible_public_key=(
+                crucible_public_key
+            ),
         )
 
     if backend == "windows-unattend":
@@ -1848,6 +2351,7 @@ def build_machine_manifest(
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
     management_address: str,
+    instance_serial: str,
 ) -> dict[str, Any]:
 
     profile = load_os_profile(
@@ -1872,8 +2376,59 @@ def build_machine_manifest(
             "source_id"
         ] = str(source_id)
 
+    topology_interfaces = list(
+        hardware.get(
+            "topology_interfaces",
+            [],
+        )
+    )
+
+    network_layout = (
+        build_network_slot_layout(
+            len(
+                topology_interfaces
+            ),
+            internet_enabled=True,
+            management_enabled=True,
+        )
+    )
+
+    resolved_topology: list[
+        dict[str, Any]
+    ] = []
+
+    for interface, slot in zip(
+        topology_interfaces,
+        network_layout.topology_slots,
+    ):
+        resolved_interface = dict(
+            interface
+        )
+
+        resolved_interface[
+            "slot"
+        ] = slot
+
+        resolved_interface[
+            "mac_address"
+        ] = (
+            topology_mac_for_machine(
+                machine_name,
+                slot,
+            )
+        )
+
+        resolved_topology.append(
+            resolved_interface
+        )
+
     return {
-        "schema_version": 1,
+        "instance": {
+            "serial": (
+                instance_serial
+            ),
+        },
+        "schema_version": 2,
         "name": machine_name,
         "profile": os_info["profile"],
         "image_id": os_info["image_id"],
@@ -1895,35 +2450,40 @@ def build_machine_manifest(
                 ],
             },
         },
-
         "network": {
+            "topology": (
+                resolved_topology
+            ),
+
             "internet": {
                 "enabled": True,
-                "slot": 1,
+                "slot": (
+                    network_layout
+                    .internet_slot
+                ),
                 "mode": "nat",
+                "mac_address": (
+                    internet_mac_for_machine(
+                        machine_name
+                    )
+                ),
             },
 
             "management": {
                 "enabled": True,
-                "slot": 2,
-                "address": management_address,
+                "slot": (
+                    network_layout
+                    .management_slot
+                ),
+                "address": (
+                    management_address
+                ),
                 "mac_address": (
                     management_mac_for_machine(
                         machine_name
                     )
                 ),
             },
-
-            "internal": [
-                {
-                    "name": network_name,
-                    "slot": slot,
-                }
-                for slot, network_name in enumerate(
-                    hardware["internal_networks"],
-                    start=3,
-                )
-            ],
         },
         "autoinstall": resolved_autoinstall,
         "start": {
@@ -1936,13 +2496,14 @@ def build_machine_manifest(
 def build_lab_manifest(
     machine_manifest_path: Path,
     machine_name: str,
+    instance_serial: str,
 ) -> dict[str, Any]:
     relative_machine_path = (
         machine_manifest_path.relative_to(REPO_ROOT).as_posix()
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "name": "crucible-lab",
         "machines": [
             {
@@ -1978,6 +2539,7 @@ def generate_manifests(
     machine_name: str,
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
+    instance_serial: str,
 ) -> tuple[Path, Path]:
 
     management_address = (
@@ -2003,6 +2565,7 @@ def generate_manifests(
             hardware,
             autoinstall,
             management_address,
+            instance_serial,
         )
     )
 
@@ -2014,6 +2577,7 @@ def generate_manifests(
     lab_manifest = build_lab_manifest(
         machine_path,
         machine_name,
+        instance_serial,
     )
 
     write_yaml(
@@ -2068,8 +2632,6 @@ def get_machine_connection_info(
         "/",
         1,
     )[0]
-
-    remove_stale_ssh_host_key(management_ip)
 
     return (
         machine_name,
@@ -2393,6 +2955,7 @@ def generate_ansible_inventory(
     machine_name: str,
     host: str,
     username: str,
+    ssh_identity: SshIdentity,
 ) -> Path:
     """
     Generate Crucible's runtime Ansible inventory.
@@ -2413,13 +2976,20 @@ def generate_ansible_inventory(
             "hosts": {
                 machine_name: {
                     "ansible_host": host,
+
                     "ansible_user": username,
 
-                    # Crucible machines are ephemeral
-                    # lab machines and may reuse the same IP
-                    # with a newly generated SSH host key.
+                    "ansible_ssh_private_key_file": (
+                        str(
+                            ssh_identity.private_key
+                        )
+                    ),
+
                     "ansible_ssh_common_args": (
+                        "-o IdentitiesOnly=yes "
                         "-o StrictHostKeyChecking=accept-new "
+                        "-o UserKnownHostsFile="
+                        f"{ssh_identity.known_hosts}"
                     ),
 
                     "ansible_python_interpreter": (
@@ -2586,6 +3156,7 @@ def wait_for_bootstrap(
             )
             return
 
+        '''
         print(
             f"[DEBUG] Bootstrap probe failed "
             f"(rc={result.returncode})"
@@ -2598,7 +3169,8 @@ def wait_for_bootstrap(
         if result.stderr.strip():
             print("[DEBUG stderr]")
             print(result.stderr.strip())
-
+        '''
+            
         time.sleep(poll_interval)
 
     raise CrucibleForgeError(
@@ -2667,16 +3239,35 @@ def verify_linux_machine_ready(
         machine_manifest_path
     )
 
+    instance_serial = (
+        get_machine_instance_serial(
+            machine_manifest_path
+        )
+    )
+
+    ssh_identity = (
+        load_machine_ssh_identity(
+            repo_root=REPO_ROOT,
+            machine_name=machine_name,
+            instance_serial=(
+                instance_serial
+            ),
+        )
+    )
+
     print()
     print(
         f"{BOLD}Management target:{RESET} "
         f"{username}@{management_ip}"
     )
 
-    inventory_path = generate_ansible_inventory(
-        machine_name=machine_name,
-        host=management_ip,
-        username=username,
+    inventory_path = (
+        generate_ansible_inventory(
+            machine_name=machine_name,
+            host=management_ip,
+            username=username,
+            ssh_identity=ssh_identity,
+        )
     )
 
     print(
@@ -3295,37 +3886,98 @@ def main() -> int:
 
         vm_count = ask_vm_count()
 
-        os_info = ask_operating_system()
-
-        vm_name = ask_vm_name(
-            os_info
-        )
-
-        hardware = ask_hardware_defaults(
-            os_info
-        )
-
         if vm_count != SUPPORTED_VM_COUNT:
             raise CrucibleForgeError(
                 "Unsupported VM count reached "
                 "orchestration layer."
             )
 
+        os_info = ask_operating_system()
+
+        vm_name = ask_vm_name(
+            os_info
+        )
+
+        instance_serial = (
+            generate_instance_serial()
+        )
+
+        guest_family = (
+            get_guest_family(
+                os_info
+            )
+        )
+
+        ssh_identity: (
+            SshIdentity | None
+        ) = None
+
+        if guest_family == "linux":
+            ssh_identity = (
+                create_machine_ssh_identity(
+                    repo_root=REPO_ROOT,
+                    machine_name=vm_name,
+                    instance_serial=(
+                        instance_serial
+                    ),
+                )
+            )
+
+            print()
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "Crucible SSH identity created."
+            )
+
+            print(
+                f"  Instance serial : "
+                f"{instance_serial}"
+            )
+
+            print(
+                f"  SSH identity    : "
+                f"{ssh_identity.directory.relative_to(REPO_ROOT)}"
+            )
+
+        hardware = ask_hardware_defaults(
+            os_info
+        )
+
+        topology_interfaces = (
+            ask_topology_interfaces()
+        )
+
+        hardware[
+            "topology_interfaces"
+        ] = topology_interfaces
+
+        show_network_slot_plan(
+            topology_interfaces
+        )
+
         autoinstall, plaintext_password = (
             ask_installation_configuration(
                 os_info,
-                vm_name
+                vm_name,
+                crucible_public_key=(
+                    ssh_identity.public_key_text
+                    if ssh_identity
+                    else None
+                ),
             )
         )
 
         print()
         print(f"{CYAN}Generating Crucible manifests...{RESET}")
 
-        lab_path, machine_path = generate_manifests(
-            os_info,
-            vm_name,
-            hardware,
-            autoinstall,
+        lab_path, machine_path = (
+            generate_manifests(
+                os_info,
+                vm_name,
+                hardware,
+                autoinstall,
+                instance_serial,
+            )
         )
 
         print()
@@ -3424,6 +4076,7 @@ def main() -> int:
         KeyError,
         VirtualBoxError,
         WindowsUnattendError,
+        SshIdentityError,
     ) as exc:
         print(
             f"\n{RED}ERROR: {exc}{RESET}",

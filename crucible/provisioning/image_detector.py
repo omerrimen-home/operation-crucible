@@ -486,7 +486,7 @@ def scan_images(
     )
 
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "valid": valid,
         "iso_directory": str(iso_directory.resolve()),
         "recognized": recognized,

@@ -8,7 +8,10 @@ import json
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
-
+from crucible.networking.topology import (
+    CRUCIBLE_NAT_ROUTE_METRIC,
+    TOPOLOGY_ROUTE_METRIC,
+)
 
 class WindowsUnattendError(RuntimeError):
     """
@@ -494,6 +497,34 @@ def build_unattend_iso(
         {},
     )
 
+    topology_interfaces = (
+        network.get(
+            "topology",
+            [],
+        )
+    )
+
+    internet_network = (
+        network.get(
+            "internet",
+            {},
+        )
+    )
+
+    internet_mac = str(
+        internet_network.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    if not internet_mac:
+        raise WindowsUnattendError(
+            "Windows machine manifest "
+            "is missing "
+            "network.internet.mac_address."
+        )
+
     management_network = network.get(
         "management",
         {},
@@ -562,7 +593,7 @@ def build_unattend_iso(
     )
 
     bootstrap_config_data = {
-        "schema_version": 1,
+        "schema_version": 2,
 
         "machine_name": machine_name,
 
@@ -609,6 +640,24 @@ def build_unattend_iso(
                     "auth",
                     "ntlm",
                 )
+            ),
+        },
+        "internet": {
+            "mac_address": (
+                internet_mac
+            ),
+        },
+
+        "topology": (
+            topology_interfaces
+        ),
+
+        "routing": {
+            "internet_metric": (
+                CRUCIBLE_NAT_ROUTE_METRIC
+            ),
+            "topology_metric": (
+                TOPOLOGY_ROUTE_METRIC
             ),
         },
     }

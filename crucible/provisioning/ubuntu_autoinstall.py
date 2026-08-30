@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Any
 import base64
 import yaml
-
+from crucible.networking.topology import (
+    CRUCIBLE_NAT_ROUTE_METRIC,
+    TOPOLOGY_ROUTE_METRIC,
+)
 
 class UbuntuAutoinstallError(RuntimeError):
     """Expected Ubuntu autoinstall seed-generation error."""
@@ -315,6 +318,31 @@ def build_seed_iso(
         {}
     )
 
+    topology_interfaces = (
+        network.get(
+            "topology",
+            [],
+        )
+    )
+
+    internet_network = network.get(
+        "internet",
+        {},
+    )
+
+    internet_mac_address = str(
+        internet_network.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    if not internet_mac_address:
+        raise UbuntuAutoinstallError(
+            "Machine manifest is missing "
+            "network.internet.mac_address."
+        )
+
     management_network = network.get(
         "management",
         {}
@@ -332,6 +360,19 @@ def build_seed_iso(
             "Machine manifest is missing "
             "network.management.address."
         )
+
+    management_mac_address = str(
+        management_network.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    if not management_mac_address:
+        raise UbuntuAutoinstallError(
+            "Machine manifest is missing "
+            "network.management.mac_address."
+        )   
 
     context = {
         "instance_id": f"crucible-{machine_name}",
@@ -396,6 +437,23 @@ def build_seed_iso(
         ),
         "late_commands": late_commands,
         "management_address": management_address,
+        "internet_mac_address": (
+            internet_mac_address
+        ),
+        "management_mac_address": (
+            management_mac_address
+        ),
+        "topology_interfaces": (
+            topology_interfaces
+        ),
+
+        "internet_route_metric": (
+            CRUCIBLE_NAT_ROUTE_METRIC
+        ),
+
+        "topology_route_metric": (
+            TOPOLOGY_ROUTE_METRIC
+        ),
     }
 
     _render_template(

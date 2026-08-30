@@ -19,17 +19,51 @@ autoinstall:
 
     ethernets:
 
-      enp0s3:
+      crucible-nat:
+        match:
+          macaddress: {{ internet_mac_address | yaml_string }}
         dhcp4: true
         dhcp6: false
+        dhcp4-overrides:
+          route-metric: {{ internet_route_metric }}
         optional: true
 
-      enp0s8:
+      crucible-management:
+        match:
+          macaddress: {{ management_mac_address | yaml_string }}
         dhcp4: false
         dhcp6: false
         addresses:
           - {{ management_address | yaml_string }}
         optional: true
+
+{% for interface in topology_interfaces %}
+      topology-{{ interface.slot }}:
+        match:
+          macaddress: {{ interface.mac_address | yaml_string }}
+
+{% if interface.ipv4.method == "dhcp" %}
+        dhcp4: true
+        dhcp6: false
+        dhcp4-overrides:
+          route-metric: {{ topology_route_metric }}
+        optional: true
+
+{% elif interface.ipv4.method == "static" %}
+        dhcp4: false
+        dhcp6: false
+        addresses:
+          - {{ interface.ipv4.address | yaml_string }}
+{% if interface.ipv4.gateway %}
+        routes:
+          - to: default
+            via: {{ interface.ipv4.gateway | yaml_string }}
+            metric: {{ topology_route_metric }}
+{% endif %}
+        optional: true
+
+{% endif %}
+{% endfor %}
         
   timezone: {{ timezone | yaml_string }}
 

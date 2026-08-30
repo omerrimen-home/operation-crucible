@@ -19,12 +19,17 @@ d-i console-keymaps-at/keymap select {{ keyboard_layout }}
 # ------------------------------------------------------------
 # Networking
 #
-# NIC 1 / eth0 is Crucible's temporary NAT interface.
-# NIC 2 / eth1 is configured by the late command for the
-# permanent Crucible management network.
+# Persistent internal topology NICs occupy the lowest
+# VirtualBox slots.
+#
+# Crucible's temporary NAT interface is appended after
+# those NICs and selected dynamically.
+#
+# The Crucible management interface is appended after
+# the NAT interface and configured during the late command.
 # ------------------------------------------------------------
 
-d-i netcfg/choose_interface select eth0
+d-i netcfg/choose_interface select {{ internet_interface }}
 
 d-i netcfg/get_hostname string {{ hostname }}
 d-i netcfg/get_domain string unassigned-domain
@@ -124,7 +129,8 @@ d-i grub-installer/bootdev string /dev/sda
 # ------------------------------------------------------------
 # Crucible bootstrap
 #
-# This installs/configures SSH + Python, configures eth1,
+# This installs/configures SSH + Python, configures the
+# Crucible management interface,
 # and creates /var/lib/crucible/bootstrap-complete.
 # ------------------------------------------------------------
 

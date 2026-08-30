@@ -35,6 +35,60 @@ function Normalize-MacAddress {
     return $MacAddress.Replace(":", "").Replace("-", "").ToUpperInvariant()
 }
 
+function Find-CrucibleNetAdapterByMac {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $MacAddress,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Description = "network",
+
+        [Parameter(Mandatory = $false)]
+        [int] $Attempts = 30
+    )
+
+    $TargetMac = Normalize-MacAddress $MacAddress
+
+    for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
+
+        $Adapters = Get-NetAdapter `
+            -ErrorAction SilentlyContinue
+
+        foreach ($Adapter in $Adapters) {
+
+            $AdapterMac = Normalize-MacAddress `
+                ([string]$Adapter.MacAddress)
+
+            if ($AdapterMac -eq $TargetMac) {
+
+                Write-CrucibleLog (
+                    "{0} adapter found: {1} (ifIndex {2})" -f `
+                    $Description, `
+                    $Adapter.Name, `
+                    $Adapter.ifIndex
+                )
+
+                return $Adapter
+            }
+        }
+
+        Write-CrucibleLog (
+            "Waiting for {0} adapter by MAC " +
+            "(attempt {1}/{2})." -f `
+            $Description, `
+            $Attempt, `
+            $Attempts
+        )
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw (
+        "Could not locate {0} adapter with MAC {1}" -f `
+        $Description, `
+        $MacAddress
+    )
+}
 
 try {
 
@@ -124,6 +178,13 @@ try {
 
     $ManagementIp = [string]$Config.management.address
     $PrefixLength = [int]$Config.management.prefix_length
+    $InternetMac = [string]$Config.internet.mac_address
+    $InternetRouteMetric = [int]$Config.routing.internet_metric
+    $TopologyRouteMetric = [int]$Config.routing.topology_metric
+
+    $TopologyInterfaces = @(
+        $Config.topology
+    )
     $ManagementNetwork = [string]$Config.management.network
     $TargetMac = Normalize-MacAddress ([string]$Config.management.mac_address)
     $WinRmPort = [int]$Config.winrm.port
@@ -203,7 +264,6 @@ try {
         Start-Sleep -Seconds 2
     }
 
-
     # ---------------------------------------------------------
     # Configure static management IPv4 address
     # ---------------------------------------------------------
@@ -241,7 +301,8 @@ try {
 
 
     # The Crucible management interface must never become
-    # Windows' default Internet route. NAT NIC 1 owns that.
+    # Windows' default Internet route. The appended Crucible
+    # NAT interface owns Internet routing when present.
     $DefaultRoutes = @(
         Get-NetRoute `
             -InterfaceIndex $InterfaceIndex `
@@ -307,7 +368,6 @@ try {
 
         Start-Sleep -Seconds 1
     }
-
 
     # ---------------------------------------------------------
     # Permit remote administration using local Crucible admin
@@ -507,6 +567,181 @@ try {
         "WinRM HTTPS is listening on port {0}." -f $WinRmPort
     )
 
+    # ---------------------------------------------------------
+    # Prefer Crucible temporary NAT while it exists
+    # ---------------------------------------------------------
+
+    $InternetAdapter = Find-CrucibleNetAdapterByMac `
+        -MacAddress $InternetMac `
+        -Description "Crucible Internet"
+
+    $InternetInterfaceIndex = [int]$InternetAdapter.ifIndex
+
+    Set-NetIPInterface `
+        -InterfaceIndex $InternetInterfaceIndex `
+        -AddressFamily IPv4 `
+        -AutomaticMetric Disabled `
+        -InterfaceMetric $InternetRouteMetric
+
+    Write-CrucibleLog (
+        "Crucible Internet interface metric set to {0}." -f `
+        $InternetRouteMetric
+    )
+
+    # ---------------------------------------------------------
+    # Configure persistent topology interfaces
+    # ---------------------------------------------------------
+
+    foreach ($InterfaceSpec in $TopologyInterfaces) {
+
+        $Label = [string]$InterfaceSpec.label
+        $MacAddress = [string]$InterfaceSpec.mac_address
+
+        $TopologyAdapter = Find-CrucibleNetAdapterByMac `
+            -MacAddress $MacAddress `
+            -Description ("topology interface '{0}'" -f $Label)
+
+        $TopologyIndex = [int]$TopologyAdapter.ifIndex
+
+        if ($TopologyAdapter.Status -eq "Disabled") {
+
+            Enable-NetAdapter `
+                -InterfaceIndex $TopologyIndex `
+                -Confirm:$false
+
+            Start-Sleep -Seconds 1
+        }
+
+        Set-NetIPInterface `
+            -InterfaceIndex $TopologyIndex `
+            -AddressFamily IPv4 `
+            -AutomaticMetric Disabled `
+            -InterfaceMetric $TopologyRouteMetric
+
+        $Method = [string]$InterfaceSpec.ipv4.method
+
+        if ($Method -eq "dhcp") {
+
+            Write-CrucibleLog (
+                "Configuring topology interface '{0}' for DHCP." -f `
+                $Label
+            )
+
+            Set-NetIPInterface `
+                -InterfaceIndex $TopologyIndex `
+                -AddressFamily IPv4 `
+                -Dhcp Enabled `
+                -AutomaticMetric Disabled `
+                -InterfaceMetric $TopologyRouteMetric
+
+            Set-DnsClientServerAddress `
+                -InterfaceIndex $TopologyIndex `
+                -ResetServerAddresses `
+                -ErrorAction SilentlyContinue
+
+            continue
+        }
+
+        if ($Method -ne "static") {
+
+            throw (
+                "Unsupported IPv4 method '{0}' " +
+                "for topology interface '{1}'." -f `
+                $Method, `
+                $Label
+            )
+        }
+
+        Write-CrucibleLog (
+            "Configuring topology interface '{0}' statically." -f `
+            $Label
+        )
+
+        Set-NetIPInterface `
+            -InterfaceIndex $TopologyIndex `
+            -AddressFamily IPv4 `
+            -Dhcp Disabled `
+            -AutomaticMetric Disabled `
+            -InterfaceMetric $TopologyRouteMetric
+
+        $ExistingAddresses = @(
+            Get-NetIPAddress `
+                -InterfaceIndex $TopologyIndex `
+                -AddressFamily IPv4 `
+                -ErrorAction SilentlyContinue
+        )
+
+        foreach ($Address in $ExistingAddresses) {
+
+            Remove-NetIPAddress `
+                -InterfaceIndex $TopologyIndex `
+                -IPAddress $Address.IPAddress `
+                -Confirm:$false `
+                -ErrorAction SilentlyContinue
+        }
+
+        $ExistingDefaultRoutes = @(
+            Get-NetRoute `
+                -InterfaceIndex $TopologyIndex `
+                -AddressFamily IPv4 `
+                -DestinationPrefix "0.0.0.0/0" `
+                -ErrorAction SilentlyContinue
+        )
+
+        foreach ($Route in $ExistingDefaultRoutes) {
+
+            Remove-NetRoute `
+                -InterfaceIndex $TopologyIndex `
+                -DestinationPrefix "0.0.0.0/0" `
+                -Confirm:$false `
+                -ErrorAction SilentlyContinue
+        }
+
+        $AddressText = [string]$InterfaceSpec.ipv4.address
+        $AddressParts = $AddressText.Split("/")
+
+        if ($AddressParts.Count -ne 2) {
+
+            throw (
+                "Invalid CIDR address '{0}' for topology " +
+                "interface '{1}'." -f `
+                $AddressText, `
+                $Label
+            )
+        }
+
+        $IpAddress = [string]$AddressParts[0]
+        $StaticPrefixLength = [int]$AddressParts[1]
+
+        $Gateway = [string]$InterfaceSpec.ipv4.gateway
+
+        $NewAddressParams = @{
+            InterfaceIndex = $TopologyIndex
+            IPAddress = $IpAddress
+            PrefixLength = $StaticPrefixLength
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($Gateway)) {
+
+            $NewAddressParams["DefaultGateway"] = $Gateway
+        }
+
+        New-NetIPAddress @NewAddressParams |
+            Out-Null
+
+        Set-DnsClientServerAddress `
+            -InterfaceIndex $TopologyIndex `
+            -ResetServerAddresses `
+            -ErrorAction SilentlyContinue
+
+        Write-CrucibleLog (
+            "Topology interface '{0}' configured as {1}." -f `
+            $Label, `
+            $AddressText
+        )
+    }
+
+    Write-CrucibleLog "Persistent topology interface configuration complete."
 
     # ---------------------------------------------------------
     # Signal successful bootstrap completion

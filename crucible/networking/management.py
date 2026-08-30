@@ -75,7 +75,7 @@ def _next_guest_ip(
 
 def _new_state() -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "network": str(
             MANAGEMENT_NETWORK
         ),
@@ -394,6 +394,46 @@ def management_mac_for_machine(
     digest = hashlib.sha256(
         (
             "operation-crucible:"
+            + name
+        ).encode("utf-8")
+    ).digest()
+
+    octets = [
+        0x02,
+        digest[0],
+        digest[1],
+        digest[2],
+        digest[3],
+        digest[4],
+    ]
+
+    return ":".join(
+        f"{octet:02X}"
+        for octet in octets
+    )
+
+def internet_mac_for_machine(
+    machine_name: str,
+) -> str:
+    """
+    Generate a deterministic locally-administered MAC
+    address for a machine's temporary Crucible NAT NIC.
+
+    This lets provisioning identify the NAT interface
+    without depending on OS-specific interface names.
+    """
+
+    name = machine_name.strip()
+
+    if not name:
+        raise ManagementIPAMError(
+            "Cannot generate an Internet NIC MAC "
+            "without a machine name."
+        )
+
+    digest = hashlib.sha256(
+        (
+            "operation-crucible:internet:"
             + name
         ).encode("utf-8")
     ).digest()

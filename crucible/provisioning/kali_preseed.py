@@ -6,7 +6,13 @@ import re
 import uuid
 from pathlib import Path
 from typing import Any
-
+from crucible.networking.layout import (
+    legacy_linux_interface_for_slot,
+)
+from crucible.networking.topology import (
+    CRUCIBLE_NAT_ROUTE_METRIC,
+    TOPOLOGY_ROUTE_METRIC,
+)
 
 class KaliPreseedError(RuntimeError):
     """Expected Kali preseed generation error."""
@@ -93,6 +99,131 @@ def _validate_rendered_preseed(
             "contains Jinja template syntax."
         )
 
+def _build_topology_nmconnection(
+    interface: dict[str, Any],
+) -> tuple[str, str]:
+    """
+    Build a persistent NetworkManager keyfile for one
+    user topology interface.
+
+    Interfaces are matched by deterministic MAC rather
+    than Linux device name.
+    """
+
+    slot = int(
+        interface[
+            "slot"
+        ]
+    )
+
+    label = str(
+        interface[
+            "label"
+        ]
+    )
+
+    mac_address = str(
+        interface[
+            "mac_address"
+        ]
+    )
+
+    ipv4 = interface[
+        "ipv4"
+    ]
+
+    method = str(
+        ipv4[
+            "method"
+        ]
+    ).lower()
+
+    connection_uuid = str(
+        uuid.uuid4()
+    )
+
+    lines = [
+        "[connection]\n",
+        f"id=crucible-topology-{label}\n",
+        f"uuid={connection_uuid}\n",
+        "type=ethernet\n",
+        "autoconnect=true\n",
+        "autoconnect-retries=1\n",
+        "\n",
+        "[ethernet]\n",
+        f"mac-address={mac_address}\n",
+        "\n",
+        "[ipv4]\n",
+    ]
+
+    if method == "dhcp":
+        lines.extend(
+            [
+                "method=auto\n",
+                "dhcp-timeout=10\n",
+                "may-fail=true\n",
+                (
+                    "route-metric="
+                    f"{TOPOLOGY_ROUTE_METRIC}\n"
+                ),
+            ]
+        )
+
+    elif method == "static":
+        address = str(
+            ipv4[
+                "address"
+            ]
+        )
+
+        gateway = (
+            ipv4.get(
+                "gateway"
+            )
+        )
+
+        lines.extend(
+            [
+                "method=manual\n",
+                f"address1={address}\n",
+                (
+                    "route-metric="
+                    f"{TOPOLOGY_ROUTE_METRIC}\n"
+                ),
+                "may-fail=true\n",
+            ]
+        )
+
+        if gateway:
+            lines.append(
+                f"gateway={gateway}\n"
+            )
+
+    else:
+        raise KaliPreseedError(
+            "Unsupported topology IPv4 "
+            f"method: {method}"
+        )
+
+    lines.extend(
+        [
+            "\n",
+            "[ipv6]\n",
+            "method=disabled\n",
+        ]
+    )
+
+    filename = (
+        f"crucible-topology-"
+        f"{slot}.nmconnection"
+    )
+
+    return (
+        filename,
+        "".join(
+            lines
+        ),
+    )
 
 def build_preseed(
     machine_manifest: dict[str, Any],
@@ -183,10 +314,70 @@ def build_preseed(
         {},
     )
 
+    topology_interfaces = (
+        network.get(
+            "topology",
+            [],
+        )
+    )
+
+    internet = network.get(
+        "internet",
+        {},
+    )
+
+    internet_slot = int(
+        internet.get(
+            "slot",
+            0,
+        )
+    )
+
+    try:
+        internet_interface_name = (
+            legacy_linux_interface_for_slot(
+                internet_slot
+            )
+        )
+
+    except ValueError as exc:
+        raise KaliPreseedError(
+            "Invalid Kali Internet "
+            f"NIC slot: {internet_slot}"
+        ) from exc
+
     management = network.get(
         "management",
         {},
     )
+
+    internet_mac = str(
+        internet.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    management_mac = str(
+        management.get(
+            "mac_address",
+            "",
+        )
+    ).strip()
+
+    if not internet_mac:
+        raise KaliPreseedError(
+            "Kali machine manifest is "
+            "missing the Crucible Internet "
+            "NIC MAC address."
+        )
+
+    if not management_mac:
+        raise KaliPreseedError(
+            "Kali machine manifest is "
+            "missing the Crucible management "
+            "NIC MAC address."
+        )
 
     management_address = str(
         management.get(
@@ -266,8 +457,8 @@ def build_preseed(
     bootstrap_service = (
         "[Unit]\n"
         "Description=Operation Crucible First-Boot Bootstrap\n"
-        "Wants=network-online.target\n"
-        "After=network-online.target\n"
+        "Wants=NetworkManager.service\n"
+        "After=NetworkManager.service\n"
         "ConditionPathExists=!/var/lib/crucible/bootstrap-complete\n"
         "\n"
         "[Service]\n"
@@ -301,13 +492,14 @@ def build_preseed(
         "id=crucible-nat\n"
         f"uuid={nat_connection_uuid}\n"
         "type=ethernet\n"
-        "interface-name=eth0\n"
         "autoconnect=true\n"
         "\n"
         "[ethernet]\n"
+        f"mac-address={internet_mac}\n"
         "\n"
         "[ipv4]\n"
         "method=auto\n"
+        f"route-metric={CRUCIBLE_NAT_ROUTE_METRIC}\n"
         "\n"
         "[ipv6]\n"
         "method=disabled\n"
@@ -318,10 +510,10 @@ def build_preseed(
         "id=crucible-management\n"
         f"uuid={management_connection_uuid}\n"
         "type=ethernet\n"
-        "interface-name=eth1\n"
         "autoconnect=true\n"
         "\n"
         "[ethernet]\n"
+        f"mac-address={management_mac}\n"
         "\n"
         "[ipv4]\n"
         "method=manual\n"
@@ -352,12 +544,42 @@ def build_preseed(
         .decode("ascii")
     )
 
+    networkmanager_policy = (
+        "[main]\n"
+        "no-auto-default=*\n"
+    )
+
+    networkmanager_policy_base64 = (
+        base64.b64encode(
+            networkmanager_policy.encode(
+                "utf-8"
+            )
+        )
+        .decode("ascii")
+    )
+
     late_commands = [
         (
             "in-target install "
             "-d -m 0755 "
             "/etc/NetworkManager/"
             "system-connections"
+            "/etc/NetworkManager/conf.d"
+        ),
+
+        (
+            "in-target /bin/sh -c "
+            "\"printf '%s' "
+            f"'{networkmanager_policy_base64}' "
+            "| base64 -d "
+            "> /etc/NetworkManager/conf.d/"
+            "99-crucible-no-auto-default.conf\""
+        ),
+
+        (
+            "in-target chmod 0644 "
+            "/etc/NetworkManager/conf.d/"
+            "99-crucible-no-auto-default.conf"
         ),
 
         (
@@ -393,27 +615,49 @@ def build_preseed(
             "system-connections/"
             "crucible-management.nmconnection"
         ),
-
-        (
-            "in-target systemctl enable "
-            "NetworkManager"
-        ),
-
-        (
-            "in-target /bin/sh -c "
-            "\"printf '%s' "
-            f"'{bootstrap_base64}' "
-            "| base64 -d "
-            "> /usr/local/sbin/"
-            "crucible-bootstrap.sh\""
-        ),
-
-        (
-            "in-target chmod 0755 "
-            "/usr/local/sbin/"
-            "crucible-bootstrap.sh"
-        ),
     ]
+
+    for topology_interface in (
+                topology_interfaces
+            ):
+                (
+                    topology_filename,
+                    topology_connection,
+                ) = (
+                    _build_topology_nmconnection(
+                        topology_interface
+                    )
+                )
+    
+                topology_base64 = (
+                    base64.b64encode(
+                        topology_connection.encode(
+                            "utf-8"
+                        )
+                    )
+                    .decode("ascii")
+                )
+    
+                late_commands.extend(
+                    [
+                        (
+                            "in-target /bin/sh -c "
+                            "\"printf '%s' "
+                            f"'{topology_base64}' "
+                            "| base64 -d "
+                            "> /etc/NetworkManager/"
+                            "system-connections/"
+                            f"{topology_filename}\""
+                        ),
+    
+                        (
+                            "in-target chmod 0600 "
+                            "/etc/NetworkManager/"
+                            "system-connections/"
+                            f"{topology_filename}"
+                        ),
+                    ]
+                )
 
     authorized_keys = list(
         ssh.get(
@@ -442,7 +686,26 @@ def build_preseed(
         )
 
         late_commands.extend(
-            [
+            [   
+                (
+                    "in-target systemctl enable "
+                    "NetworkManager"
+                ),
+
+                (
+                    "in-target /bin/sh -c "
+                    "\"printf '%s' "
+                    f"'{bootstrap_base64}' "
+                    "| base64 -d "
+                    "> /usr/local/sbin/"
+                    "crucible-bootstrap.sh\""
+                ),
+
+                (
+                    "in-target chmod 0755 "
+                    "/usr/local/sbin/"
+                    "crucible-bootstrap.sh"
+                ),
                 (
                     "in-target install "
                     "-d -m 0700 "
@@ -565,6 +828,10 @@ def build_preseed(
                 "layout",
                 "us",
             )
+        ),
+
+        "internet_interface": (
+            internet_interface_name
         ),
 
         "late_command": (

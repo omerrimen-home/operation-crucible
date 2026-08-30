@@ -1,7 +1,6 @@
 from __future__ import annotations
-
 from typing import Any
-
+import re
 
 CPU_MIN = 1
 CPU_MAX = 4
@@ -15,9 +14,22 @@ DISK_GB_MAX = 75
 VRAM_MB_MIN = 16
 VRAM_MB_MAX = 128
 
-MAX_NIC_SLOTS = 8
-BASE_NIC_COUNT = 2
-MAX_INTERNAL_NICS = MAX_NIC_SLOTS - BASE_NIC_COUNT
+from crucible.networking.layout import (
+    MAX_NIC_SLOTS,
+    build_network_slot_layout,
+)
+from crucible.networking.topology import (
+    TOPOLOGY_ATTACHMENT_TYPES,
+    TopologyConfigurationError,
+    validate_ipv4_configuration,
+)
+
+CRUCIBLE_OVERLAY_NIC_COUNT = 2
+
+MAX_TOPOLOGY_NICS = (
+    MAX_NIC_SLOTS
+    - CRUCIBLE_OVERLAY_NIC_COUNT
+)
 
 GRAPHICS_CONTROLLERS = {
     "vmsvga",
@@ -129,65 +141,328 @@ def validate_machine_hardware(
             "with the legacy VBoxVGA controller."
         )
 
-    internal_networks = network.get(
-        "internal",
-        [],
+    if (
+        "internal" in network
+        and
+        "topology" not in network
+    ):
+        raise HardwareValidationError(
+            "network.internal belongs to the "
+            "pre-v0.3-AB manifest schema. "
+            "Regenerate the machine manifest "
+            "using network.topology."
+        )
+
+    topology_interfaces = (
+        network.get(
+            "topology",
+            [],
+        )
     )
 
-    if not isinstance(internal_networks, list):
-        raise HardwareValidationError(
-            "network.internal must be a list."
-        )
-
-    if len(internal_networks) > MAX_INTERNAL_NICS:
-        raise HardwareValidationError(
-            f"A maximum of {MAX_INTERNAL_NICS} "
-            "internal networks is supported."
-        )
-
-    used_names: set[str] = set()
-    used_slots = {1, 2}
-
-    for index, nic in enumerate(
-        internal_networks,
-        start=3,
+    if not isinstance(
+        topology_interfaces,
+        list,
     ):
-        if not isinstance(nic, dict):
+        raise HardwareValidationError(
+            "network.topology must "
+            "be a list."
+        )
+
+    if (
+        len(topology_interfaces)
+        > MAX_TOPOLOGY_NICS
+    ):
+        raise HardwareValidationError(
+            f"A maximum of "
+            f"{MAX_TOPOLOGY_NICS} "
+            "persistent topology "
+            "interfaces is supported."
+        )
+
+    internet = network.get(
+        "internet",
+        {},
+    )
+
+    management = network.get(
+        "management",
+        {},
+    )
+
+    internet_enabled = bool(
+        internet.get(
+            "enabled",
+            False,
+        )
+    )
+
+    management_enabled = bool(
+        management.get(
+            "enabled",
+            True,
+        )
+    )
+
+    try:
+        layout = (
+            build_network_slot_layout(
+                len(
+                    topology_interfaces
+                ),
+                internet_enabled=(
+                    internet_enabled
+                ),
+                management_enabled=(
+                    management_enabled
+                ),
+            )
+        )
+
+    except ValueError as exc:
+        raise HardwareValidationError(
+            str(exc)
+        ) from exc
+
+    used_labels: set[str] = set()
+    used_macs: set[str] = set()
+    used_intnets: set[str] = set()
+
+    for interface, expected_slot in zip(
+        topology_interfaces,
+        layout.topology_slots,
+    ):
+        if not isinstance(
+            interface,
+            dict,
+        ):
             raise HardwareValidationError(
-                "Each internal NIC must be a mapping."
+                "Each topology interface "
+                "must be a mapping."
             )
 
-        name = str(
-            nic.get("name", "")
+        label = str(
+            interface.get(
+                "label",
+                "",
+            )
         ).strip()
 
-        if not name:
+        if not label:
             raise HardwareValidationError(
-                "Each internal NIC requires a name."
+                "Each topology interface "
+                "requires a label."
             )
 
-        if name in used_names:
+        if label in used_labels:
             raise HardwareValidationError(
-                f"Duplicate internal network name: {name}"
+                "Duplicate topology "
+                f"interface label: {label}"
             )
 
         slot = int(
-            nic.get("slot", index)
+            interface.get(
+                "slot",
+                expected_slot,
+            )
         )
 
-        if slot < 3 or slot > MAX_NIC_SLOTS:
+        if slot != expected_slot:
             raise HardwareValidationError(
-                "Internal NIC slots must be between "
-                "3 and 8."
+                f"Topology interface "
+                f"'{label}' must occupy "
+                f"NIC {expected_slot}; "
+                f"got NIC {slot}."
             )
 
-        if slot in used_slots:
+        mac_address = str(
+            interface.get(
+                "mac_address",
+                "",
+            )
+        ).strip().upper()
+
+        if not re.fullmatch(
+            r"(?:[0-9A-F]{2}:){5}"
+            r"[0-9A-F]{2}",
+            mac_address,
+        ):
             raise HardwareValidationError(
-                f"NIC slot {slot} is already in use."
+                f"Topology interface "
+                f"'{label}' has invalid "
+                f"MAC address: "
+                f"{mac_address}"
             )
 
-        used_names.add(name)
-        used_slots.add(slot)
+        if mac_address in used_macs:
+            raise HardwareValidationError(
+                f"Duplicate topology MAC: "
+                f"{mac_address}"
+            )
+
+        attachment = (
+            interface.get(
+                "attachment",
+                {},
+            )
+        )
+
+        if not isinstance(
+            attachment,
+            dict,
+        ):
+            raise HardwareValidationError(
+                f"Topology interface "
+                f"'{label}' attachment "
+                "must be a mapping."
+            )
+
+        attachment_type = str(
+            attachment.get(
+                "type",
+                "",
+            )
+        ).strip().lower()
+
+        if (
+            attachment_type
+            not in
+            TOPOLOGY_ATTACHMENT_TYPES
+        ):
+            raise HardwareValidationError(
+                f"Unsupported topology "
+                f"attachment type: "
+                f"{attachment_type}"
+            )
+
+        if attachment_type == "intnet":
+            network_name = str(
+                attachment.get(
+                    "network",
+                    "",
+                )
+            ).strip()
+
+            if not network_name:
+                raise HardwareValidationError(
+                    f"Topology interface "
+                    f"'{label}' requires an "
+                    "internal network name."
+                )
+
+            if (
+                network_name
+                in used_intnets
+            ):
+                raise HardwareValidationError(
+                    f"VM is already attached "
+                    f"to internal network "
+                    f"'{network_name}'."
+                )
+
+            used_intnets.add(
+                network_name
+            )
+
+        elif (
+            attachment_type
+            == "bridged"
+        ):
+            adapter = str(
+                attachment.get(
+                    "adapter",
+                    "",
+                )
+            ).strip()
+
+            if not adapter:
+                raise HardwareValidationError(
+                    f"Bridged topology "
+                    f"interface '{label}' "
+                    "requires a host adapter."
+                )
+
+        try:
+            validate_ipv4_configuration(
+                interface.get(
+                    "ipv4",
+                    {},
+                )
+            )
+
+        except (
+            TopologyConfigurationError
+        ) as exc:
+            raise HardwareValidationError(
+                f"Topology interface "
+                f"'{label}': {exc}"
+            ) from exc
+
+        used_labels.add(
+            label
+        )
+
+        used_macs.add(
+            mac_address
+        )
+
+    if internet_enabled:
+        expected_internet_slot = (
+            layout.internet_slot
+        )
+
+        if expected_internet_slot is None:
+            raise HardwareValidationError(
+                "Could not resolve Internet "
+                "NIC slot."
+            )
+
+        internet_slot = int(
+            internet.get(
+                "slot",
+                expected_internet_slot,
+            )
+        )
+
+        if (
+            internet_slot
+            != expected_internet_slot
+        ):
+            raise HardwareValidationError(
+                "Crucible Internet NIC must "
+                f"occupy slot "
+                f"{expected_internet_slot}; "
+                f"got {internet_slot}."
+            )
+
+    if management_enabled:
+        expected_management_slot = (
+            layout.management_slot
+        )
+
+        if expected_management_slot is None:
+            raise HardwareValidationError(
+                "Could not resolve management "
+                "NIC slot."
+            )
+
+        management_slot = int(
+            management.get(
+                "slot",
+                expected_management_slot,
+            )
+        )
+
+        if (
+            management_slot
+            != expected_management_slot
+        ):
+            raise HardwareValidationError(
+                "Crucible management NIC must "
+                f"occupy slot "
+                f"{expected_management_slot}; "
+                f"got {management_slot}."
+            )
 
 def validate_profile_hardware(
     manifest: dict[str, Any],

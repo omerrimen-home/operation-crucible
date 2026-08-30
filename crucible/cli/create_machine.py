@@ -28,6 +28,10 @@ from crucible.provisioning.windows_unattend import (
     WindowsUnattendError,
     build_unattend_iso,
 )
+from crucible.networking.layout import (
+    build_network_slot_layout,
+    legacy_linux_interface_for_slot,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -189,6 +193,57 @@ def create_machine(
         {},
     )
 
+    topology_interfaces = (
+        network.get(
+            "topology",
+            [],
+        )
+    )
+
+    internet = network.get(
+        "internet",
+        {},
+    )
+
+    management = network.get(
+        "management",
+        {},
+    )
+
+    internet_enabled = bool(
+        internet.get(
+            "enabled",
+            False,
+        )
+    )
+
+    management_enabled = bool(
+        management.get(
+            "enabled",
+            True,
+        )
+    )
+
+    try:
+        network_layout = (
+            build_network_slot_layout(
+                len(
+                    topology_interfaces
+                ),
+                internet_enabled=(
+                    internet_enabled
+                ),
+                management_enabled=(
+                    management_enabled
+                ),
+            )
+        )
+
+    except ValueError as exc:
+        raise CrucibleError(
+            f"Invalid NIC layout: {exc}"
+        ) from exc
+
     autoinstall = manifest.get(
         "autoinstall",
         {},
@@ -266,39 +321,46 @@ def create_machine(
                 "requires the internet NAT NIC."
             )
 
-        if int(
-            kali_internet.get(
-                "slot",
-                1,
-            )
-        ) != 1:
-            raise CrucibleError(
-                "Kali unattended installation "
-                "currently requires the NAT NIC "
-                "in VirtualBox slot 1."
-            )
-
-        if not kali_management.get(
-            "enabled",
-            True,
+        if (
+            unattended_enabled
+            and installer_backend
+            == "debian-preseed"
         ):
-            raise CrucibleError(
-                "Kali unattended installation "
-                "requires the Crucible "
-                "management NIC."
+            kali_internet = internet
+            kali_management = management
+
+            if not internet_enabled:
+                raise CrucibleError(
+                    "Kali unattended installation "
+                    "requires the Crucible NAT NIC."
+                )
+
+            if not management_enabled:
+                raise CrucibleError(
+                    "Kali unattended installation "
+                    "requires the Crucible "
+                    "management NIC."
+                )
+
+            internet_slot = int(
+                kali_internet.get(
+                    "slot",
+                    0,
+                )
             )
 
-        if int(
-            kali_management.get(
-                "slot",
-                2,
-            )
-        ) != 2:
-            raise CrucibleError(
-                "Kali unattended installation "
-                "currently requires the "
-                "management NIC in slot 2."
-            )
+            try:
+                kali_installer_interface = (
+                    legacy_linux_interface_for_slot(
+                        internet_slot
+                    )
+                )
+
+            except ValueError as exc:
+                raise CrucibleError(
+                    "Could not resolve Kali "
+                    "installer network interface."
+                ) from exc
 
     expected_media_type = installer.get(
         "media_type"
@@ -492,28 +554,115 @@ def create_machine(
     )
 
     # ---------------------------------------------------------
-    # NIC 1 - temporary NAT / internet
+    # NIC 1..N - persistent user topology
     # ---------------------------------------------------------
 
-    internet = network.get(
-        "internet",
-        {},
-    )
-
-    if internet.get(
-        "enabled",
-        False,
+    for (
+        topology_interface,
+        expected_slot,
+    ) in zip(
+        topology_interfaces,
+        network_layout.topology_slots,
     ):
+        slot = int(
+            topology_interface.get(
+                "slot",
+                expected_slot,
+            )
+        )
+
+        label = str(
+            topology_interface[
+                "label"
+            ]
+        )
+
+        mac_address = str(
+            topology_interface[
+                "mac_address"
+            ]
+        )
+
+        attachment = (
+            topology_interface[
+                "attachment"
+            ]
+        )
+
+        attachment_type = str(
+            attachment[
+                "type"
+            ]
+        )
+
+        provider.configure_topology_nic(
+            name,
+            slot=slot,
+            attachment_type=(
+                attachment_type
+            ),
+            mac_address=(
+                mac_address
+            ),
+            network_name=(
+                attachment.get(
+                    "network"
+                )
+            ),
+            host_adapter=(
+                attachment.get(
+                    "adapter"
+                )
+            ),
+        )
+
+        print(
+            f"      -> topology NIC "
+            f"slot {slot}: "
+            f"{label} "
+            f"({attachment_type})"
+        )
+
+        print(
+            f"      -> topology MAC: "
+            f"{mac_address}"
+        )
+
+    # ---------------------------------------------------------
+    # Crucible NAT / Internet overlay
+    # ---------------------------------------------------------
+
+    if internet_enabled:
+        if (
+            network_layout.internet_slot
+            is None
+        ):
+            raise CrucibleError(
+                "Internet NIC slot "
+                "was not resolved."
+            )
+
         slot = int(
             internet.get(
                 "slot",
-                1,
+                network_layout.internet_slot,
             )
         )
+
+        internet_mac = str(
+            internet.get(
+                "mac_address",
+                "",
+            )
+        ).strip()
 
         provider.configure_nat_nic(
             name,
             slot=slot,
+            mac_address=(
+                internet_mac
+                or None
+            ),
         )
 
         if (
@@ -528,9 +677,15 @@ def create_machine(
             )
 
         print(
-            f"      -> internet NIC slot "
-            f"{slot}: NAT"
+            f"      -> Crucible Internet "
+            f"NIC slot {slot}: NAT"
         )
+
+        if internet_mac:
+            print(
+                f"      -> Internet MAC: "
+                f"{internet_mac}"
+            )
 
         if (
             unattended_enabled
@@ -543,22 +698,23 @@ def create_machine(
             )
 
     # ---------------------------------------------------------
-    # NIC 2 - Crucible management / Ansible
+    # Crucible management overlay
     # ---------------------------------------------------------
 
-    management = network.get(
-        "management",
-        {},
-    )
+    if management_enabled:
+        if (
+            network_layout.management_slot
+            is None
+        ):
+            raise CrucibleError(
+                "Management NIC slot "
+                "was not resolved."
+            )
 
-    if management.get(
-        "enabled",
-        True,
-    ):
         slot = int(
             management.get(
                 "slot",
-                2,
+                network_layout.management_slot,
             )
         )
 
@@ -581,8 +737,9 @@ def create_machine(
         )
 
         print(
-            f"      -> management NIC slot "
-            f"{slot}: {interface.name}"
+            f"      -> Crucible management "
+            f"NIC slot {slot}: "
+            f"{interface.name}"
         )
 
         if management_mac:
@@ -590,41 +747,6 @@ def create_machine(
                 f"      -> management MAC: "
                 f"{management_mac}"
             )
-            
-    # ---------------------------------------------------------
-    # NIC 3+ - user-defined internal networks
-    # ---------------------------------------------------------
-
-    internal_networks = network.get(
-        "internal",
-        [],
-    )
-
-    for index, internal in enumerate(
-        internal_networks,
-        start=3,
-    ):
-        slot = int(
-            internal.get(
-                "slot",
-                index,
-            )
-        )
-
-        network_name = str(
-            internal["name"]
-        )
-
-        provider.configure_internal_nic(
-            name,
-            slot=slot,
-            network_name=network_name,
-        )
-
-        print(
-            f"      -> internal NIC slot "
-            f"{slot}: {network_name}"
-        )
 
     # ---------------------------------------------------------
     # Start VM
@@ -683,10 +805,19 @@ def create_machine(
                         f"{preseed_server.guest_url}"
                     )
 
+                    if kali_installer_interface is None:
+                        raise CrucibleError(
+                            "Kali installer interface "
+                            "was not resolved."
+                        )
+
                     provider.start_kali_preseed_install(
                         name,
                         preseed_url=(
                             preseed_server.guest_url
+                        ),
+                        installer_interface=(
+                            kali_installer_interface
                         ),
                         headless=headless,
                     )
