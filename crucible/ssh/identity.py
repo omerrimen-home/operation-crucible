@@ -56,6 +56,23 @@ def identity_directory(
         )
     )
 
+def reset_machine_known_hosts(
+    identity: SshIdentity,
+) -> None:
+    """
+    Reset the permanent host-key trust database for a VM
+    immediately before establishing its final installed-OS
+    SSH identity.
+    """
+
+    identity.known_hosts.write_text(
+        "",
+        encoding="utf-8",
+    )
+
+    identity.known_hosts.chmod(
+        0o600
+    )
 
 def create_machine_ssh_identity(
     *,

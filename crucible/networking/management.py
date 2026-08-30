@@ -90,7 +90,7 @@ def _new_state() -> dict[str, Any]:
 def _validate_state(
     state: dict[str, Any],
 ) -> None:
-    if state.get("schema_version") != 1:
+    if state.get("schema_version") != 2:
         raise ManagementIPAMError(
             "Unsupported management IPAM "
             "state schema."

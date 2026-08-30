@@ -11,10 +11,36 @@ from pathlib import Path
 
 DEFAULT_BIND_ADDRESS = "127.0.0.1"
 
-# With VirtualBox's default NAT configuration,
-# 10.0.2.2 represents the host from inside the guest.
-DEFAULT_GUEST_HOST = "10.0.2.2"
+def virtualbox_nat_guest_host(
+    slot: int,
+) -> str:
+    """
+    Return the host-side gateway address visible through
+    VirtualBox's default per-adapter NAT network.
 
+    VirtualBox default NAT networks are assigned by slot:
+
+        NIC 1 -> 10.0.2.0/24
+        NIC 2 -> 10.0.3.0/24
+        NIC 3 -> 10.0.4.0/24
+        ...
+
+    The .2 address is the NAT gateway/host-facing address.
+    """
+
+    if slot < 1 or slot > 8:
+        raise PreseedServerError(
+            "NAT NIC slot must be between "
+            f"1 and 8; got {slot}."
+        )
+
+    network_octet = (
+        slot + 1
+    )
+
+    return (
+        f"10.0.{network_octet}.2"
+    )
 
 class PreseedServerError(RuntimeError):
     """Raised when the temporary preseed server fails."""
@@ -132,13 +158,11 @@ class PreseedServer:
         self,
         preseed_path: Path,
         *,
+        guest_host: str,
         bind_address: str = (
             DEFAULT_BIND_ADDRESS
         ),
         port: int = 0,
-        guest_host: str = (
-            DEFAULT_GUEST_HOST
-        ),
     ) -> None:
         self.preseed_path = (
             preseed_path

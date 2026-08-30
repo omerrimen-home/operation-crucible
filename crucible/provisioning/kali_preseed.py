@@ -563,7 +563,7 @@ def build_preseed(
             "in-target install "
             "-d -m 0755 "
             "/etc/NetworkManager/"
-            "system-connections"
+            "system-connections "
             "/etc/NetworkManager/conf.d"
         ),
 

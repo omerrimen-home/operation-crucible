@@ -23,6 +23,7 @@ from crucible.provisioning.kali_preseed import (
 from crucible.provisioning.preseed_server import (
     PreseedServer,
     PreseedServerError,
+    virtualbox_nat_guest_host,
 )
 from crucible.provisioning.windows_unattend import (
     WindowsUnattendError,
@@ -297,70 +298,50 @@ def create_machine(
         )
     ).strip().lower()
 
+    kali_installer_interface: (
+        str | None
+    ) = None
+
+    kali_internet_slot: (
+        int | None
+    ) = None
+
     if (
         unattended_enabled
         and installer_backend
         == "debian-preseed"
     ):
-        kali_internet = network.get(
-            "internet",
-            {},
-        )
-
-        kali_management = network.get(
-            "management",
-            {},
-        )
-
-        if not kali_internet.get(
-            "enabled",
-            False,
-        ):
+        if not internet_enabled:
             raise CrucibleError(
                 "Kali unattended installation "
-                "requires the internet NAT NIC."
+                "requires the Crucible NAT NIC."
             )
 
-        if (
-            unattended_enabled
-            and installer_backend
-            == "debian-preseed"
-        ):
-            kali_internet = internet
-            kali_management = management
+        if not management_enabled:
+            raise CrucibleError(
+                "Kali unattended installation "
+                "requires the Crucible management NIC."
+            )
 
-            if not internet_enabled:
-                raise CrucibleError(
-                    "Kali unattended installation "
-                    "requires the Crucible NAT NIC."
-                )
+        kali_internet_slot = int(
+            internet.get(
+                "slot",
+                0,
+            )
+        )
 
-            if not management_enabled:
-                raise CrucibleError(
-                    "Kali unattended installation "
-                    "requires the Crucible "
-                    "management NIC."
-                )
-
-            internet_slot = int(
-                kali_internet.get(
-                    "slot",
-                    0,
+        try:
+            kali_installer_interface = (
+                legacy_linux_interface_for_slot(
+                    kali_internet_slot
                 )
             )
 
-            try:
-                kali_installer_interface = (
-                    legacy_linux_interface_for_slot(
-                        internet_slot
-                    )
-                )
-
-            except ValueError as exc:
-                raise CrucibleError(
-                    "Could not resolve Kali "
-                    "installer network interface."
-                ) from exc
+        except ValueError as exc:
+            raise CrucibleError(
+                "Could not resolve Kali "
+                "installer network interface."
+            ) from exc
 
     expected_media_type = installer.get(
         "media_type"
@@ -791,8 +772,36 @@ def create_machine(
                     f"(headless={headless})"
                 )
 
+                if kali_internet_slot is None:
+                    raise CrucibleError(
+                        "Kali NAT slot was not resolved."
+                    )
+
+                preseed_guest_host = (
+                    virtualbox_nat_guest_host(
+                        kali_internet_slot
+                    )
+                )
+
+                print(
+                    "      -> Kali installer "
+                    f"interface: "
+                    f"{kali_installer_interface}"
+                )
+
+                print(
+                    "      -> Kali NAT slot: "
+                    f"NIC {kali_internet_slot}"
+                )
+
+                print(
+                    "      -> Kali NAT host: "
+                    f"{preseed_guest_host}"
+                )
+
                 with PreseedServer(
-                    preseed_path
+                    preseed_path,
+                    guest_host=preseed_guest_host,
                 ) as preseed_server:
 
                     print(

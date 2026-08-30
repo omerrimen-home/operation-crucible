@@ -74,6 +74,7 @@ from crucible.ssh.identity import (
     create_machine_ssh_identity,
     generate_instance_serial,
     load_machine_ssh_identity,
+    reset_machine_known_hosts,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -1264,6 +1265,104 @@ def detect_ssh_public_key() -> str | None:
 
     return None
 
+def wait_for_ssh_authentication(
+    *,
+    host: str,
+    username: str,
+    ssh_identity: SshIdentity,
+    timeout: int = 300,
+    poll_interval: float = 3.0,
+) -> None:
+    """
+    Wait until the guest accepts Crucible's dedicated
+    per-instance SSH identity.
+    """
+
+    print()
+    print(
+        f"{CYAN}"
+        "Waiting for SSH authentication..."
+        f"{RESET}"
+    )
+
+    deadline = (
+        time.monotonic()
+        + timeout
+    )
+
+    command = [
+        "ssh",
+
+        "-i",
+        str(
+            ssh_identity.private_key
+        ),
+
+        "-o",
+        "IdentitiesOnly=yes",
+
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+
+        "-o",
+        (
+            "UserKnownHostsFile="
+            f"{ssh_identity.known_hosts}"
+        ),
+
+        "-o",
+        "BatchMode=yes",
+
+        "-o",
+        "ConnectTimeout=5",
+
+        f"{username}@{host}",
+
+        "true",
+    ]
+
+    last_error = ""
+
+    while (
+        time.monotonic()
+        < deadline
+    ):
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode == 0:
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "SSH authentication verified."
+            )
+
+            return
+
+        last_error = (
+            result.stderr.strip()
+            or result.stdout.strip()
+        )
+
+        time.sleep(
+            poll_interval
+        )
+
+    raise CrucibleForgeError(
+        "Crucible could reach SSH but "
+        "could not authenticate using the "
+        "VM's dedicated SSH identity."
+        + (
+            "\n\nLast SSH response:\n"
+            + last_error
+            if last_error
+            else ""
+        )
+    )
+
 def generate_password(length: int = 20) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#%^*-_"
 
@@ -1480,25 +1579,21 @@ def ask_autoinstall(
 
     plaintext_password, password_hash = ask_password()
 
-    install_ssh = ask_yes_no(
-        "Install OpenSSH server?",
+    install_ssh = True
+
+    print(
+        "OpenSSH Server: required by "
+        "Crucible management"
+    )
+
+    allow_password = ask_yes_no(
+        "Allow SSH password authentication?",
         default=True,
     )
 
-    allow_password = False
-    authorized_keys: list[str] = []
-
-    if install_ssh:
-        allow_password = ask_yes_no(
-            "Allow SSH password authentication?",
-            default=True,
-        )
-
-        if detected_key and ask_yes_no(
-            "Include detected SSH public key?",
-            default=True,
-        ):
-            authorized_keys.append(detected_key)
+    authorized_keys = [
+        crucible_public_key
+    ]
 
     return (
         {
@@ -3111,37 +3206,77 @@ def generate_windows_ansible_inventory(
 
 def wait_for_bootstrap(
     *,
-    machine_name: str,
-    inventory_path: Path,
+    host: str,
+    username: str,
+    ssh_identity: SshIdentity,
     timeout: int = 3000,
     poll_interval: float = 5.0,
 ) -> None:
     """
-    Wait until bootstrap.sh has completed inside the VM.
+    Wait for the installed Linux guest to expose Crucible's
+    bootstrap-complete marker.
+
+    Host-key persistence is deliberately disabled during this
+    transitional phase because the installer environment may
+    reboot into a final system with newly-generated SSH host keys.
     """
 
     print()
     print(
-        f"{CYAN}Waiting for Crucible bootstrap "
-        f"to complete...{RESET}"
+        f"{CYAN}"
+        "Waiting for Crucible bootstrap "
+        f"to complete..."
+        f"{RESET}"
     )
 
-    deadline = time.monotonic() + timeout
+    deadline = (
+        time.monotonic()
+        + timeout
+    )
 
     command = [
-        "ansible",
-        machine_name,
+        "ssh",
+
         "-i",
-        str(inventory_path),
-        "-m",
-        "ansible.builtin.raw",
-        "-a",
+        str(
+            ssh_identity.private_key
+        ),
+
+        "-o",
+        "IdentitiesOnly=yes",
+
+        # Transitional installation phase:
+        # do not pin an SSH host identity yet.
+        "-o",
+        "StrictHostKeyChecking=no",
+
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+
+        "-o",
+        "BatchMode=yes",
+
+        "-o",
+        "ConnectTimeout=5",
+
+        "-o",
+        "LogLevel=ERROR",
+
+        f"{username}@{host}",
+
         (
-            "test -f /var/lib/crucible/bootstrap-complete"
+            "test -f "
+            "/var/lib/crucible/"
+            "bootstrap-complete"
         ),
     ]
 
-    while time.monotonic() < deadline:
+    last_error = ""
+
+    while (
+        time.monotonic()
+        < deadline
+    ):
         result = subprocess.run(
             command,
             text=True,
@@ -3152,30 +3287,33 @@ def wait_for_bootstrap(
         if result.returncode == 0:
             print(
                 f"{GREEN}[✓]{RESET} "
-                f"Bootstrap complete."
+                "Bootstrap complete."
             )
+
             return
 
-        '''
-        print(
-            f"[DEBUG] Bootstrap probe failed "
-            f"(rc={result.returncode})"
+        last_error = (
+            result.stderr.strip()
+            or
+            result.stdout.strip()
         )
 
-        if result.stdout.strip():
-            print("[DEBUG stdout]")
-            print(result.stdout.strip())
+        time.sleep(
+            poll_interval
+        )
 
-        if result.stderr.strip():
-            print("[DEBUG stderr]")
-            print(result.stderr.strip())
-        '''
-            
-        time.sleep(poll_interval)
+    details = ""
+
+    if last_error:
+        details = (
+            "\n\nLast SSH response:\n"
+            + last_error
+        )
 
     raise CrucibleForgeError(
-        "Timed out waiting for Linux bootstrap "
-        "to complete."
+        "Timed out waiting for Linux "
+        "bootstrap to complete."
+        + details
     )
 
 def verify_ansible(
@@ -3249,9 +3387,7 @@ def verify_linux_machine_ready(
         load_machine_ssh_identity(
             repo_root=REPO_ROOT,
             machine_name=machine_name,
-            instance_serial=(
-                instance_serial
-            ),
+            instance_serial=instance_serial,
         )
     )
 
@@ -3261,6 +3397,33 @@ def verify_linux_machine_ready(
         f"{username}@{management_ip}"
     )
 
+    # 1. Something is listening on TCP/22.
+    wait_for_ssh(
+        management_ip
+    )
+
+    # 2. Wait through installer/final-OS transitions without
+    #    committing a host key to permanent trust.
+    wait_for_bootstrap(
+        host=management_ip,
+        username=username,
+        ssh_identity=ssh_identity,
+    )
+
+    # 3. We now know the installed OS is running.
+    #    Establish its permanent SSH host identity.
+    reset_machine_known_hosts(
+        ssh_identity
+    )
+
+    wait_for_ssh_authentication(
+        host=management_ip,
+        username=username,
+        ssh_identity=ssh_identity,
+    )
+
+    # 4. Generate Ansible inventory only after final SSH
+    #    trust has been established.
     inventory_path = (
         generate_ansible_inventory(
             machine_name=machine_name,
@@ -3271,23 +3434,17 @@ def verify_linux_machine_ready(
     )
 
     print(
+        "\n\n\n"
         f"{GREEN}[✓]{RESET} "
-        f"Ansible inventory generated:"
+        "Ansible inventory generated:"
     )
     print(
-        f"    "
+        "    "
         f"{inventory_path.relative_to(REPO_ROOT)}"
     )
 
-    wait_for_ssh(
-        management_ip
-    )
-
-    wait_for_bootstrap(
-        machine_name=machine_name,
-        inventory_path=inventory_path,
-    )
-
+    # 5. Everything from here onward uses the permanent
+    #    per-instance SSH identity/trust database.
     verify_ansible(
         machine_name=machine_name,
         inventory_path=inventory_path,

@@ -2,8 +2,6 @@
 
 set -Eeuo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
-
 LOG_FILE="/var/log/crucible-bootstrap.log"
 MARKER_FILE="/var/lib/crucible/bootstrap-complete"
 
@@ -15,43 +13,49 @@ echo "=========================================="
 echo " Operation Crucible - Linux Bootstrap"
 echo "=========================================="
 
-echo "[1/5] Updating package indexes..."
-apt-get update
+echo "[1/3] Verifying Crucible prerequisites..."
 
-echo "[2/5] Upgrading installed packages..."
-apt-get \
-    -y \
-    -o Dpkg::Options::="--force-confdef" \
-    -o Dpkg::Options::="--force-confold" \
-    upgrade
+if [[ ! -x /usr/sbin/sshd ]]; then
+    echo "ERROR: OpenSSH server is not installed."
+    exit 1
+fi
 
-echo "[3/5] Installing Crucible base packages..."
-apt-get install -y \
-    openssh-server \
-    python3 \
-    python3-apt \
-    sudo \
-    ca-certificates
+if [[ ! -x /usr/bin/python3 ]]; then
+    echo "ERROR: Python 3 is not installed."
+    exit 1
+fi
 
-echo "[4/5] Configuring SSH..."
+if [[ ! -x /usr/bin/sudo ]]; then
+    echo "ERROR: sudo is not installed."
+    exit 1
+fi
 
-mkdir -p /etc/ssh/sshd_config.d
+echo "Required packages are available."
 
-cat > /etc/ssh/sshd_config.d/99-crucible.conf <<'EOF'
+echo "[2/3] Configuring SSH..."
+
+install -d -m 0755 /etc/ssh/sshd_config.d
+
+cat > /etc/ssh/sshd_config.d/00-crucible.conf <<'EOF'
 PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
 PasswordAuthentication yes
 PermitRootLogin no
 EOF
 
-systemctl enable --now ssh.service
+systemctl enable ssh.service
 
-echo "[5/5] Marking bootstrap complete..."
+# Ubuntu may execute this script from curtin/in-target while
+# the installed system is not yet booted. Starting/restarting
+# sshd is therefore best-effort here. Kali runs this at first
+# boot, where the restart will normally succeed.
+systemctl restart ssh.service >/dev/null 2>&1 || true
+
+echo "[3/3] Marking bootstrap complete..."
 
 date --iso-8601=seconds > "$MARKER_FILE"
 
 echo
+echo "Crucible bootstrap complete."
 echo "SSH enabled."
 echo "Python available for Ansible."
-
-mkdir -p /var/lib/crucible
-date --iso-8601=seconds > /var/lib/crucible/bootstrap-complete
