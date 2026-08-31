@@ -57,18 +57,19 @@ configurations:
       inbound: []
       forward: []
 
-
   ubuntu-cis:
     display_name: CIS Ubuntu Linux 26.04 LTS Hardening
 
     description: >
-      Applies the Operation Crucible implementation of the
-      CIS Ubuntu Linux 26.04 LTS benchmark. Benchmark
-      controls are being implemented during Crucible
-      milestone BA and this configuration remains
-      unavailable until its control set has been reviewed.
+      Applies the Operation Crucible implementation of
+      the CIS Ubuntu Linux 26.04 LTS Benchmark.
+      The initial implementation automatically applies
+      the reviewed low-risk Wave 1 baseline while
+      conditional, authentication-sensitive, audit,
+      installation-time, and deferred controls remain
+      explicitly reported.
 
-    selectable: false
+    selectable: true
 
     supported_os:
       - family: linux
@@ -83,18 +84,62 @@ configurations:
         min_static_internal_interfaces: 0
 
     relationships:
-      requires: []
+      requires:
+        - nftables
+
       conflicts: []
 
-    implementation: null
+    implementation:
+      backend: ansible
+
+      playbook: >
+        ansible/playbooks/configurations/ubuntu_cis.yml
+
+      order: 950
 
     parameters:
+
       profile: auto
+
       exceptions: []
+
+      implementation_wave: "1"
+
+      banner_text: >
+        Authorized users only. Activity may be
+        monitored and reported.
+
+      tmp_size: "25%"
+
+      dev_shm_size: "50%"
+
+      sudo_timestamp_timeout_minutes: 15
+
+      password_max_days: 365
+
+      password_warn_days: 7
+
+      password_inactive_days: 45
+
+      default_umask: "027"
+
+      ssh_client_alive_interval: 15
+
+      ssh_client_alive_count_max: 3
+
+      ssh_login_grace_time: 60
+
+      ssh_max_auth_tries: 4
+
+      ssh_max_sessions: 10
+
+      ssh_max_startups: "10:30:60"
 
     hardening:
       benchmark: cis-ubuntu-linux-26.04
+
       profile_parameter: profile
+
       exceptions_parameter: exceptions
 
     firewall:

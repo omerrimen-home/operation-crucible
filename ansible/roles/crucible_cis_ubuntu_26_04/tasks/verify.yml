@@ -1,0 +1,115 @@
+---
+
+- name: Flush all hardening handlers
+  ansible.builtin.meta:
+    flush_handlers
+
+
+- name: Validate SSH syntax
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -t
+
+  changed_when: false
+
+
+- name: Read effective SSH configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -T
+
+  register: crucible_cis_sshd_effective
+
+  changed_when: false
+
+
+- name: Validate critical SSH settings
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        'permitrootlogin no'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        'permitemptypasswords no'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        'usepam yes'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        'maxauthtries 4'
+        in
+        crucible_cis_sshd_effective.stdout
+
+
+- name: Validate AppArmor service
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - apparmor
+
+  changed_when: false
+
+
+- name: Validate rsyslog service
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - rsyslog
+
+  changed_when: false
+
+
+- name: Validate nftables alternate firewall provider
+  ansible.builtin.command:
+
+    argv:
+      - nft
+      - list
+      - table
+      - inet
+      - crucible_filter
+
+  register: crucible_cis_nftables
+
+  changed_when: false
+
+
+- name: Verify controller connection after hardening
+  ansible.builtin.wait_for_connection:
+
+    timeout: 90
+
+
+- name: Show partial compliance status
+  ansible.builtin.debug:
+
+    msg:
+      - >-
+        Crucible CIS Ubuntu Wave 1 remediation
+        completed successfully.
+
+      - >-
+        Benchmark compliance remains unverified
+        until per-control audit validation is
+        implemented.
+
+      - >-
+        Conditional, authentication-sensitive,
+        audit, installer-time, and deferred controls
+        have not been blindly remediated.

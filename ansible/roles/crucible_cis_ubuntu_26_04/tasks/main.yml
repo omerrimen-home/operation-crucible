@@ -1,0 +1,75 @@
+---
+
+- name: CIS Ubuntu | Preflight
+  ansible.builtin.include_tasks:
+    file: preflight.yml
+
+
+- name: CIS Ubuntu | Kernel module baseline
+  ansible.builtin.include_tasks:
+    file: kernel_modules.yml
+
+
+- name: CIS Ubuntu | Filesystem baseline
+  ansible.builtin.include_tasks:
+    file: filesystem.yml
+
+
+- name: CIS Ubuntu | APT baseline
+  ansible.builtin.include_tasks:
+    file: apt.yml
+
+
+- name: CIS Ubuntu | AppArmor baseline
+  ansible.builtin.include_tasks:
+    file: apparmor.yml
+
+
+- name: CIS Ubuntu | Process hardening
+  ansible.builtin.include_tasks:
+    file: process_hardening.yml
+
+
+- name: CIS Ubuntu | Warning banners
+  ansible.builtin.include_tasks:
+    file: banners.yml
+
+
+- name: CIS Ubuntu | Job schedulers
+  ansible.builtin.include_tasks:
+    file: schedulers.yml
+
+
+- name: CIS Ubuntu | Network hardening
+  ansible.builtin.include_tasks:
+    file: network.yml
+
+
+- name: CIS Ubuntu | SSH hardening
+  ansible.builtin.include_tasks:
+    file: ssh.yml
+
+
+- name: CIS Ubuntu | Sudo hardening
+  ansible.builtin.include_tasks:
+    file: sudo.yml
+
+
+- name: CIS Ubuntu | Account baseline
+  ansible.builtin.include_tasks:
+    file: accounts.yml
+
+
+- name: CIS Ubuntu | Logging baseline
+  ansible.builtin.include_tasks:
+    file: logging.yml
+
+
+- name: CIS Ubuntu | System file permissions
+  ansible.builtin.include_tasks:
+    file: permissions.yml
+
+
+- name: CIS Ubuntu | Validate hardened guest
+  ansible.builtin.include_tasks:
+    file: verify.yml

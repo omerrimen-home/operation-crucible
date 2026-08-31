@@ -3,20 +3,18 @@ schema_version: 1
 benchmarks:
 
   cis-ubuntu-linux-26.04:
+
     display_name: CIS Ubuntu Linux 26.04 LTS
 
     description: >
-      CIS security benchmark for Ubuntu Linux 26.04 LTS.
-      The benchmark definition is registered with Crucible,
-      but its control inventory and automation implementation
-      remain intentionally disabled until the source benchmark
-      has been reviewed.
+      Operation Crucible implementation of the CIS
+      Ubuntu Linux 26.04 LTS Benchmark.
 
     authority: CIS
 
     benchmark_version: "1.0.0"
 
-    status: planned
+    status: implemented
 
     target:
       type: os
@@ -25,6 +23,59 @@ benchmarks:
         - ubuntu-26.04-server
         - ubuntu-26.04-desktop
 
-    profiles: {}
+    profiles:
 
-    controls_file: null
+      level1-server:
+        display_name: Level 1 - Server
+
+        description: >
+          Practical baseline for Ubuntu server systems.
+
+        applies_to_profiles:
+          - ubuntu-26.04-server
+
+        default_for_profiles:
+          - ubuntu-26.04-server
+
+
+      level2-server:
+        display_name: Level 2 - Server
+
+        description: >
+          Additional defense-in-depth controls for
+          security-sensitive Ubuntu server systems.
+
+        applies_to_profiles:
+          - ubuntu-26.04-server
+
+        default_for_profiles: []
+
+
+      level1-workstation:
+        display_name: Level 1 - Workstation
+
+        description: >
+          Practical baseline for Ubuntu workstation
+          systems.
+
+        applies_to_profiles:
+          - ubuntu-26.04-desktop
+
+        default_for_profiles:
+          - ubuntu-26.04-desktop
+
+
+      level2-workstation:
+        display_name: Level 2 - Workstation
+
+        description: >
+          Additional defense-in-depth controls for
+          security-sensitive Ubuntu workstation systems.
+
+        applies_to_profiles:
+          - ubuntu-26.04-desktop
+
+        default_for_profiles: []
+
+    controls_file: >
+      hardening/benchmarks/cis-ubuntu-linux-26.04.yml

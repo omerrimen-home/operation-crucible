@@ -1,0 +1,111 @@
+---
+
+- name: Verify Ubuntu guest
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+      - ansible_facts.distribution == "Ubuntu"
+      - ansible_facts.distribution_version is version("26.04", ">=")
+
+    fail_msg: >
+      crucible_cis_ubuntu_26_04 may only run
+      against Ubuntu 26.04 guests.
+
+
+- name: Verify hardening runtime exists
+  ansible.builtin.assert:
+    that:
+      - crucible_hardening is defined
+      - crucible_hardening.benchmark.id == "cis-ubuntu-linux-26.04"
+      - crucible_hardening.benchmark.version == "1.0.0"
+
+    fail_msg: >
+      CIS Ubuntu hardening runtime metadata is
+      missing or targets the wrong benchmark.
+
+
+- name: Verify supported benchmark profile
+  ansible.builtin.assert:
+    that:
+      - >-
+        crucible_hardening.profile.id
+        in
+        [
+          'level1-server',
+          'level2-server',
+          'level1-workstation',
+          'level2-workstation'
+        ]
+
+
+- name: Restrict initial implementation to Wave 1
+  ansible.builtin.assert:
+    that:
+      - crucible_cis_implementation_wave == "1"
+
+    fail_msg: >
+      The initial Ubuntu CIS Ansible implementation
+      currently supports implementation_wave=1 only.
+
+
+- name: Initialize Wave 1 execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_execution_controls: []
+
+
+- name: Resolve automated Wave 1 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_execution_controls: >-
+      {{
+        crucible_cis_execution_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+    }}
+
+  when:
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Display hardening execution summary
+  ansible.builtin.debug:
+    msg:
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Applicable controls:
+        {{ crucible_hardening.counts.applicable }}
+
+      - >-
+        Wave 1 automated controls selected:
+        {{ crucible_cis_execution_controls | length }}
+
+      - >-
+        Conditional controls:
+        {{ crucible_hardening.counts.conditional }}
+
+      - >-
+        Audit-only controls:
+        {{ crucible_hardening.counts.audit_only }}
+
+      - >-
+        Satisfied elsewhere:
+        {{ crucible_hardening.counts.satisfied_elsewhere }}

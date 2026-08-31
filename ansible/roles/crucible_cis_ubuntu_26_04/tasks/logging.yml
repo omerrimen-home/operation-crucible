@@ -1,0 +1,91 @@
+---
+
+- name: Install rsyslog
+  ansible.builtin.apt:
+
+    name: rsyslog
+
+    state: present
+
+
+- name: Create journald configuration directory
+  ansible.builtin.file:
+
+    path: /etc/systemd/journald.conf.d
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Configure CIS journald baseline
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/systemd/journald.conf.d/
+      60-crucible-cis.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      [Journal]
+
+      ForwardToSyslog=yes
+      Storage=persistent
+      Compress=yes
+
+  notify:
+    - Restart journald
+
+
+- name: Configure rsyslog file creation mode
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/rsyslog.d/
+      20-crucible-cis-permissions.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      $FileCreateMode 0640
+
+  notify:
+    - Restart rsyslog
+
+
+- name: Enable rsyslog
+  ansible.builtin.systemd_service:
+
+    name: rsyslog
+
+    enabled: true
+
+    state: started
+
+
+- name: Ensure persistent journal directory exists
+  ansible.builtin.file:
+
+    path: /var/log/journal
+
+    owner: root
+
+    group: systemd-journal
+
+    mode: "2755"
+
+    state: directory

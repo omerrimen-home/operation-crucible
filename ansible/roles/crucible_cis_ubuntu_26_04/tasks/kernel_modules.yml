@@ -1,0 +1,80 @@
+---
+
+- name: Disable unused CIS filesystem kernel modules
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/modprobe.d/60-crucible-cis-{{
+        item.module
+      }}.conf
+
+    owner: root
+    group: root
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      # CIS {{ item.id }}
+      blacklist {{ item.module }}
+      install {{ item.module }} /bin/false
+
+  loop:
+
+    - id: "1.1.1.1"
+      module: cramfs
+
+    - id: "1.1.1.2"
+      module: freevxfs
+
+    - id: "1.1.1.3"
+      module: hfs
+
+    - id: "1.1.1.4"
+      module: hfsplus
+
+    - id: "1.1.1.5"
+      module: jffs2
+
+    - id: "1.1.1.9"
+      module: firewire-core
+
+  when:
+    - item.id in crucible_cis_execution_controls
+
+
+- name: Unload disabled CIS kernel modules if currently loaded
+  ansible.builtin.command:
+    argv:
+      - modprobe
+      - -r
+      - "{{ item.module }}"
+
+  register: crucible_cis_module_unload
+
+  changed_when:
+    - crucible_cis_module_unload.rc == 0
+
+  failed_when: false
+
+  loop:
+
+    - id: "1.1.1.1"
+      module: cramfs
+
+    - id: "1.1.1.2"
+      module: freevxfs
+
+    - id: "1.1.1.3"
+      module: hfs
+
+    - id: "1.1.1.4"
+      module: hfsplus
+
+    - id: "1.1.1.5"
+      module: jffs2
+
+    - id: "1.1.1.9"
+      module: firewire-core
+
+  when:
+    - item.id in crucible_cis_execution_controls

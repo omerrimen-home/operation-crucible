@@ -1,0 +1,11 @@
+---
+- name: Apply Crucible Ubuntu CIS hardening
+  hosts: all
+
+  gather_facts: true
+
+  become: true
+
+  roles:
+
+    - role: crucible_cis_ubuntu_26_04

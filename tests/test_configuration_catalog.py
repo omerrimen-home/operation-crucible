@@ -151,6 +151,7 @@ class ConfigurationCatalogTests(
             ids,
             {
                 "nftables",
+                "ubuntu-cis"
             },
         )
 

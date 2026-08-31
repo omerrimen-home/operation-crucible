@@ -1,0 +1,114 @@
+---
+
+crucible_cis_parameters: >-
+  {{
+    crucible_current_configuration.parameters
+    | default({})
+  }}
+
+
+crucible_cis_implementation_wave: >-
+  {{
+    crucible_cis_parameters.implementation_wave
+    | default('1')
+  }}
+
+
+crucible_cis_banner_text: >-
+  {{
+    crucible_cis_parameters.banner_text
+    | default(
+        'Authorized users only. Activity may be monitored and reported.'
+      )
+  }}
+
+
+crucible_cis_tmp_size: >-
+  {{
+    crucible_cis_parameters.tmp_size
+    | default('25%')
+  }}
+
+
+crucible_cis_dev_shm_size: >-
+  {{
+    crucible_cis_parameters.dev_shm_size
+    | default('50%')
+  }}
+
+
+crucible_cis_sudo_timestamp_timeout: >-
+  {{
+    crucible_cis_parameters.sudo_timestamp_timeout_minutes
+    | default(15)
+  }}
+
+
+crucible_cis_password_max_days: >-
+  {{
+    crucible_cis_parameters.password_max_days
+    | default(365)
+  }}
+
+
+crucible_cis_password_warn_days: >-
+  {{
+    crucible_cis_parameters.password_warn_days
+    | default(7)
+  }}
+
+
+crucible_cis_password_inactive_days: >-
+  {{
+    crucible_cis_parameters.password_inactive_days
+    | default(45)
+  }}
+
+
+crucible_cis_default_umask: >-
+  {{
+    crucible_cis_parameters.default_umask
+    | default('027')
+  }}
+
+
+crucible_cis_ssh_client_alive_interval: >-
+  {{
+    crucible_cis_parameters.ssh_client_alive_interval
+    | default(15)
+  }}
+
+
+crucible_cis_ssh_client_alive_count_max: >-
+  {{
+    crucible_cis_parameters.ssh_client_alive_count_max
+    | default(3)
+  }}
+
+
+crucible_cis_ssh_login_grace_time: >-
+  {{
+    crucible_cis_parameters.ssh_login_grace_time
+    | default(60)
+  }}
+
+
+crucible_cis_ssh_max_auth_tries: >-
+  {{
+    crucible_cis_parameters.ssh_max_auth_tries
+    | default(4)
+  }}
+
+
+crucible_cis_ssh_max_sessions: >-
+  {{
+    crucible_cis_parameters.ssh_max_sessions
+    | default(10)
+  }}
+
+
+crucible_cis_ssh_max_startups: >-
+  {{
+    crucible_cis_parameters.ssh_max_startups
+    | default('10:30:60')
+  }}

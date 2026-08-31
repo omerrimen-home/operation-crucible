@@ -1,0 +1,94 @@
+---
+
+- name: Protect core account database files
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+
+    group: "{{ item.group }}"
+
+    mode: "{{ item.mode }}"
+
+  loop:
+
+    - path: /etc/passwd
+      group: root
+      mode: "0644"
+
+    - path: /etc/passwd-
+      group: root
+      mode: "0644"
+
+    - path: /etc/group
+      group: root
+      mode: "0644"
+
+    - path: /etc/group-
+      group: root
+      mode: "0644"
+
+    - path: /etc/shadow
+      group: shadow
+      mode: "0640"
+
+    - path: /etc/shadow-
+      group: shadow
+      mode: "0640"
+
+    - path: /etc/gshadow
+      group: shadow
+      mode: "0640"
+
+    - path: /etc/gshadow-
+      group: shadow
+      mode: "0640"
+
+    - path: /etc/shells
+      group: root
+      mode: "0644"
+
+
+- name: Check opasswd
+  ansible.builtin.stat:
+
+    path: /etc/security/opasswd
+
+  register: crucible_cis_opasswd
+
+
+- name: Protect opasswd
+  ansible.builtin.file:
+
+    path: /etc/security/opasswd
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  when:
+    - crucible_cis_opasswd.stat.exists
+
+
+- name: Check old opasswd
+  ansible.builtin.stat:
+
+    path: /etc/security/opasswd.old
+
+  register: crucible_cis_opasswd_old
+
+
+- name: Protect old opasswd
+  ansible.builtin.file:
+
+    path: /etc/security/opasswd.old
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  when:
+    - crucible_cis_opasswd_old.stat.exists

@@ -1,0 +1,39 @@
+---
+
+- name: Install AppArmor packages
+  ansible.builtin.apt:
+
+    name:
+      - apparmor
+      - apparmor-utils
+
+    state: present
+
+    update_cache: false
+
+
+- name: Enable and start AppArmor
+  ansible.builtin.systemd_service:
+
+    name: apparmor
+
+    enabled: true
+
+    state: started
+
+
+- name: Restrict unprivileged unconfined AppArmor usage
+  ansible.posix.sysctl:
+
+    name: >-
+      kernel.apparmor_restrict_unprivileged_unconfined
+
+    value: "1"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      60-crucible-cis-apparmor.conf

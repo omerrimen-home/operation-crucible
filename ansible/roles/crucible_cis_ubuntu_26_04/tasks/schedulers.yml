@@ -1,0 +1,74 @@
+---
+
+- name: Ensure cron is installed
+  ansible.builtin.apt:
+
+    name: cron
+
+    state: present
+
+
+- name: Enable cron
+  ansible.builtin.systemd_service:
+
+    name: cron
+
+    enabled: true
+
+    state: started
+
+
+- name: Protect crontab
+  ansible.builtin.file:
+
+    path: /etc/crontab
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+
+- name: Protect cron directories
+  ansible.builtin.file:
+
+    path: "{{ item }}"
+
+    owner: root
+    group: root
+
+    mode: "0700"
+
+    state: directory
+
+  loop:
+    - /etc/cron.hourly
+    - /etc/cron.daily
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+    - /etc/cron.d
+
+
+- name: Configure at allow-list
+  ansible.builtin.file:
+
+    path: /etc/at.allow
+
+    owner: root
+    group: root
+
+    mode: "0640"
+
+    state: touch
+
+    modification_time: preserve
+
+    access_time: preserve
+
+
+- name: Remove permissive at deny-list
+  ansible.builtin.file:
+
+    path: /etc/at.deny
+
+    state: absent

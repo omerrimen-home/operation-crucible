@@ -3,3 +3,4 @@ collections:
   - name: community.windows
   - name: microsoft.ad
   - name: community.general
+  - name: ansible.posix

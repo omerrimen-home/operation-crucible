@@ -1,0 +1,144 @@
+---
+
+- name: Configure password maximum age
+  ansible.builtin.lineinfile:
+
+    path: /etc/login.defs
+
+    regexp: '^\s*PASS_MAX_DAYS\s+'
+
+    line: >-
+      PASS_MAX_DAYS
+      {{ crucible_cis_password_max_days }}
+
+
+- name: Configure password warning age
+  ansible.builtin.lineinfile:
+
+    path: /etc/login.defs
+
+    regexp: '^\s*PASS_WARN_AGE\s+'
+
+    line: >-
+      PASS_WARN_AGE
+      {{ crucible_cis_password_warn_days }}
+
+
+- name: Configure strong password hashing
+  ansible.builtin.lineinfile:
+
+    path: /etc/login.defs
+
+    regexp: '^\s*ENCRYPT_METHOD\s+'
+
+    line: "ENCRYPT_METHOD YESCRYPT"
+
+
+- name: Configure default inactive password period
+  ansible.builtin.command:
+
+    argv:
+      - useradd
+      - -D
+      - -f
+      - "{{ crucible_cis_password_inactive_days }}"
+
+  changed_when: false
+
+
+- name: Find local users with password hashes
+  ansible.builtin.shell: |
+    awk -F: \
+      '$2 ~ /^\$.+\$/ {print $1}' \
+      /etc/shadow
+
+  args:
+
+    executable: /bin/bash
+
+  register: crucible_cis_password_users
+
+  changed_when: false
+
+
+- name: Configure existing user password ageing
+  ansible.builtin.command:
+
+    argv:
+      - chage
+      - --maxdays
+      - "{{ crucible_cis_password_max_days }}"
+      - --warndays
+      - "{{ crucible_cis_password_warn_days }}"
+      - --inactive
+      - "{{ crucible_cis_password_inactive_days }}"
+      - "{{ item }}"
+
+  loop: >-
+    {{
+      crucible_cis_password_users.stdout_lines
+    }}
+
+
+- name: Lock direct root password login
+  ansible.builtin.user:
+
+    name: root
+
+    password_lock: true
+
+
+- name: Configure default system umask
+  ansible.builtin.lineinfile:
+
+    path: /etc/login.defs
+
+    regexp: '^\s*UMASK\s+'
+
+    line: >-
+      UMASK {{ crucible_cis_default_umask }}
+
+
+- name: Configure shell default umask
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/profile.d/
+      60-crucible-cis-umask.sh
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      umask {{ crucible_cis_default_umask }}
+
+
+- name: Configure root bash umask
+  ansible.builtin.lineinfile:
+
+    path: /root/.bashrc
+
+    regexp: '^\s*umask\s+'
+
+    line: >-
+      umask {{ crucible_cis_default_umask }}
+
+    create: true
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Remove nologin from valid login shells
+  ansible.builtin.lineinfile:
+
+    path: /etc/shells
+
+    regexp: '.*nologin.*'
+
+    state: absent

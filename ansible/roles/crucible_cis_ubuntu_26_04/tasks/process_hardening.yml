@@ -1,0 +1,89 @@
+---
+
+- name: Apply CIS process-hardening sysctls
+  ansible.posix.sysctl:
+
+    name: "{{ item.name }}"
+
+    value: "{{ item.value }}"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      60-crucible-cis-process.conf
+
+  loop:
+
+    - id: "1.5.1"
+      name: fs.protected_hardlinks
+      value: "1"
+
+    - id: "1.5.2"
+      name: fs.protected_symlinks
+      value: "1"
+
+    - id: "1.5.5"
+      name: kernel.dmesg_restrict
+      value: "1"
+
+    - id: "1.5.8"
+      name: kernel.kptr_restrict
+      value: "2"
+
+    - id: "1.5.9"
+      name: kernel.randomize_va_space
+      value: "2"
+
+  when:
+    - item.id in crucible_cis_execution_controls
+
+
+- name: Remove prelink
+  ansible.builtin.apt:
+
+    name: prelink
+
+    state: absent
+
+    purge: true
+
+  when:
+    - "'1.5.6' in crucible_cis_execution_controls"
+
+
+- name: Disable automatic Apport error reporting
+  ansible.builtin.lineinfile:
+
+    path: /etc/default/apport
+
+    regexp: '^\s*enabled\s*='
+
+    line: "enabled=0"
+
+    create: true
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  when:
+    - "'1.5.7' in crucible_cis_execution_controls"
+
+
+- name: Stop and mask Apport
+  ansible.builtin.systemd_service:
+
+    name: apport.service
+
+    state: stopped
+
+    masked: true
+
+  failed_when: false
+
+  when:
+    - "'1.5.7' in crucible_cis_execution_controls"

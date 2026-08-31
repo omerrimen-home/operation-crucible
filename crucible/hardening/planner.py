@@ -20,7 +20,6 @@ class HardeningPlanningError(
     unambiguous hardening plan.
     """
 
-
 @dataclass(
     frozen=True
 )
@@ -44,6 +43,21 @@ class HardeningPlan:
     ]
 
     automated_control_ids: tuple[
+        str,
+        ...
+    ]
+
+    conditional_control_ids: tuple[
+        str,
+        ...
+    ]
+
+    audit_only_control_ids: tuple[
+        str,
+        ...
+    ]
+
+    satisfied_elsewhere_control_ids: tuple[
         str,
         ...
     ]
@@ -331,6 +345,18 @@ def build_hardening_plan(
         str
     ] = []
 
+    conditional_control_ids: list[
+        str
+    ] = []
+
+    audit_only_control_ids: list[
+        str
+    ] = []
+
+    satisfied_elsewhere_control_ids: list[
+        str
+    ] = []
+
     manual_control_ids: list[
         str
     ] = []
@@ -344,23 +370,46 @@ def build_hardening_plan(
         if control.id in exception_ids:
             continue
 
-        if (
-            control.crucible_implementation
-            == "automated"
-        ):
+        implementation = (
+            control
+            .crucible_implementation
+        )
+
+        if implementation == "automated":
+
             automated_control_ids.append(
                 control.id
             )
 
+        elif implementation == "conditional":
+
+            conditional_control_ids.append(
+                control.id
+            )
+
+        elif implementation == "audit_only":
+
+            audit_only_control_ids.append(
+                control.id
+            )
+
         elif (
-            control.crucible_implementation
-            == "manual"
+            implementation
+            == "satisfied_elsewhere"
         ):
+
+            satisfied_elsewhere_control_ids.append(
+                control.id
+            )
+
+        elif implementation == "manual":
+
             manual_control_ids.append(
                 control.id
             )
 
         else:
+
             not_implemented_control_ids.append(
                 control.id
             )
@@ -368,18 +417,35 @@ def build_hardening_plan(
     return HardeningPlan(
         benchmark=benchmark,
         profile=profile,
+
         applicable_controls=(
             applicable_controls
         ),
+
         automated_control_ids=tuple(
             automated_control_ids
         ),
+
+        conditional_control_ids=tuple(
+            conditional_control_ids
+        ),
+
+        audit_only_control_ids=tuple(
+            audit_only_control_ids
+        ),
+
+        satisfied_elsewhere_control_ids=tuple(
+            satisfied_elsewhere_control_ids
+        ),
+
         manual_control_ids=tuple(
             manual_control_ids
         ),
+
         not_implemented_control_ids=tuple(
             not_implemented_control_ids
         ),
+
         exception_control_ids=tuple(
             normalized_exceptions
         ),
@@ -466,6 +532,21 @@ def hardening_plan_to_runtime(
                 .automated_control_ids
             ),
 
+            "conditional": list(
+                plan
+                .conditional_control_ids
+            ),
+
+            "audit_only": list(
+                plan
+                .audit_only_control_ids
+            ),
+
+            "satisfied_elsewhere": list(
+                plan
+                .satisfied_elsewhere_control_ids
+            ),
+
             "manual": list(
                 plan
                 .manual_control_ids
@@ -488,18 +569,28 @@ def hardening_plan_to_runtime(
 
         "counts": {
             "applicable": len(
-                plan
-                .applicable_controls
+                plan.applicable_controls
             ),
 
             "automated": len(
+                plan.automated_control_ids
+            ),
+
+            "conditional": len(
+                plan.conditional_control_ids
+            ),
+
+            "audit_only": len(
+                plan.audit_only_control_ids
+            ),
+
+            "satisfied_elsewhere": len(
                 plan
-                .automated_control_ids
+                .satisfied_elsewhere_control_ids
             ),
 
             "manual": len(
-                plan
-                .manual_control_ids
+                plan.manual_control_ids
             ),
 
             "not_implemented": len(
@@ -508,8 +599,7 @@ def hardening_plan_to_runtime(
             ),
 
             "exceptions": len(
-                plan
-                .exception_control_ids
+                plan.exception_control_ids
             ),
         },
     }
