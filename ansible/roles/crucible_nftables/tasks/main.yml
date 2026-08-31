@@ -57,7 +57,7 @@
       or set nftables.disable_ufw to true.
   when:
     - crucible_ufw_binary.rc == 0
-    - crucible_ufw_status.stdout is search("Status: active")
+    - 'crucible_ufw_status.stdout is search("Status: active")'
     - not crucible_nftables_disable_ufw | bool
 
 
@@ -69,7 +69,7 @@
       - disable
   when:
     - crucible_ufw_binary.rc == 0
-    - crucible_ufw_status.stdout is search("Status: active")
+    - 'crucible_ufw_status.stdout is search("Status: active")'
     - crucible_nftables_disable_ufw | bool
 
 
