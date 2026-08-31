@@ -463,7 +463,7 @@ def build_preseed(
         "\n"
         "[Service]\n"
         "Type=oneshot\n"
-        "ExecStart=/usr/local/sbin/crucible-bootstrap.sh\n"
+        f"ExecStart=/usr/local/sbin/crucible-bootstrap.sh {username}\n"
         "RemainAfterExit=yes\n"
         "\n"
         "[Install]\n"

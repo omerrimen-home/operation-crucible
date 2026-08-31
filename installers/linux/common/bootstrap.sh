@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+CRUCIBLE_USER="${1:-crucible}"
+
 LOG_FILE="/var/log/crucible-bootstrap.log"
 MARKER_FILE="/var/lib/crucible/bootstrap-complete"
 
@@ -13,7 +15,8 @@ echo "=========================================="
 echo " Operation Crucible - Linux Bootstrap"
 echo "=========================================="
 
-echo "[1/3] Verifying Crucible prerequisites..."
+echo
+echo "[1/4] Verifying Crucible prerequisites..."
 
 if [[ ! -x /usr/sbin/sshd ]]; then
     echo "ERROR: OpenSSH server is not installed."
@@ -30,9 +33,41 @@ if [[ ! -x /usr/bin/sudo ]]; then
     exit 1
 fi
 
+if ! id "$CRUCIBLE_USER" >/dev/null 2>&1; then
+    echo "ERROR: Crucible user does not exist: $CRUCIBLE_USER"
+    exit 1
+fi
+
+if [[ ! "$CRUCIBLE_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+    echo "ERROR: Invalid Crucible username."
+    exit 1
+fi
+
 echo "Required packages are available."
 
-echo "[2/3] Configuring SSH..."
+echo
+echo "[2/4] Configuring Crucible privilege escalation..."
+
+install -d -m 0755 /etc/sudoers.d
+
+SUDOERS_FILE="/etc/sudoers.d/90-crucible"
+
+printf '%s ALL=(ALL:ALL) NOPASSWD: ALL\n' \
+    "$CRUCIBLE_USER" \
+    > "$SUDOERS_FILE"
+
+chmod 0440 "$SUDOERS_FILE"
+
+if ! /usr/sbin/visudo -cf "$SUDOERS_FILE"; then
+    echo "ERROR: Generated sudoers configuration is invalid."
+    rm -f "$SUDOERS_FILE"
+    exit 1
+fi
+
+echo "Passwordless sudo configured for $CRUCIBLE_USER."
+
+echo
+echo "[3/4] Configuring SSH..."
 
 install -d -m 0755 /etc/ssh/sshd_config.d
 
@@ -45,13 +80,10 @@ EOF
 
 systemctl enable ssh.service
 
-# Ubuntu may execute this script from curtin/in-target while
-# the installed system is not yet booted. Starting/restarting
-# sshd is therefore best-effort here. Kali runs this at first
-# boot, where the restart will normally succeed.
 systemctl restart ssh.service >/dev/null 2>&1 || true
 
-echo "[3/3] Marking bootstrap complete..."
+echo
+echo "[4/4] Marking bootstrap complete..."
 
 date --iso-8601=seconds > "$MARKER_FILE"
 
@@ -59,3 +91,4 @@ echo
 echo "Crucible bootstrap complete."
 echo "SSH enabled."
 echo "Python available for Ansible."
+echo "Privilege escalation available for configuration roles."

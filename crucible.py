@@ -14,10 +14,6 @@ import socket
 import yaml
 import time
 import re
-from crucible.cli.create_machine import (
-    create_machine,
-    load_os_profile,
-)
 from crucible.validation.hardware import (
     CPU_MIN,
     CPU_MAX,
@@ -76,8 +72,28 @@ from crucible.ssh.identity import (
     load_machine_ssh_identity,
     reset_machine_known_hosts,
 )
+from crucible.configurations.catalog import (
+    ConfigurationCatalog,
+    ConfigurationCatalogError,
+    NetworkRequirements,
+    combine_network_requirements,
+    compatible_configurations,
+    load_configuration_catalog,
+    resolve_configuration_ids,
+    validate_topology_requirements,
+)
+from crucible.configurations.executor import (
+    ConfigurationExecutionError,
+    execute_machine_configurations,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+CONFIGURATION_CATALOG_PATH = (
+    REPO_ROOT
+    / "config"
+    / "configurations.yml"
+)
 
 MACHINE_MANIFEST_DIR = (
     REPO_ROOT
@@ -305,6 +321,356 @@ def ask_operating_system() -> dict[str, Any]:
             f"{RED}That operating system is not currently supported "
             f"by Crucible.{RESET}"
         )
+
+def _configuration_requirement_lines(
+    requirements: NetworkRequirements,
+) -> list[str]:
+    """
+    Produce human-readable network requirement lines
+    for the interactive Forge.
+    """
+
+    lines: list[
+        str
+    ] = []
+
+    if (
+        requirements
+        .min_topology_interfaces
+        > 0
+    ):
+        lines.append(
+            "At least "
+            f"{requirements.min_topology_interfaces} "
+            "persistent topology interface(s)"
+        )
+
+    if (
+        requirements
+        .min_static_ipv4_interfaces
+        > 0
+    ):
+        lines.append(
+            "At least "
+            f"{requirements.min_static_ipv4_interfaces} "
+            "topology interface(s) "
+            "using static IPv4"
+        )
+
+    if (
+        requirements
+        .min_internal_network_interfaces
+        > 0
+    ):
+        lines.append(
+            "At least "
+            f"{requirements.min_internal_network_interfaces} "
+            "VirtualBox Internal "
+            "Network interface(s)"
+        )
+
+    if (
+        requirements
+        .min_static_internal_interfaces
+        > 0
+    ):
+        lines.append(
+            "At least "
+            f"{requirements.min_static_internal_interfaces} "
+            "Internal Network "
+            "interface(s) using "
+            "static IPv4"
+        )
+
+    return lines
+
+
+def ask_configuration_selection(
+    os_info: dict[str, Any],
+    catalog: ConfigurationCatalog,
+) -> list[str]:
+    """
+    Show configurations compatible with the selected
+    OS and return selected configuration IDs.
+
+    Multiple configurations may be selected.
+
+    AC only records the selection. Execution begins
+    during milestone AD.
+    """
+
+    profile = load_os_profile(
+        str(
+            os_info["profile"]
+        )
+    )
+
+    all_compatible = (
+        compatible_configurations(
+            catalog,
+            profile,
+            selectable_only=False,
+        )
+    )
+
+    selectable = [
+        definition
+
+        for definition
+        in all_compatible
+
+        if definition.selectable
+    ]
+
+    planned = [
+        definition
+
+        for definition
+        in all_compatible
+
+        if not definition.selectable
+    ]
+
+    print()
+    print(
+        f"{BOLD}"
+        "Post-install configurations"
+        f"{RESET}"
+    )
+    print()
+
+    if not all_compatible:
+        print(
+            "No Crucible configurations "
+            "are currently defined for "
+            "this operating system."
+        )
+
+        return []
+
+    if selectable:
+        print(
+            "Configurations currently "
+            "selectable for this OS:"
+        )
+        print()
+
+        print(
+            "  [0] None"
+        )
+
+        for index, definition in enumerate(
+            selectable,
+            start=1,
+        ):
+            print(
+                f"  [{index}] "
+                f"{definition.display_name}"
+            )
+
+            print(
+                f"      {definition.description}"
+            )
+
+            requirement_lines = (
+                _configuration_requirement_lines(
+                    definition
+                    .network_requirements
+                )
+            )
+
+            if requirement_lines:
+                print(
+                    "      Network requirements:"
+                )
+
+                for line in requirement_lines:
+                    print(
+                        f"        - {line}"
+                    )
+
+            else:
+                print(
+                    "      Network requirements: "
+                    "none"
+                )
+
+            print()
+
+    if planned:
+        print(
+            f"{DIM}"
+            "Compatible configurations "
+            "planned for later milestones:"
+            f"{RESET}"
+        )
+
+        for definition in planned:
+            print(
+                f"{DIM}"
+                f"  - {definition.display_name}"
+                f"{RESET}"
+            )
+
+        print()
+
+    if not selectable:
+        print(
+            "There are no selectable "
+            "post-install configurations "
+            "for this OS yet."
+        )
+
+        return []
+
+    print(
+        f"{DIM}"
+        "Multiple selections may be entered "
+        "as comma-separated numbers."
+        f"{RESET}"
+    )
+
+    print(
+        f"{DIM}"
+        "During milestone AC, selections "
+        "are recorded in the machine manifest "
+        "but are not executed yet."
+        f"{RESET}"
+    )
+
+    print()
+
+    while True:
+
+        answer = input(
+            "Configuration selection "
+            "[0]: "
+        ).strip()
+
+        if not answer:
+            return []
+
+        normalized = (
+            answer
+            .strip()
+            .lower()
+        )
+
+        if normalized in {
+            "0",
+            "none",
+            "no",
+        }:
+            return []
+
+        tokens = [
+            token
+
+            for token
+            in re.split(
+                r"[\s,]+",
+                answer,
+            )
+
+            if token
+        ]
+
+        if not tokens:
+            return []
+
+        selected_indexes: list[
+            int
+        ] = []
+
+        invalid = False
+
+        for token in tokens:
+
+            try:
+                index = int(
+                    token
+                )
+
+            except ValueError:
+                invalid = True
+                break
+
+            if (
+                index < 1
+                or
+                index > len(
+                    selectable
+                )
+            ):
+                invalid = True
+                break
+
+            if index in selected_indexes:
+                invalid = True
+                break
+
+            selected_indexes.append(
+                index
+            )
+
+        if invalid:
+            print(
+                f"{RED}"
+                "Enter one or more valid "
+                "configuration numbers, "
+                "for example: 1 or 1,2."
+                f"{RESET}"
+            )
+
+            continue
+
+        configuration_ids = [
+
+            selectable[
+                index - 1
+            ].id
+
+            for index
+            in selected_indexes
+        ]
+
+        try:
+            resolve_configuration_ids(
+                configuration_ids,
+                catalog,
+                profile,
+                require_selectable=True,
+            )
+
+        except ConfigurationCatalogError as exc:
+
+            print(
+                f"{RED}"
+                f"{exc}"
+                f"{RESET}"
+            )
+
+            continue
+
+        print()
+        print(
+            f"{GREEN}[✓]{RESET} "
+            "Selected configuration(s):"
+        )
+
+        for configuration_id in (
+            configuration_ids
+        ):
+            definition = catalog.get(
+                configuration_id
+            )
+
+            print(
+                f"  - "
+                f"{definition.display_name}"
+            )
+
+        return configuration_ids
 
 def show_network_slot_plan(
     topology_interfaces: (
@@ -1056,6 +1422,8 @@ def ask_topology_ipv4_configuration(
             )
 
 def ask_topology_interfaces(
+    *,
+    minimum_count: int = 0,
 ) -> list[dict[str, Any]]:
     """
     Ask the user for persistent topology NICs.
@@ -1084,8 +1452,8 @@ def ask_topology_interfaces(
 
     count = ask_int_with_default(
         "Number of topology interfaces",
-        0,
-        minimum=0,
+        minimum_count,
+        minimum=minimum_count,
         maximum=MAX_TOPOLOGY_NICS,
     )
 
@@ -1246,6 +1614,128 @@ def ask_topology_interfaces(
         )
 
     return interfaces
+
+def ask_configuration_aware_topology(
+    configuration_ids: list[str],
+    catalog: ConfigurationCatalog,
+    os_info: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """
+    Collect persistent topology interfaces and ensure
+    they satisfy the selected configuration set.
+
+    If the entered topology does not satisfy the
+    configuration requirements, return the user to
+    topology entry rather than allowing the Forge to
+    fail during later provisioning.
+    """
+
+    profile = load_os_profile(
+        str(
+            os_info["profile"]
+        )
+    )
+
+    definitions = (
+        resolve_configuration_ids(
+            configuration_ids,
+            catalog,
+            profile,
+            require_selectable=True,
+        )
+    )
+
+    requirements = (
+        combine_network_requirements(
+            definitions
+        )
+    )
+
+    minimum_count = (
+        requirements
+        .effective_min_topology_interfaces
+    )
+
+    if (
+        minimum_count
+        > MAX_TOPOLOGY_NICS
+    ):
+        raise CrucibleForgeError(
+            "Selected configuration(s) "
+            "require at least "
+            f"{minimum_count} topology NICs, "
+            "but Crucible currently supports "
+            f"only {MAX_TOPOLOGY_NICS}."
+        )
+
+    if (
+        configuration_ids
+        and
+        not requirements.is_empty
+    ):
+        print()
+        print(
+            f"{BOLD}"
+            "Selected configuration "
+            "network requirements:"
+            f"{RESET}"
+        )
+        print()
+
+        for line in (
+            _configuration_requirement_lines(
+                requirements
+            )
+        ):
+            print(
+                f"  - {line}"
+            )
+
+        print()
+
+    while True:
+
+        topology_interfaces = (
+            ask_topology_interfaces(
+                minimum_count=(
+                    minimum_count
+                )
+            )
+        )
+
+        try:
+            validate_topology_requirements(
+                topology_interfaces,
+                requirements,
+            )
+
+        except ConfigurationCatalogError as exc:
+
+            print()
+            print(
+                f"{RED}"
+                "The topology does not satisfy "
+                "the selected configuration(s)."
+                f"{RESET}"
+            )
+
+            print(
+                f"{RED}"
+                f"{exc}"
+                f"{RESET}"
+            )
+
+            print()
+            print(
+                f"{YELLOW}"
+                "Returning to persistent "
+                "topology configuration."
+                f"{RESET}"
+            )
+
+            continue
+
+        return topology_interfaces
 
 def detect_ssh_public_key() -> str | None:
     candidates = (
@@ -2445,6 +2935,7 @@ def build_machine_manifest(
     machine_name: str,
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
+    configuration_ids: list[str],
     management_address: str,
     instance_serial: str,
 ) -> dict[str, Any]:
@@ -2581,6 +3072,17 @@ def build_machine_manifest(
             },
         },
         "autoinstall": resolved_autoinstall,
+        "configurations": [
+            {
+                "id": (
+                    configuration_id
+                ),
+                "parameters": {},
+            }
+
+            for configuration_id
+            in configuration_ids
+        ],
         "start": {
             "enabled": True,
             "headless": False,
@@ -2634,6 +3136,7 @@ def generate_manifests(
     machine_name: str,
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
+    configuration_ids: list[str],
     instance_serial: str,
 ) -> tuple[Path, Path]:
 
@@ -2659,6 +3162,7 @@ def generate_manifests(
             machine_name,
             hardware,
             autoinstall,
+            configuration_ids,
             management_address,
             instance_serial,
         )
@@ -3357,7 +3861,7 @@ def verify_ansible(
 
 def verify_linux_machine_ready(
     machine_manifest_path: Path,
-) -> None:
+) -> Path:
     """
     Wait for a newly forged machine to become completely
     manageable by Crucible.
@@ -3450,9 +3954,11 @@ def verify_linux_machine_ready(
         inventory_path=inventory_path,
     )
 
+    return inventory_path
+
 def verify_windows_machine_ready(
     machine_manifest_path: Path,
-) -> None:
+) -> Path:
     """
     Wait for a newly forged Windows machine to become
     completely manageable by Crucible through PSRP.
@@ -3599,9 +4105,11 @@ def verify_windows_machine_ready(
         inventory_path=inventory_path,
     )
 
+    return inventory_path
+
 def verify_machine_ready(
     machine_manifest_path: Path,
-) -> None:
+) -> Path:
     """
     Dispatch controller-side readiness verification according
     to the guest operating-system family.
@@ -3652,19 +4160,15 @@ def verify_machine_ready(
 
     if guest_family == "linux":
 
-        verify_linux_machine_ready(
+        return verify_linux_machine_ready(
             machine_manifest_path
         )
-
-        return
 
     if guest_family == "windows":
 
-        verify_windows_machine_ready(
+        return verify_windows_machine_ready(
             machine_manifest_path
         )
-
-        return
 
     raise CrucibleForgeError(
         "No readiness verification path exists "
@@ -3717,6 +4221,99 @@ def verify_windows_ansible_prerequisites() -> None:
             "  ansible-galaxy collection install "
             "-r ansible/requirements.yml"
         )
+
+def verify_post_configuration_connectivity(
+    machine_manifest_path: Path,
+    inventory_path: Path,
+) -> None:
+    """
+    Ensure post-install configuration did not destroy
+    Crucible's management path.
+
+    This is particularly important for firewall,
+    routing and network configurations.
+    """
+
+    with machine_manifest_path.open(
+        "r",
+        encoding="utf-8",
+    ) as file:
+
+        manifest = yaml.safe_load(
+            file
+        )
+
+    if not isinstance(
+        manifest,
+        dict,
+    ):
+        raise CrucibleForgeError(
+            "Machine manifest is invalid."
+        )
+
+    machine_name = str(
+        manifest[
+            "name"
+        ]
+    )
+
+    profile = load_os_profile(
+        str(
+            manifest[
+                "profile"
+            ]
+        )
+    )
+
+    guest_family = str(
+        profile.get(
+            "os",
+            {},
+        ).get(
+            "family",
+            "",
+        )
+    ).strip().lower()
+
+    print()
+    print(
+        f"{CYAN}"
+        "Verifying post-configuration "
+        "management connectivity..."
+        f"{RESET}"
+    )
+
+    if guest_family == "linux":
+
+        verify_ansible(
+            machine_name=(
+                machine_name
+            ),
+            inventory_path=(
+                inventory_path
+            ),
+        )
+
+        return
+
+    if guest_family == "windows":
+
+        verify_windows_ansible(
+            machine_name=(
+                machine_name
+            ),
+            inventory_path=(
+                inventory_path
+            ),
+        )
+
+        return
+
+    raise CrucibleForgeError(
+        "No post-configuration "
+        "verification exists for "
+        f"guest family '{guest_family}'."
+    )
 
 def ask_int_with_default(
     prompt: str,
@@ -4051,6 +4648,19 @@ def main() -> int:
 
         os_info = ask_operating_system()
 
+        configuration_catalog = (
+            load_configuration_catalog(
+                CONFIGURATION_CATALOG_PATH
+            )
+        )
+
+        configuration_ids = (
+            ask_configuration_selection(
+                os_info,
+                configuration_catalog,
+            )
+        )
+
         vm_name = ask_vm_name(
             os_info
         )
@@ -4101,7 +4711,11 @@ def main() -> int:
         )
 
         topology_interfaces = (
-            ask_topology_interfaces()
+            ask_configuration_aware_topology(
+                configuration_ids,
+                configuration_catalog,
+                os_info,
+            )
         )
 
         hardware[
@@ -4133,6 +4747,7 @@ def main() -> int:
                 vm_name,
                 hardware,
                 autoinstall,
+                configuration_ids,
                 instance_serial,
             )
         )
@@ -4195,10 +4810,46 @@ def main() -> int:
                     f"{RESET}"
                 )
 
-        forge_machine(machine_path)
+        forge_machine(
+            machine_path
+        )
 
-        verify_machine_ready(
-                    machine_path
+        inventory_path = (
+            verify_machine_ready(
+                machine_path
+            )
+        )
+
+        applied_configurations = (
+            execute_machine_configurations(
+                machine_path,
+                inventory_path,
+            )
+        )
+
+        if applied_configurations:
+
+            verify_post_configuration_connectivity(
+                machine_path,
+                inventory_path,
+            )
+
+            print()
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "Post-install configuration complete."
+            )
+
+            print(
+                "  Applied:"
+            )
+
+            for configuration_id in (
+                applied_configurations
+            ):
+                print(
+                    f"    - "
+                    f"{configuration_id}"
                 )
 
         print()
@@ -4234,6 +4885,7 @@ def main() -> int:
         VirtualBoxError,
         WindowsUnattendError,
         SshIdentityError,
+        ConfigurationExecutionError,
     ) as exc:
         print(
             f"\n{RED}ERROR: {exc}{RESET}",

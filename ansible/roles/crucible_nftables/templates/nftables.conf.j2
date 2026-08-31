@@ -1,0 +1,12 @@
+#!/usr/sbin/nft -f
+
+#
+# Operation Crucible
+#
+# Main nftables configuration.
+#
+# Individual Crucible-generated nftables fragments are
+# stored beneath /etc/nftables.d/.
+#
+
+include "/etc/nftables.d/*.nft"

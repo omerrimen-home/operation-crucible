@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 import base64
 import yaml
+import shlex
 from crucible.networking.topology import (
     CRUCIBLE_NAT_ROUTE_METRIC,
     TOPOLOGY_ROUTE_METRIC,
@@ -231,6 +232,20 @@ def build_seed_iso(
         )
 
     identity = autoinstall.get("identity", {})
+
+    bootstrap_username = str(
+        identity.get(
+            "username",
+            "",
+        )
+    ).strip()
+
+    if not bootstrap_username:
+        raise UbuntuAutoinstallError(
+            "autoinstall.identity.username "
+            "is required for Linux bootstrap."
+        )
+
     keyboard = autoinstall.get("keyboard", {})
     storage = autoinstall.get("storage", {})
     ssh = autoinstall.get("ssh", {})
@@ -309,7 +324,7 @@ def build_seed_iso(
         (
             "curtin in-target -- "
             "/usr/local/sbin/"
-            "crucible-bootstrap.sh"
+            f"crucible-bootstrap.sh {shlex.quote(bootstrap_username)}"
         ),
     ]
 

@@ -1,0 +1,84 @@
+---
+crucible_nftables_input_policy: >-
+  {{
+    crucible_current_configuration.parameters.input_policy
+    | default('drop')
+  }}
+
+crucible_nftables_forward_policy: >-
+  {{
+    crucible_current_configuration.parameters.forward_policy
+    | default('drop')
+  }}
+
+crucible_nftables_output_policy: >-
+  {{
+    crucible_current_configuration.parameters.output_policy
+    | default('accept')
+  }}
+
+crucible_nftables_allow_icmp: >-
+  {{
+    crucible_current_configuration.parameters.allow_icmp
+    | default(true)
+  }}
+
+crucible_nftables_icmp_rate: >-
+  {{
+    crucible_current_configuration.parameters.icmp_rate
+    | default('20/second')
+  }}
+
+crucible_nftables_icmp_burst_packets: >-
+  {{
+    crucible_current_configuration.parameters.icmp_burst_packets
+    | default(40)
+  }}
+
+crucible_nftables_allow_topology_ssh: >-
+  {{
+    crucible_current_configuration.parameters.allow_topology_ssh
+    | default(false)
+  }}
+
+crucible_nftables_ssh_rate: >-
+  {{
+    crucible_current_configuration.parameters.ssh_rate
+    | default('10/minute')
+  }}
+
+crucible_nftables_ssh_burst_packets: >-
+  {{
+    crucible_current_configuration.parameters.ssh_burst_packets
+    | default(20)
+  }}
+
+crucible_nftables_log_drops: >-
+  {{
+    crucible_current_configuration.parameters.log_drops
+    | default(true)
+  }}
+
+crucible_nftables_log_rate: >-
+  {{
+    crucible_current_configuration.parameters.log_rate
+    | default('5/second')
+  }}
+
+crucible_nftables_log_burst_packets: >-
+  {{
+    crucible_current_configuration.parameters.log_burst_packets
+    | default(20)
+  }}
+
+crucible_nftables_disable_ufw: >-
+  {{
+    crucible_current_configuration.parameters.disable_ufw
+    | default(true)
+  }}
+
+crucible_nftables_disable_firewalld: >-
+  {{
+    crucible_current_configuration.parameters.disable_firewalld
+    | default(true)
+  }}

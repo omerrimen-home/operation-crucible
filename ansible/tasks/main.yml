@@ -1,0 +1,463 @@
+---
+- name: Verify nftables is running on Linux
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == "Linux"
+    fail_msg: >
+      The Crucible nftables role may only
+      run on Linux guests.
+
+
+- name: Refresh APT package metadata on Debian-family guests
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - ansible_facts.os_family == "Debian"
+
+
+- name: Install nftables
+  ansible.builtin.package:
+    name: nftables
+    state: present
+
+
+# ------------------------------------------------------------
+# Competing firewall managers
+# ------------------------------------------------------------
+
+- name: Detect ufw
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - command -v ufw
+  register: crucible_ufw_binary
+  changed_when: false
+  failed_when: false
+
+
+- name: Query ufw status
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - status
+  register: crucible_ufw_status
+  changed_when: false
+  failed_when: false
+  when:
+    - crucible_ufw_binary.rc == 0
+
+
+- name: Refuse active ufw when Crucible is not allowed to disable it
+  ansible.builtin.fail:
+    msg: >
+      UFW is active and may conflict with the
+      Crucible nftables policy. Either disable UFW
+      or set nftables.disable_ufw to true.
+  when:
+    - crucible_ufw_binary.rc == 0
+    - crucible_ufw_status.stdout is search("Status: active")
+    - not crucible_nftables_disable_ufw | bool
+
+
+- name: Disable active ufw
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - --force
+      - disable
+  when:
+    - crucible_ufw_binary.rc == 0
+    - crucible_ufw_status.stdout is search("Status: active")
+    - crucible_nftables_disable_ufw | bool
+
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+
+- name: Determine whether firewalld is running
+  ansible.builtin.set_fact:
+    crucible_firewalld_running: >-
+      {{
+        (
+          ansible_facts.services.get(
+            'firewalld.service',
+            {}
+          ).get(
+            'state',
+            ''
+          )
+        ) == 'running'
+      }}
+
+
+- name: Refuse active firewalld when Crucible is not allowed to disable it
+  ansible.builtin.fail:
+    msg: >
+      firewalld is active and may conflict with the
+      Crucible nftables policy.
+  when:
+    - crucible_firewalld_running | bool
+    - not crucible_nftables_disable_firewalld | bool
+
+
+- name: Disable firewalld when requested
+  ansible.builtin.systemd_service:
+    name: firewalld
+    state: stopped
+    enabled: false
+  when:
+    - crucible_firewalld_running | bool
+    - crucible_nftables_disable_firewalld | bool
+
+
+# ------------------------------------------------------------
+# Resolve actual Linux interface names from Crucible MACs
+#
+# Crucible must NEVER rely on:
+#
+# eth0
+# eth1
+# enp0s3
+# enp0s8
+#
+# The manifest's deterministic MACs are canonical.
+# ------------------------------------------------------------
+
+- name: Initialize MAC-to-interface map
+  ansible.builtin.set_fact:
+    crucible_nftables_mac_to_ifname: {}
+
+
+- name: Build MAC-to-interface map from Ansible facts
+  ansible.builtin.set_fact:
+    crucible_nftables_mac_to_ifname: >-
+      {{
+        crucible_nftables_mac_to_ifname
+        | combine(
+            {
+              (
+                ansible_facts[item].macaddress
+                | lower
+              ): item
+            }
+          )
+      }}
+  loop: "{{ ansible_facts.interfaces }}"
+  when:
+    - ansible_facts[item] is mapping
+    - ansible_facts[item].macaddress is defined
+
+
+- name: Read Crucible management MAC
+  ansible.builtin.set_fact:
+    crucible_nftables_management_mac: >-
+      {{
+        crucible_machine.network.management.mac_address
+        | lower
+      }}
+
+
+- name: Verify management NIC can be resolved
+  ansible.builtin.assert:
+    that:
+      - >-
+        crucible_nftables_management_mac
+        in
+        crucible_nftables_mac_to_ifname
+    fail_msg: >
+      Crucible could not resolve the Linux management
+      interface from its deterministic MAC address.
+
+
+- name: Resolve management interface
+  ansible.builtin.set_fact:
+    crucible_nftables_management_ifname: >-
+      {{
+        crucible_nftables_mac_to_ifname[
+          crucible_nftables_management_mac
+        ]
+      }}
+
+
+# ------------------------------------------------------------
+# Internet NIC
+# ------------------------------------------------------------
+
+- name: Initialize Internet interface
+  ansible.builtin.set_fact:
+    crucible_nftables_internet_ifname: ""
+
+
+- name: Verify Internet NIC can be resolved
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          crucible_machine.network.internet.mac_address
+          | lower
+        )
+        in
+        crucible_nftables_mac_to_ifname
+  when:
+    - crucible_machine.network.internet.enabled | bool
+
+
+- name: Resolve Internet interface
+  ansible.builtin.set_fact:
+    crucible_nftables_internet_ifname: >-
+      {{
+        crucible_nftables_mac_to_ifname[
+          crucible_machine.network.internet.mac_address
+          | lower
+        ]
+      }}
+  when:
+    - crucible_machine.network.internet.enabled | bool
+
+
+# ------------------------------------------------------------
+# Persistent topology NICs
+# ------------------------------------------------------------
+
+- name: Initialize topology interface structures
+  ansible.builtin.set_fact:
+    crucible_nftables_topology_ifnames: []
+    crucible_nftables_topology_label_to_ifname: {}
+    crucible_nftables_dhcp_client_ifnames: []
+
+
+- name: Add Crucible NAT interface to DHCP-client interfaces
+  ansible.builtin.set_fact:
+    crucible_nftables_dhcp_client_ifnames: >-
+      {{
+        crucible_nftables_dhcp_client_ifnames
+        +
+        [
+          crucible_nftables_internet_ifname
+        ]
+      }}
+  when:
+    - crucible_machine.network.internet.enabled | bool
+    - crucible_nftables_internet_ifname | length > 0
+
+
+- name: Verify topology interface MACs can be resolved
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          item.mac_address
+          | lower
+        )
+        in
+        crucible_nftables_mac_to_ifname
+    fail_msg: >-
+      Could not resolve topology interface
+      {{ item.label }}
+      from MAC
+      {{ item.mac_address }}.
+  loop:
+    "{{ crucible_machine.network.topology }}"
+
+
+- name: Build topology interface list
+  ansible.builtin.set_fact:
+    crucible_nftables_topology_ifnames: >-
+      {{
+        crucible_nftables_topology_ifnames
+        +
+        [
+          crucible_nftables_mac_to_ifname[
+            item.mac_address | lower
+          ]
+        ]
+      }}
+
+    crucible_nftables_topology_label_to_ifname: >-
+      {{
+        crucible_nftables_topology_label_to_ifname
+        |
+        combine(
+          {
+            item.label:
+              crucible_nftables_mac_to_ifname[
+                item.mac_address | lower
+              ]
+          }
+        )
+      }}
+  loop:
+    "{{ crucible_machine.network.topology }}"
+
+
+- name: Add DHCP topology NICs to DHCP-client interface list
+  ansible.builtin.set_fact:
+    crucible_nftables_dhcp_client_ifnames: >-
+      {{
+        crucible_nftables_dhcp_client_ifnames
+        +
+        [
+          crucible_nftables_mac_to_ifname[
+            item.mac_address | lower
+          ]
+        ]
+      }}
+  loop:
+    "{{ crucible_machine.network.topology }}"
+  when:
+    - item.ipv4.method == "dhcp"
+
+
+# ------------------------------------------------------------
+# Logical scope -> actual interface names
+# ------------------------------------------------------------
+
+- name: Build Crucible firewall interface scopes
+  ansible.builtin.set_fact:
+    crucible_nftables_scope_ifnames:
+      management:
+        - "{{ crucible_nftables_management_ifname }}"
+
+      internet: >-
+        {{
+          (
+            [
+              crucible_nftables_internet_ifname
+            ]
+            if
+            crucible_nftables_internet_ifname | length > 0
+            else
+            []
+          )
+        }}
+
+      topology: >-
+        {{
+          crucible_nftables_topology_ifnames
+        }}
+
+      any: []
+
+
+- name: Show resolved nftables interface layout
+  ansible.builtin.debug:
+    msg:
+      management: "{{ crucible_nftables_management_ifname }}"
+      internet: "{{ crucible_nftables_internet_ifname }}"
+      topology: "{{ crucible_nftables_topology_label_to_ifname }}"
+      dhcp_clients: "{{ crucible_nftables_dhcp_client_ifnames }}"
+
+
+# ------------------------------------------------------------
+# Persistent configuration
+# ------------------------------------------------------------
+
+- name: Create nftables fragment directory
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+
+- name: Check whether original nftables configuration backup exists
+  ansible.builtin.stat:
+    path: /etc/nftables.conf.pre-crucible
+  register: crucible_nftables_backup
+
+
+- name: Check whether original nftables configuration exists
+  ansible.builtin.stat:
+    path: /etc/nftables.conf
+  register: crucible_nftables_original
+
+
+- name: Back up original nftables configuration
+  ansible.builtin.copy:
+    src: /etc/nftables.conf
+    dest: /etc/nftables.conf.pre-crucible
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  when:
+    - crucible_nftables_original.stat.exists
+    - not crucible_nftables_backup.stat.exists
+
+
+- name: Install Crucible nftables dispatcher
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/nft -c -f %s"
+  notify:
+    - Reload Crucible nftables
+
+
+- name: Install generated Crucible firewall
+  ansible.builtin.template:
+    src: crucible-filter.nft.j2
+    dest: /etc/nftables.d/90-crucible-filter.nft
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/nft -c -f %s"
+  notify:
+    - Reload Crucible nftables
+
+
+- name: Enable nftables at boot
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started
+
+
+# Apply firewall now rather than waiting until playbook exit.
+- name: Apply pending nftables changes
+  ansible.builtin.meta:
+    flush_handlers
+
+
+# ------------------------------------------------------------
+# Verification
+# ------------------------------------------------------------
+
+- name: Validate persistent nftables configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/nft
+      - -c
+      - -f
+      - /etc/nftables.conf
+  changed_when: false
+
+
+- name: Verify Crucible nftables table exists
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/nft
+      - list
+      - table
+      - inet
+      - crucible_filter
+  register: crucible_nftables_ruleset
+  changed_when: false
+
+
+- name: Confirm management connection survives firewall activation
+  ansible.builtin.wait_for_connection:
+    timeout: 30
+
+
+- name: Display active Crucible firewall
+  ansible.builtin.debug:
+    var: crucible_nftables_ruleset.stdout_lines

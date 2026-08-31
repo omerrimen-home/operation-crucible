@@ -33,11 +33,20 @@ from crucible.networking.layout import (
     build_network_slot_layout,
     legacy_linux_interface_for_slot,
 )
+from crucible.configurations.catalog import (
+    load_configuration_catalog,
+    validate_manifest_configurations,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 IMAGE_CONFIG = REPO_ROOT / "config" / "images.yml"
 PROFILE_DIR = REPO_ROOT / "profiles" / "os"
+CONFIGURATION_CONFIG = (
+    REPO_ROOT
+    / "config"
+    / "configurations.yml"
+)
 
 
 class CrucibleError(RuntimeError):
@@ -285,6 +294,37 @@ def create_machine(
         manifest,
         profile
     )
+
+    configuration_catalog = (
+        load_configuration_catalog(
+            CONFIGURATION_CONFIG
+        )
+    )
+
+    selected_configurations = (
+        validate_manifest_configurations(
+            manifest,
+            profile,
+            configuration_catalog,
+        )
+    )
+
+    if selected_configurations:
+        print(
+            "      -> catalog configuration(s): "
+            +
+            ", ".join(
+                definition.id
+
+                for definition
+                in selected_configurations
+            )
+        )
+
+        print(
+            "      -> configuration execution "
+            "deferred to post-forge configuration stage"
+        )
 
     installer = profile.get(
         "installer",

@@ -1,0 +1,229 @@
+schema_version: 1
+
+configurations:
+
+  nftables:
+    display_name: Restrictive nftables Firewall
+
+    description: >
+      Installs and maintains a restrictive nftables host firewall.
+      Rules are generated from the machine topology, Crucible
+      management infrastructure, and firewall requirements declared
+      by other selected configurations.
+
+    selectable: true
+
+    supported_os:
+      - family: linux
+
+    requirements:
+      network:
+        min_topology_interfaces: 0
+        min_static_ipv4_interfaces: 0
+        min_internal_network_interfaces: 0
+        min_static_internal_interfaces: 0
+
+    relationships:
+      requires: []
+      conflicts: []
+
+    implementation:
+      backend: ansible
+      playbook: ansible/playbooks/configurations/nftables.yml
+      order: 900
+
+    parameters:
+      input_policy: drop
+      forward_policy: drop
+      output_policy: accept
+
+      allow_icmp: true
+      icmp_rate: 20/second
+      icmp_burst_packets: 40
+
+      allow_topology_ssh: false
+
+      ssh_rate: 10/minute
+      ssh_burst_packets: 20
+
+      log_drops: true
+      log_rate: 5/second
+      log_burst_packets: 20
+
+      disable_ufw: true
+      disable_firewalld: true
+
+    firewall:
+      inbound: []
+      forward: []
+
+
+  ubuntu-cis:
+    display_name: Ubuntu CIS-Aligned Baseline
+
+    description: >
+      Applies a CIS-aligned security baseline to Ubuntu 26.04
+      LTS Server.
+
+    selectable: false
+
+    supported_os:
+      - family: linux
+        distribution: ubuntu
+        version: "26.04"
+        flavor: server
+
+    requirements:
+      network:
+        min_topology_interfaces: 0
+        min_static_ipv4_interfaces: 0
+        min_internal_network_interfaces: 0
+        min_static_internal_interfaces: 0
+
+    firewall:
+      inbound: []
+      forward: []
+
+    relationships:
+      requires: []
+      conflicts: []
+
+    implementation: null
+
+    parameters: {}
+
+
+  active-directory-domain-controller:
+    display_name: Active Directory Domain Controller
+
+    description: >
+      Promotes Windows Server 2022 into an Active Directory
+      Domain Services domain controller.
+
+    selectable: false
+
+    supported_os:
+      - family: windows
+        distribution: windows-server
+        version: "2022"
+
+    requirements:
+      network:
+        min_topology_interfaces: 1
+        min_static_ipv4_interfaces: 1
+        min_internal_network_interfaces: 1
+        min_static_internal_interfaces: 1
+
+    relationships:
+      requires: []
+      conflicts: []
+
+    implementation: null
+
+    parameters: {}
+
+
+  authoritative-dns:
+    display_name: Authoritative DNS Server
+
+    description: >
+      Configures an authoritative DNS server on a persistent
+      Crucible lab network.
+
+    selectable: false
+
+    supported_os:
+      - family: linux
+        distribution: ubuntu
+        version: "26.04"
+        flavor: server
+
+      - family: windows
+        distribution: windows-server
+        version: "2022"
+
+    requirements:
+      network:
+        min_topology_interfaces: 1
+        min_static_ipv4_interfaces: 1
+        min_internal_network_interfaces: 1
+        min_static_internal_interfaces: 1
+
+    firewall:
+      inbound:
+        - id: dns-udp
+          source_scope: topology
+          protocol: udp
+          ports:
+            - 53
+          source_ports: []
+          source_addresses: []
+          comment: Authoritative DNS UDP
+
+        - id: dns-tcp
+          source_scope: topology
+          protocol: tcp
+          ports:
+            - 53
+          source_ports: []
+          source_addresses: []
+          comment: Authoritative DNS TCP
+
+      forward: []
+
+    relationships:
+      requires: []
+      conflicts: []
+
+    implementation: null
+
+    parameters: {}
+
+
+  dhcp-server:
+    display_name: DHCP Server
+
+    description: >
+      Configures DHCP service for a persistent Crucible
+      internal lab network.
+
+    selectable: false
+
+    supported_os:
+      - family: linux
+        distribution: ubuntu
+        version: "26.04"
+        flavor: server
+
+      - family: windows
+        distribution: windows-server
+        version: "2022"
+
+    requirements:
+      network:
+        min_topology_interfaces: 1
+        min_static_ipv4_interfaces: 1
+        min_internal_network_interfaces: 1
+        min_static_internal_interfaces: 1
+
+    firewall:
+      inbound:
+        - id: dhcp-server
+          source_scope: topology
+          protocol: udp
+          ports:
+            - 67
+          source_ports:
+            - 68
+          source_addresses: []
+          comment: DHCP server requests
+
+      forward: []
+
+    relationships:
+      requires: []
+      conflicts: []
+
+    implementation: null
+
+    parameters: {}

@@ -1,0 +1,297 @@
+#!/usr/sbin/nft -f
+
+#
+# ============================================================
+# Operation Crucible - Generated nftables Policy
+# ============================================================
+#
+# Machine:
+#   {{ crucible_machine.name }}
+#
+# Instance:
+#   {{ crucible_machine.instance_serial }}
+#
+# This file is generated from:
+#
+#   - Crucible management networking
+#   - persistent topology interfaces
+#   - DHCP/static interface configuration
+#   - selected Crucible configurations
+#   - configuration firewall contracts
+#
+# Do not depend on Linux interface naming.
+# Crucible resolves interfaces from deterministic MAC addresses.
+#
+# ============================================================
+#
+
+#
+# Replace only the table owned by Operation Crucible.
+#
+# Unlike "flush ruleset", destroy table leaves unrelated
+# nftables tables untouched.
+#
+
+destroy table inet crucible_filter
+
+
+table inet crucible_filter {
+
+    #
+    # ========================================================
+    # INPUT
+    # ========================================================
+    #
+
+    chain input {
+
+        type filter hook input priority filter;
+        policy {{ crucible_nftables_input_policy }};
+
+
+        #
+        # Loopback
+        #
+
+        iifname "lo" counter accept \
+            comment "Crucible loopback"
+
+
+        #
+        # Invalid connection tracking state
+        #
+
+        ct state invalid counter drop \
+            comment "Crucible invalid-state drop"
+
+
+        #
+        # Existing connections
+        #
+
+        ct state established,related counter accept \
+            comment "Crucible established/related"
+
+
+        #
+        # ----------------------------------------------------
+        # DHCP client traffic
+        #
+        # Crucible NAT always uses DHCP.
+        #
+        # Persistent topology interfaces may also use DHCP.
+        #
+        # Without this rule a default-deny firewall can break
+        # lease acquisition or renewal after reboot.
+        # ----------------------------------------------------
+        #
+
+{% for ifname in crucible_nftables_dhcp_client_ifnames %}
+        iifname "{{ ifname }}" \
+            udp sport 67 \
+            udp dport 68 \
+            counter accept \
+            comment "Crucible DHCP client {{ ifname }}"
+{% endfor %}
+
+
+        #
+        # ----------------------------------------------------
+        # ICMP / ICMPv6
+        #
+        # Rate limiting preserves useful diagnostics and
+        # IPv6 control traffic without permitting unlimited
+        # echo traffic.
+        # ----------------------------------------------------
+        #
+
+{% if crucible_nftables_allow_icmp | bool %}
+        ip protocol icmp \
+            limit rate {{ crucible_nftables_icmp_rate }} \
+            burst {{ crucible_nftables_icmp_burst_packets }} packets \
+            counter accept \
+            comment "Crucible IPv4 ICMP"
+
+        meta l4proto ipv6-icmp \
+            limit rate {{ crucible_nftables_icmp_rate }} \
+            burst {{ crucible_nftables_icmp_burst_packets }} packets \
+            counter accept \
+            comment "Crucible IPv6 ICMP"
+{% endif %}
+
+
+        #
+        # ----------------------------------------------------
+        # Crucible management
+        #
+        # SSH is not exposed indiscriminately.
+        #
+        # Only the Crucible controller may establish new SSH
+        # sessions through the dedicated management NIC.
+        # ----------------------------------------------------
+        #
+
+        iifname "{{ crucible_nftables_management_ifname }}" \
+            ip saddr {{ crucible_firewall.management_controller_ipv4 }} \
+            tcp dport 22 \
+            ct state new \
+            limit rate {{ crucible_nftables_ssh_rate }} \
+            burst {{ crucible_nftables_ssh_burst_packets }} packets \
+            counter accept \
+            comment "Crucible controller SSH"
+
+
+        #
+        # Optional SSH access from persistent topology.
+        #
+
+{% if crucible_nftables_allow_topology_ssh | bool %}
+{% for ifname in crucible_nftables_topology_ifnames %}
+        iifname "{{ ifname }}" \
+            tcp dport 22 \
+            ct state new \
+            limit rate {{ crucible_nftables_ssh_rate }} \
+            burst {{ crucible_nftables_ssh_burst_packets }} packets \
+            counter accept \
+            comment "Crucible topology SSH {{ ifname }}"
+{% endfor %}
+{% endif %}
+
+
+        #
+        # ====================================================
+        # CONFIGURATION-PUBLISHED SERVICES
+        # ====================================================
+        #
+        # The nftables role contains no knowledge of DNS,
+        # DHCP, HTTP, databases, etc.
+        #
+        # Those configurations publish firewall contracts
+        # through config/configurations.yml.
+        #
+
+{% for rule in crucible_firewall.inbound %}
+
+        #
+        # {{ rule.owner_configuration }}:
+        # {{ rule.comment }}
+        #
+
+{% if rule.source_scope == "any" %}
+
+        {% if rule.source_addresses | length > 0 %}ip saddr { {{ rule.source_addresses | join(', ') }} } {% endif %}{{ rule.protocol }}{% if rule.source_ports | length == 1 %} sport {{ rule.source_ports[0] }}{% elif rule.source_ports | length > 1 %} sport { {{ rule.source_ports | join(', ') }} }{% endif %}{% if rule.ports | length == 1 %} dport {{ rule.ports[0] }}{% else %} dport { {{ rule.ports | join(', ') }} }{% endif %} \
+            ct state new \
+            counter accept \
+            comment "{{ rule.owner_configuration }}:{{ rule.id }}"
+
+{% else %}
+
+{% for ifname in crucible_nftables_scope_ifnames[rule.source_scope] %}
+        iifname "{{ ifname }}" \
+            {% if rule.source_addresses | length > 0 %}ip saddr { {{ rule.source_addresses | join(', ') }} } \
+            {% endif %}{{ rule.protocol }}{% if rule.source_ports | length == 1 %} sport {{ rule.source_ports[0] }}{% elif rule.source_ports | length > 1 %} sport { {{ rule.source_ports | join(', ') }} }{% endif %}{% if rule.ports | length == 1 %} dport {{ rule.ports[0] }}{% else %} dport { {{ rule.ports | join(', ') }} }{% endif %} \
+            ct state new \
+            counter accept \
+            comment "{{ rule.owner_configuration }}:{{ rule.id }}"
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+
+
+        #
+        # ----------------------------------------------------
+        # Default-drop logging
+        #
+        # Logging itself is rate limited to avoid letting
+        # hostile traffic create an uncontrolled log flood.
+        # ----------------------------------------------------
+        #
+
+{% if crucible_nftables_log_drops | bool %}
+        limit rate {{ crucible_nftables_log_rate }} \
+            burst {{ crucible_nftables_log_burst_packets }} packets \
+            log prefix "CRUCIBLE-NFT-INPUT-DROP: " \
+            flags all \
+            counter
+{% endif %}
+
+        counter
+    }
+
+
+    #
+    # ========================================================
+    # FORWARD
+    # ========================================================
+    #
+
+    chain forward {
+
+        type filter hook forward priority filter;
+        policy {{ crucible_nftables_forward_policy }};
+
+
+        ct state invalid counter drop \
+            comment "Crucible invalid forwarded traffic"
+
+
+        ct state established,related counter accept \
+            comment "Crucible forwarded established/related"
+
+
+        #
+        # Configuration-published forwarding contracts.
+        #
+
+{% for rule in crucible_firewall.forward %}
+
+{% set source_interfaces = crucible_nftables_scope_ifnames[rule.source_scope] if rule.source_scope != "any" else [""] %}
+{% set destination_interfaces = crucible_nftables_scope_ifnames[rule.destination_scope] if rule.destination_scope != "any" else [""] %}
+
+{% for source_ifname in source_interfaces %}
+{% for destination_ifname in destination_interfaces %}
+        {% if source_ifname %}iifname "{{ source_ifname }}" {% endif %}{% if destination_ifname %}oifname "{{ destination_ifname }}" {% endif %}{% if rule.source_addresses | length > 0 %}ip saddr { {{ rule.source_addresses | join(', ') }} } {% endif %}{{ rule.protocol }}{% if rule.source_ports | length == 1 %} sport {{ rule.source_ports[0] }}{% elif rule.source_ports | length > 1 %} sport { {{ rule.source_ports | join(', ') }} }{% endif %}{% if rule.ports | length == 1 %} dport {{ rule.ports[0] }}{% else %} dport { {{ rule.ports | join(', ') }} }{% endif %} \
+            ct state new \
+            counter accept \
+            comment "{{ rule.owner_configuration }}:{{ rule.id }}"
+{% endfor %}
+{% endfor %}
+
+{% endfor %}
+
+
+{% if crucible_nftables_log_drops | bool %}
+        limit rate {{ crucible_nftables_log_rate }} \
+            burst {{ crucible_nftables_log_burst_packets }} packets \
+            log prefix "CRUCIBLE-NFT-FORWARD-DROP: " \
+            flags all \
+            counter
+{% endif %}
+
+        counter
+    }
+
+
+    #
+    # ========================================================
+    # OUTPUT
+    # ========================================================
+    #
+
+    chain output {
+
+        type filter hook output priority filter;
+        policy {{ crucible_nftables_output_policy }};
+
+
+        #
+        # For AD we intentionally leave output unrestricted.
+        #
+        # Future Crucible configurations can extend the
+        # firewall-contract model to declarative egress rules.
+        #
+
+        counter
+    }
+}
