@@ -35,7 +35,7 @@ configurations:
     parameters:
       input_policy: drop
       forward_policy: drop
-      output_policy: accept
+      output_policy: drop
 
       allow_icmp: true
       icmp_rate: 20/second

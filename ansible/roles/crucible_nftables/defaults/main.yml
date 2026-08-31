@@ -14,7 +14,7 @@ crucible_nftables_forward_policy: >-
 crucible_nftables_output_policy: >-
   {{
     crucible_current_configuration.parameters.output_policy
-    | default('accept')
+    | default('drop')
   }}
 
 crucible_nftables_allow_icmp: >-

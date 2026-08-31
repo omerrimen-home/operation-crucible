@@ -286,10 +286,58 @@ table inet crucible_filter {
 
 
         #
-        # For AD we intentionally leave output unrestricted.
+        # Invalid connection-tracking state should never be
+        # permitted to leave the machine.
         #
-        # Future Crucible configurations can extend the
-        # firewall-contract model to declarative egress rules.
+
+        ct state invalid \
+            counter drop \
+            comment "Crucible invalid outbound state"
+
+
+        #
+        # Default-deny output policy with explicit permission
+        # for normal connection-tracked traffic.
+        #
+        # This intentionally allows:
+        #
+        #   established
+        #       Packets belonging to connections that have
+        #       already been established.
+        #
+        #   related
+        #       Traffic associated with an existing connection.
+        #
+        #   new
+        #       New locally-originated connections.
+        #
+        # Ordinary outbound traffic therefore remains usable
+        # while the chain itself retains an explicit DROP
+        # policy.
+        #
+
+        ct state established,related,new \
+            counter accept \
+            comment "Crucible tracked outbound traffic"
+
+
+{% if crucible_nftables_log_drops | bool %}
+        #
+        # Anything reaching this point is outside the normal
+        # tracked outbound states and will fall through to the
+        # chain's default DROP policy.
+        #
+
+        limit rate {{ crucible_nftables_log_rate }} \
+            burst {{ crucible_nftables_log_burst_packets }} packets \
+            log prefix "CRUCIBLE-NFT-OUTPUT-DROP: " \
+            flags all \
+            counter
+{% endif %}
+
+
+        #
+        # Count anything that reaches the default policy.
         #
 
         counter
