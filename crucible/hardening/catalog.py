@@ -38,6 +38,9 @@ ASSESSMENT_TYPES = {
 
 CONTROL_IMPLEMENTATION_TYPES = {
     "automated",
+    "conditional",
+    "audit_only",
+    "satisfied_elsewhere",
     "manual",
     "not_implemented",
 }
