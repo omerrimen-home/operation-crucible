@@ -225,7 +225,36 @@ def build_configuration_runtime_context(
 
     context = {
         "crucible_machine": {
-            # existing contents unchanged
+            "name": (
+                str(
+                    manifest.get(
+                        "name",
+                        "",
+                    )
+                )
+            ),
+
+            "profile": (
+                str(
+                    manifest.get(
+                        "profile",
+                        "",
+                    )
+                )
+            ),
+
+            "instance_serial": (
+                str(
+                    instance.get(
+                        "serial",
+                        "",
+                    )
+                )
+            ),
+
+            "network": (
+                network
+            ),
         },
 
         "crucible_configurations": (

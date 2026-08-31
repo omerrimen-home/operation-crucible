@@ -132,6 +132,63 @@ class ConfigurationRuntimeTests(
             )
         )
 
+        machine = (
+            context[
+                "crucible_machine"
+            ]
+        )
+
+        self.assertEqual(
+            machine[
+                "name"
+            ],
+            "test",
+        )
+
+        self.assertEqual(
+            machine[
+                "profile"
+            ],
+            "test-linux",
+        )
+
+        self.assertEqual(
+            machine[
+                "instance_serial"
+            ],
+            "CRU-TEST",
+        )
+
+        self.assertEqual(
+            machine[
+                "network"
+            ],
+            manifest[
+                "network"
+            ],
+        )
+
+        self.assertIn(
+            "management",
+            machine[
+                "network"
+            ],
+        )
+
+        self.assertIn(
+            "internet",
+            machine[
+                "network"
+            ],
+        )
+
+        self.assertIn(
+            "topology",
+            machine[
+                "network"
+            ],
+        )
+
         rules = (
             context[
                 "crucible_firewall"
