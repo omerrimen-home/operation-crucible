@@ -12,6 +12,11 @@ CONFIGURATION_ID_PATTERN = re.compile(
     r"^[a-z][a-z0-9_-]{0,63}$"
 )
 
+CAPABILITY_PATTERN = re.compile(
+    r"^[a-z][a-z0-9._-]*"
+    r":[a-z][a-z0-9._-]*"
+    r"(?::[a-z][a-z0-9._-]*)*$"
+)
 
 SUPPORTED_OS_SELECTOR_FIELDS = {
     "profile",
@@ -170,6 +175,11 @@ class ConfigurationDefinition:
         str,
         Any
     ]
+
+    capabilities: tuple[
+        str,
+        ...
+    ] = ()
 
     hardening: (
         dict[str, str]
@@ -1334,6 +1344,86 @@ def _parse_hardening_reference(
         ),
     }
 
+def _parse_capabilities(
+    configuration_id: str,
+    value: Any,
+) -> tuple[str, ...]:
+    """
+    Parse semantic capabilities provided by a
+    configuration.
+
+    Capabilities describe what the final machine is
+    intentionally expected to do.
+
+    Examples:
+
+        service:dns-server
+        service:dhcp-server
+        service:web-server
+        protocol:sctp
+        network:ipv4-router
+    """
+
+    if value is None:
+        return ()
+
+    if not isinstance(
+        value,
+        list,
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            "capabilities must be a list."
+        )
+
+    capabilities: list[
+        str
+    ] = []
+
+    seen: set[
+        str
+    ] = set()
+
+    for raw_capability in value:
+
+        capability = str(
+            raw_capability
+        ).strip().lower()
+
+        if not (
+            CAPABILITY_PATTERN
+            .fullmatch(
+                capability
+            )
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "contains invalid capability "
+                f"{capability!r}."
+            )
+
+        if capability in seen:
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "contains duplicate capability "
+                f"'{capability}'."
+            )
+
+        seen.add(
+            capability
+        )
+
+        capabilities.append(
+            capability
+        )
+
+    return tuple(
+        capabilities
+    )
+
 def load_configuration_catalog(
     path: Path,
 ) -> ConfigurationCatalog:
@@ -1520,6 +1610,16 @@ def load_configuration_catalog(
             )
         )
 
+        capabilities = (
+            _parse_capabilities(
+                configuration_id,
+                raw_definition.get(
+                    "capabilities",
+                    [],
+                ),
+            )
+        )
+
         firewall = (
             _parse_firewall_contract(
                 configuration_id,
@@ -1604,6 +1704,9 @@ def load_configuration_catalog(
 
                 firewall=(
                     firewall
+                ),
+                capabilities=(
+                    capabilities
                 ),
                 hardening=(
                     hardening
@@ -1736,6 +1839,34 @@ def profile_matches_selector(
 
     return True
 
+def combine_configuration_capabilities(
+    definitions: Iterable[
+        ConfigurationDefinition
+    ],
+) -> tuple[str, ...]:
+    """
+    Return the semantic capability union provided by
+    all selected configurations.
+
+    Ordering is deterministic for stable runtime vars
+    and tests.
+    """
+
+    capabilities = {
+        capability
+
+        for definition
+        in definitions
+
+        for capability
+        in definition.capabilities
+    }
+
+    return tuple(
+        sorted(
+            capabilities
+        )
+    )
 
 def configuration_supports_profile(
     definition: (

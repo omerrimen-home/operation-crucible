@@ -658,6 +658,49 @@ class ConfigurationCatalogTests(
             "exceptions",
         )
 
+    def test_dns_configuration_provides_dns_capability(
+        self,
+    ):
+        definition = (
+            self.catalog.get(
+                "authoritative-dns"
+            )
+        )
+
+        self.assertIn(
+            "service:dns-server",
+            definition.capabilities,
+        )
+
+
+    def test_dhcp_configuration_provides_dhcp_capability(
+        self,
+    ):
+        definition = (
+            self.catalog.get(
+                "dhcp-server"
+            )
+        )
+
+        self.assertIn(
+            "service:dhcp-server",
+            definition.capabilities,
+        )
+
+
+    def test_nftables_provides_firewall_capability(
+        self,
+    ):
+        definition = (
+            self.catalog.get(
+                "nftables"
+            )
+        )
+
+        self.assertIn(
+            "firewall:nftables",
+            definition.capabilities,
+        )
 
 if __name__ == "__main__":
     unittest.main()

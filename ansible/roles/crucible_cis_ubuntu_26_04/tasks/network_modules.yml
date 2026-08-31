@@ -1,0 +1,99 @@
+---
+
+- name: Install conditional CIS network module deny-list
+  ansible.builtin.template:
+
+    src: network-modules.conf.j2
+
+    dest: >-
+      /etc/modprobe.d/
+      60-crucible-cis-network-modules.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  notify:
+
+    - Update initramfs
+
+
+- name: Define conditional network protocol modules
+  ansible.builtin.set_fact:
+
+    crucible_cis_network_protocol_modules:
+
+      - control: "3.2.1"
+        module: atm
+
+      - control: "3.2.2"
+        module: can
+
+      - control: "3.2.3"
+        module: dccp
+
+      - control: "3.2.4"
+        module: rds
+
+      - control: "3.2.5"
+        module: sctp
+
+      - control: "3.2.6"
+        module: tipc
+
+
+- name: Check whether conditional network modules are loaded
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    lsmod \
+      | awk 'NR > 1 {print $1}' \
+      | grep -Fx \
+          '{{ item.module }}'
+
+  args:
+
+    executable: /bin/bash
+
+  register:
+    crucible_cis_network_module_loaded
+
+  changed_when: false
+
+  failed_when: false
+
+  loop: >-
+    {{
+      crucible_cis_network_protocol_modules
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+
+- name: Unload prohibited network protocol modules
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/modprobe
+      - -r
+      - "{{ item.item.module }}"
+
+  loop: >-
+    {{
+      crucible_cis_network_module_loaded.results
+      | default([])
+    }}
+
+  when:
+
+    - not item.skipped | default(false)
+
+    - item.rc == 0
+
+  failed_when: false

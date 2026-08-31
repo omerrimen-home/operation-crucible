@@ -21,3 +21,35 @@
 - name: Reload systemd
   ansible.builtin.systemd:
     daemon_reload: true
+
+
+- name: Restart postfix
+  ansible.builtin.systemd_service:
+
+    name: postfix
+
+    state: restarted
+
+
+- name: Restart systemd-timesyncd
+  ansible.builtin.systemd_service:
+
+    name: systemd-timesyncd.service
+
+    state: restarted
+
+
+- name: Restart chrony
+  ansible.builtin.systemd_service:
+
+    name: chrony.service
+
+    state: restarted
+
+
+- name: Update initramfs
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/update-initramfs
+      - -u

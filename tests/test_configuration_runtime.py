@@ -89,6 +89,9 @@ class ConfigurationRuntimeTests(
                 ],
                 "forward": [],
             },
+            capabilities=(
+                "service:dns-server",
+            ),
         )
 
         manifest = {
@@ -130,6 +133,15 @@ class ConfigurationRuntimeTests(
                     "nftables"
                 ),
             )
+        )
+
+        self.assertIn(
+            "service:dns-server",
+            context[
+                "crucible_machine"
+            ][
+                "capabilities"
+            ],
         )
 
         machine = (

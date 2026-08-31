@@ -56,6 +56,9 @@ configurations:
     firewall:
       inbound: []
       forward: []
+    
+    capabilities:
+      - firewall:nftables
 
   ubuntu-cis:
     display_name: CIS Ubuntu Linux 26.04 LTS Hardening
@@ -135,6 +138,12 @@ configurations:
 
       ssh_max_startups: "10:30:60"
 
+      time_sync_provider: systemd-timesyncd
+
+      time_servers:
+      - ntp.ubuntu.com
+
+
     hardening:
       benchmark: cis-ubuntu-linux-26.04
 
@@ -145,6 +154,8 @@ configurations:
     firewall:
       inbound: []
       forward: []
+    
+    capabilities: []
 
 
   active-directory-domain-controller:
@@ -233,6 +244,9 @@ configurations:
 
     parameters: {}
 
+    capabilities:
+      - service:dns-server
+
 
   dhcp-server:
     display_name: DHCP Server
@@ -281,3 +295,6 @@ configurations:
     implementation: null
 
     parameters: {}
+
+    capabilities:
+      - service:dhcp-server

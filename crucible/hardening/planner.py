@@ -11,6 +11,9 @@ from crucible.hardening.catalog import (
     load_benchmark_controls,
 )
 
+PRESERVE_IF_CAPABILITY_PREFIX = (
+    "preserve-if-capability:"
+)
 
 class HardeningPlanningError(
     ValueError
@@ -75,6 +78,21 @@ class HardeningPlan:
     exception_control_ids: tuple[
         str,
         ...
+    ]
+
+    user_exception_control_ids: tuple[
+        str,
+        ...
+    ]
+
+    derived_exception_control_ids: tuple[
+        str,
+        ...
+    ]
+
+    derived_exception_reasons: dict[
+        str,
+        str
     ]
 
 
@@ -220,6 +238,10 @@ def build_hardening_plan(
     machine_profile_id: str,
     requested_profile: str = "auto",
     exceptions: list[str] | tuple[str, ...] = (),
+    capabilities: (
+        list[str]
+        | tuple[str, ...]
+    ) = (),
 ) -> HardeningPlan:
     """
     Produce the exact benchmark/control plan Crucible
@@ -308,6 +330,28 @@ def build_hardening_plan(
             control_id
         )
 
+    capability_ids = {
+        str(
+            capability
+        ).strip().lower()
+
+        for capability
+        in capabilities
+
+        if str(
+            capability
+        ).strip()
+    }
+
+    derived_exception_control_ids: list[
+        str
+    ] = []
+
+    derived_exception_reasons: dict[
+        str,
+        str
+    ] = {}
+
     applicable_ids = {
         control.id
 
@@ -367,8 +411,86 @@ def build_hardening_plan(
 
     for control in applicable_controls:
 
+        #
+        # Explicit user exceptions always take
+        # precedence.
+        #
+
         if control.id in exception_ids:
             continue
+
+
+        #
+        # A benchmark control may declare that it
+        # should not be remediated when the machine
+        # intentionally provides a semantic capability.
+        #
+        # Example:
+        #
+        #   CIS 2.1.4
+        #   "DNS server services are not in use"
+        #
+        # becomes a derived exception when:
+        #
+        #   service:dns-server
+        #
+        # is provided by another selected Crucible
+        # configuration.
+        #
+
+        preserve_capabilities: list[
+            str
+        ] = []
+
+        for tag in control.tags:
+
+            if not tag.startswith(
+                PRESERVE_IF_CAPABILITY_PREFIX
+            ):
+                continue
+
+            capability = (
+                tag[
+                    len(
+                        PRESERVE_IF_CAPABILITY_PREFIX
+                    ):
+                ]
+                .strip()
+                .lower()
+            )
+
+            if capability:
+                preserve_capabilities.append(
+                    capability
+                )
+
+        matched_capabilities = sorted(
+            set(
+                preserve_capabilities
+            )
+            &
+            capability_ids
+        )
+
+        if matched_capabilities:
+
+            derived_exception_control_ids.append(
+                control.id
+            )
+
+            derived_exception_reasons[
+                control.id
+            ] = (
+                "Selected Crucible configuration "
+                "provides capability: "
+                +
+                ", ".join(
+                    matched_capabilities
+                )
+            )
+
+            continue
+
 
         implementation = (
             control
@@ -414,6 +536,12 @@ def build_hardening_plan(
                 control.id
             )
 
+    combined_exception_control_ids = tuple(
+        normalized_exceptions
+        +
+        derived_exception_control_ids
+    )
+
     return HardeningPlan(
         benchmark=benchmark,
         profile=profile,
@@ -446,8 +574,20 @@ def build_hardening_plan(
             not_implemented_control_ids
         ),
 
-        exception_control_ids=tuple(
+        exception_control_ids=(
+            combined_exception_control_ids
+        ),
+
+        user_exception_control_ids=tuple(
             normalized_exceptions
+        ),
+
+        derived_exception_control_ids=tuple(
+            derived_exception_control_ids
+        ),
+
+        derived_exception_reasons=dict(
+            derived_exception_reasons
         ),
     )
 
@@ -562,6 +702,21 @@ def hardening_plan_to_runtime(
                 .exception_control_ids
             ),
 
+            "user_exceptions": list(
+                plan
+                .user_exception_control_ids
+            ),
+
+            "derived_exceptions": list(
+                plan
+                .derived_exception_control_ids
+            ),
+
+            "derived_exception_reasons": dict(
+                plan
+                .derived_exception_reasons
+            ),
+
             "metadata": (
                 control_metadata
             ),
@@ -600,6 +755,16 @@ def hardening_plan_to_runtime(
 
             "exceptions": len(
                 plan.exception_control_ids
+            ),
+
+            "user_exceptions": len(
+                plan
+                .user_exception_control_ids
+            ),
+
+            "derived_exceptions": len(
+                plan
+                .derived_exception_control_ids
             ),
         },
     }

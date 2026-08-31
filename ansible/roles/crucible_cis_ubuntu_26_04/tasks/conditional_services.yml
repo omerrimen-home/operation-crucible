@@ -1,0 +1,341 @@
+---
+
+#
+# Operation Crucible intentionally takes the
+# conservative CIS remediation path here:
+#
+#   stop + disable + mask
+#
+# rather than blindly purging server packages.
+#
+# CIS explicitly permits this approach when the
+# package must remain due to dependencies.
+#
+# A later per-control audit can determine whether a
+# package can also safely be removed.
+#
+
+
+- name: Gather service facts for conditional hardening
+  ansible.builtin.service_facts:
+
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+
+    manager: auto
+
+
+- name: Define unwanted server service units
+  ansible.builtin.set_fact:
+
+    crucible_cis_server_service_units:
+
+      - control: "2.1.1"
+        unit: autofs.service
+
+      - control: "2.1.2"
+        unit: avahi-daemon.service
+
+      - control: "2.1.2"
+        unit: avahi-daemon.socket
+
+      - control: "2.1.3"
+        unit: isc-dhcp-server.service
+
+      - control: "2.1.3"
+        unit: isc-dhcp-server6.service
+
+      - control: "2.1.3"
+        unit: kea-dhcp4-server.service
+
+      - control: "2.1.3"
+        unit: kea-dhcp6-server.service
+
+      - control: "2.1.4"
+        unit: bind9.service
+
+      - control: "2.1.4"
+        unit: named.service
+
+      - control: "2.1.5"
+        unit: dnsmasq.service
+
+      - control: "2.1.6"
+        unit: vsftpd.service
+
+      - control: "2.1.6"
+        unit: proftpd.service
+
+      - control: "2.1.7"
+        unit: slapd.service
+
+      - control: "2.1.8"
+        unit: dovecot.service
+
+      - control: "2.1.9"
+        unit: nfs-server.service
+
+      - control: "2.1.10"
+        unit: ypserv.service
+
+      - control: "2.1.11"
+        unit: cups.service
+
+      - control: "2.1.11"
+        unit: cups.socket
+
+      - control: "2.1.11"
+        unit: cups.path
+
+      - control: "2.1.12"
+        unit: rpcbind.service
+
+      - control: "2.1.12"
+        unit: rpcbind.socket
+
+      - control: "2.1.13"
+        unit: rsync.service
+
+      - control: "2.1.13"
+        unit: rsync.socket
+
+      - control: "2.1.14"
+        unit: smbd.service
+
+      - control: "2.1.14"
+        unit: nmbd.service
+
+      - control: "2.1.15"
+        unit: snmpd.service
+
+      - control: "2.1.16"
+        unit: inetutils-inetd.service
+
+      - control: "2.1.17"
+        unit: tftpd-hpa.service
+
+      - control: "2.1.18"
+        unit: squid.service
+
+      - control: "2.1.19"
+        unit: apache2.service
+
+      - control: "2.1.19"
+        unit: nginx.service
+
+      - control: "2.1.20"
+        unit: xinetd.service
+
+
+- name: Stop and mask unneeded server services
+  ansible.builtin.systemd_service:
+
+    name: "{{ item.unit }}"
+
+    state: stopped
+
+    enabled: false
+
+    masked: true
+
+  loop: >-
+    {{
+      crucible_cis_server_service_units
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      item.unit
+      in
+      ansible_facts.services
+
+
+#
+# Client packages are considerably less risky to
+# remove than server packages.
+#
+
+- name: Define unnecessary client packages
+  ansible.builtin.set_fact:
+
+    crucible_cis_client_packages:
+
+      - control: "2.2.1"
+        package: nis
+
+      - control: "2.2.2"
+        package: rsh-client
+
+      - control: "2.2.3"
+        package: talk
+
+      - control: "2.2.4"
+        package: telnet
+
+      - control: "2.2.5"
+        package: ldap-utils
+
+      - control: "2.2.6"
+        package: ftp
+
+
+- name: Remove unnecessary client packages
+  ansible.builtin.apt:
+
+    name: "{{ item.package }}"
+
+    state: absent
+
+    purge: true
+
+    autoremove: false
+
+  loop: >-
+    {{
+      crucible_cis_client_packages
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      item.package
+      in
+      ansible_facts.packages
+
+
+#
+# Bluetooth is irrelevant on ordinary current
+# VirtualBox Crucible guests, but the capability
+# mechanism prevents this from becoming a permanent
+# assumption.
+#
+
+- name: Stop and mask Bluetooth when not required
+  ansible.builtin.systemd_service:
+
+    name: bluetooth.service
+
+    state: stopped
+
+    enabled: false
+
+    masked: true
+
+  when:
+
+    - >-
+      '3.1.3'
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      'bluetooth.service'
+      in
+      ansible_facts.services
+
+
+#
+# CIS 2.1.22 is designed primarily around Postfix.
+#
+# If the machine intentionally provides mail service,
+# service:mail-server removes this control from the
+# execution list before Ansible gets here.
+#
+
+- name: Read Postfix network-interface policy
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/postconf
+      - -h
+      - inet_interfaces
+
+  register:
+    crucible_cis_postfix_inet_interfaces
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '2.1.22'
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      'postfix'
+      in
+      ansible_facts.packages
+
+
+- name: Configure Postfix for local-only operation
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/postconf
+      - -e
+      - "inet_interfaces = loopback-only"
+
+  when:
+
+    - >-
+      '2.1.22'
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      'postfix'
+      in
+      ansible_facts.packages
+
+    - >-
+      crucible_cis_postfix_inet_interfaces.stdout
+      | trim
+      !=
+      'loopback-only'
+
+  notify:
+
+    - Restart postfix
+
+
+- name: Report unsupported non-Postfix MTA
+  ansible.builtin.debug:
+
+    msg: >
+      An alternative mail transfer agent is installed.
+      CIS 2.1.22 remains unverified because Crucible
+      currently implements automatic local-only
+      remediation for Postfix only.
+
+  when:
+
+    - >-
+      '2.1.22'
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      (
+        'exim4'
+        in
+        ansible_facts.packages
+      )
+      or
+      (
+        'sendmail'
+        in
+        ansible_facts.packages
+      )

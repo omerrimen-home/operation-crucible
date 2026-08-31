@@ -1,25 +1,3 @@
-# Operation Crucible hardening control inventory
-#
-# Source benchmark:
-#   CIS Ubuntu Linux 26.04 LTS Benchmark v1.0.0 (2026-08-26)
-#
-# Engineering notes:
-# - `assessment` is the CIS assessment status from the benchmark.
-# - `crucible_implementation` is an Operation Crucible engineering classification.
-# - CIS Level 2 extends Level 1. Accordingly, `profiles` contains effective profile
-#   membership: a Level 1 Server recommendation is also included in level2-server,
-#   and a Level 1 Workstation recommendation is also included in level2-workstation.
-# - Exact profile applicability printed by CIS is retained in `source-profile:*` tags.
-# - `wave:*` tags are implementation sequencing hints, not CIS metadata.
-# - `risk:*` tags describe remediation risk in Crucible's disposable cyber-lab topology,
-#   not the security severity or importance of the CIS recommendation.
-# - `satisfied_elsewhere` means Crucible intends to satisfy the security objective
-#   through an existing Crucible subsystem rather than literal benchmark remediation.
-# - `conditional` means remediation must first evaluate machine role, topology,
-#   installed services, or lab-use requirements.
-# - `audit_only` means Crucible should collect/report evidence but should not make an
-#   unconditional remediation change.
-#
 schema_version: 1
 benchmark_id: cis-ubuntu-linux-26.04
 benchmark_version: 1.0.0
@@ -1403,6 +1381,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level2-workstation
     - configuration-aware
+    - preserve-if-capability:service:automount
   2.1.2:
     title: Ensure avahi daemon services are not in use
     profiles:
@@ -1418,6 +1397,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level2-workstation
     - configuration-aware
+    - preserve-if-capability:service:mdns
   2.1.3:
     title: Ensure dhcp server services are not in use
     profiles:
@@ -1434,6 +1414,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:dhcp-server
   2.1.4:
     title: Ensure dns server services are not in use
     profiles:
@@ -1450,6 +1431,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:dns-server
   2.1.5:
     title: Ensure dnsmasq services are not in use
     profiles:
@@ -1466,6 +1448,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:dnsmasq
   2.1.6:
     title: Ensure ftp server services are not in use
     profiles:
@@ -1482,6 +1465,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:ftp-server
   2.1.7:
     title: Ensure ldap server services are not in use
     profiles:
@@ -1498,6 +1482,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:ldap-server
   2.1.8:
     title: Ensure message access server services are not in use
     profiles:
@@ -1514,6 +1499,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:message-access-server
   2.1.9:
     title: Ensure network file system services are not in use
     profiles:
@@ -1530,6 +1516,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:nfs-server
   2.1.10:
     title: Ensure nis server services are not in use
     profiles:
@@ -1546,6 +1533,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:nis-server
   2.1.11:
     title: Ensure print server services are not in use
     profiles:
@@ -1561,6 +1549,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level2-workstation
     - configuration-aware
+    - preserve-if-capability:service:print-server
   2.1.12:
     title: Ensure rpcbind services are not in use
     profiles:
@@ -1577,6 +1566,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:rpcbind
   2.1.13:
     title: Ensure rsync services are not in use
     profiles:
@@ -1593,6 +1583,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:rsync-server
   2.1.14:
     title: Ensure samba file server services are not in use
     profiles:
@@ -1609,6 +1600,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:samba-server
   2.1.15:
     title: Ensure snmp services are not in use
     profiles:
@@ -1625,6 +1617,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:snmp-server
   2.1.16:
     title: Ensure telnet server services are not in use
     profiles:
@@ -1641,6 +1634,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:telnet-server
   2.1.17:
     title: Ensure tftp server services are not in use
     profiles:
@@ -1657,6 +1651,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:tftp-server
   2.1.18:
     title: Ensure web proxy server services are not in use
     profiles:
@@ -1673,6 +1668,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:web-proxy
   2.1.19:
     title: Ensure web server services are not in use
     profiles:
@@ -1689,6 +1685,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:web-server
   2.1.20:
     title: Ensure xinetd services are not in use
     profiles:
@@ -1705,6 +1702,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:xinetd
   2.1.21:
     title: Ensure X window server services are not in use
     profiles:
@@ -1717,6 +1715,7 @@ controls:
     - wave:1
     - source-profile:level2-server
     - configuration-aware
+    - preserve-if-capability:service:x-window-server
   2.1.22:
     title: Ensure mail transfer agents are configured for local-only mode
     profiles:
@@ -1733,6 +1732,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:service:mail-server
   2.1.23:
     title: Ensure only approved services are listening on a network interface
     profiles:
@@ -1765,6 +1765,8 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:nis
+    - preserve-if-capability:service:nis-server
   2.2.2:
     title: Ensure rsh client is not installed
     profiles:
@@ -1781,6 +1783,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:rsh
   2.2.3:
     title: Ensure talk client is not installed
     profiles:
@@ -1797,6 +1800,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:talk
   2.2.4:
     title: Ensure telnet client is not installed
     profiles:
@@ -1813,6 +1817,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:telnet
   2.2.5:
     title: Ensure ldap client is not installed
     profiles:
@@ -1829,6 +1834,8 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:ldap
+    - preserve-if-capability:service:ldap-server
   2.2.6:
     title: Ensure ftp client is not installed
     profiles:
@@ -1845,6 +1852,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - configuration-aware
+    - preserve-if-capability:client:ftp
   2.3.1.1:
     title: Ensure a single time synchronization daemon is in use
     profiles:
@@ -2134,6 +2142,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level2-workstation
     - hardware-aware
+    - preserve-if-capability:hardware:bluetooth
   3.2.1:
     title: Ensure atm kernel module is not available
     profiles:
@@ -2151,6 +2160,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:atm
   3.2.2:
     title: Ensure can kernel module is not available
     profiles:
@@ -2168,6 +2178,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:can
   3.2.3:
     title: Ensure dccp kernel module is not available
     profiles:
@@ -2185,6 +2196,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:dccp
   3.2.4:
     title: Ensure rds kernel module is not available
     profiles:
@@ -2202,6 +2214,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:rds
   3.2.5:
     title: Ensure sctp kernel module is not available
     profiles:
@@ -2219,6 +2232,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:sctp
   3.2.6:
     title: Ensure tipc kernel module is not available
     profiles:
@@ -2236,6 +2250,7 @@ controls:
     - source-profile:level1-workstation
     - configuration-aware
     - lab-use-sensitive
+    - preserve-if-capability:protocol:tipc
   3.2.7:
     title: Ensure unneeded network protocol kernel modules are not available
     profiles:
@@ -2267,6 +2282,7 @@ controls:
     - source-profile:level1-workstation
     - source-profile:level1-server
     - routing-aware
+    - preserve-if-capability:network:ipv4-router
   3.3.1.2:
     title: Ensure net.ipv4.conf.all.forwarding is configured
     profiles:
@@ -2283,6 +2299,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - routing-aware
+    - preserve-if-capability:network:ipv4-router
   3.3.1.3:
     title: Ensure net.ipv4.conf.default.forwarding is configured
     profiles:
@@ -2299,6 +2316,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - routing-aware
+    - preserve-if-capability:network:ipv4-router
   3.3.1.4:
     title: Ensure net.ipv4.conf.all.send_redirects is configured
     profiles:
@@ -2314,6 +2332,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.5:
     title: Ensure net.ipv4.conf.default.send_redirects is configured
     profiles:
@@ -2329,6 +2348,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.6:
     title: Ensure net.ipv4.icmp_ignore_bogus_error_responses is configured
     profiles:
@@ -2344,6 +2364,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.7:
     title: Ensure net.ipv4.icmp_echo_ignore_broadcasts is configured
     profiles:
@@ -2359,6 +2380,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.8:
     title: Ensure net.ipv4.conf.all.accept_redirects is configured
     profiles:
@@ -2374,6 +2396,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.9:
     title: Ensure net.ipv4.conf.default.accept_redirects is configured
     profiles:
@@ -2389,6 +2412,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.10:
     title: Ensure net.ipv4.conf.all.secure_redirects is configured
     profiles:
@@ -2404,6 +2428,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.11:
     title: Ensure net.ipv4.conf.default.secure_redirects is configured
     profiles:
@@ -2419,6 +2444,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.12:
     title: Ensure net.ipv4.conf.all.rp_filter is configured
     profiles:
@@ -2435,6 +2461,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - multihoming-aware
+    - preserve-if-capability:network:ipv4-router
   3.3.1.13:
     title: Ensure net.ipv4.conf.default.rp_filter is configured
     profiles:
@@ -2451,6 +2478,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - multihoming-aware
+    - preserve-if-capability:network:ipv4-router
   3.3.1.14:
     title: Ensure net.ipv4.conf.all.accept_source_route is configured
     profiles:
@@ -2466,6 +2494,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.15:
     title: Ensure net.ipv4.conf.default.accept_source_route is configured
     profiles:
@@ -2481,6 +2510,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.16:
     title: Ensure net.ipv4.conf.all.log_martians is configured
     profiles:
@@ -2496,6 +2526,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.17:
     title: Ensure net.ipv4.conf.default.log_martians is configured
     profiles:
@@ -2511,6 +2542,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.18:
     title: Ensure net.ipv4.tcp_syncookies is configured
     profiles:
@@ -2526,6 +2558,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.1.19:
     title: Ensure net.ipv4.conf.all.route_localnet is configured
     profiles:
@@ -2541,6 +2574,7 @@ controls:
     - wave:1
     - source-profile:level1-server
     - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
   3.3.2.1:
     title: Ensure net.ipv6.conf.all.forwarding is configured
     profiles:
@@ -2557,6 +2591,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - routing-aware
+    - preserve-if-capability:network:ipv6-router
   3.3.2.2:
     title: Ensure net.ipv6.conf.default.forwarding is configured
     profiles:
@@ -2573,6 +2608,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - routing-aware
+    - preserve-if-capability:network:ipv6-router
   3.3.2.3:
     title: Ensure net.ipv6.conf.all.accept_redirects is configured
     profiles:
@@ -3910,6 +3946,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - service-aware
+    - preserve-if-capability:logging:journal-remote-receiver
   6.1.1.1.3:
     title: Ensure journald is configured to send logs to rsyslog
     profiles:
@@ -4077,6 +4114,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - service-aware
+    - preserve-if-capability:logging:rsyslog-receiver
   6.1.2.7:
     title: Ensure logrotate is configured
     profiles:
@@ -4479,8 +4517,8 @@ controls:
     - source-profile:level2-server
     - source-profile:level2-workstation
   6.2.3.18:
-    title: Ensure discretionary access control permission modification events chmod,fchmod,fchmodat,fchmodat2 are
-      collected
+    title: Ensure discretionary access control permission modification events chmod,fchmod,fchmodat,fchmodat2
+      are collected
     profiles:
     - level2-server
     - level2-workstation
@@ -4493,7 +4531,8 @@ controls:
     - source-profile:level2-server
     - source-profile:level2-workstation
   6.2.3.19:
-    title: Ensure discretionary access control permission modification events chown,fchown,lchown,fchownat are collected
+    title: Ensure discretionary access control permission modification events chown,fchown,lchown,fchownat
+      are collected
     profiles:
     - level2-server
     - level2-workstation

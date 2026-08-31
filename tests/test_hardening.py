@@ -129,6 +129,31 @@ class HardeningFrameworkTests(
 
                         "tags": [],
                     },
+                    "2.1.4": {
+                        "title": (
+                            "DNS server not in use"
+                        ),
+
+                        "profiles": [
+                            "level1-server",
+                        ],
+
+                        "assessment": (
+                            "automated"
+                        ),
+
+                        "crucible_implementation": (
+                            "conditional"
+                        ),
+
+                        "tags": [
+                            "wave:1",
+                            (
+                                "preserve-if-capability:"
+                                "service:dns-server"
+                            ),
+                        ],
+                    },
                 },
             },
         )
@@ -204,6 +229,112 @@ class HardeningFrameworkTests(
         )
 
         return catalog_path
+
+
+    def test_capability_creates_derived_exception(
+        self,
+    ):
+
+        with tempfile.TemporaryDirectory() as temp:
+
+            root = Path(
+                temp
+            )
+
+            catalog = (
+                load_hardening_catalog(
+                    self._create_fixture(
+                        root
+                    ),
+                    repo_root=root,
+                )
+            )
+
+            plan = (
+                build_hardening_plan(
+                    catalog,
+                    benchmark_id=(
+                        "test-linux"
+                    ),
+                    machine_profile_id=(
+                        "test-server"
+                    ),
+                    capabilities=[
+                        "service:dns-server",
+                    ],
+                )
+            )
+
+            self.assertIn(
+                "2.1.4",
+                plan
+                .derived_exception_control_ids,
+            )
+
+            self.assertIn(
+                "2.1.4",
+                plan
+                .exception_control_ids,
+            )
+
+            self.assertNotIn(
+                "2.1.4",
+                plan
+                .conditional_control_ids,
+            )
+
+            self.assertIn(
+                "service:dns-server",
+                plan
+                .derived_exception_reasons[
+                    "2.1.4"
+                ],
+            )
+
+
+    def test_conditional_control_remains_without_capability(
+        self,
+    ):
+
+        with tempfile.TemporaryDirectory() as temp:
+
+            root = Path(
+                temp
+            )
+
+            catalog = (
+                load_hardening_catalog(
+                    self._create_fixture(
+                        root
+                    ),
+                    repo_root=root,
+                )
+            )
+
+            plan = (
+                build_hardening_plan(
+                    catalog,
+                    benchmark_id=(
+                        "test-linux"
+                    ),
+                    machine_profile_id=(
+                        "test-server"
+                    ),
+                )
+            )
+
+            self.assertIn(
+                "2.1.4",
+                plan
+                .conditional_control_ids,
+            )
+
+            self.assertNotIn(
+                "2.1.4",
+                plan
+                .exception_control_ids,
+            )
+
 
 
     def test_implemented_benchmark_builds_plan(

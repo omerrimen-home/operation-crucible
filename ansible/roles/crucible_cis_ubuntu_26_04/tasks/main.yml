@@ -35,9 +35,27 @@
     file: banners.yml
 
 
+- name: CIS Ubuntu | Conditional services
+  ansible.builtin.include_tasks:
+
+    file: conditional_services.yml
+
+
+- name: CIS Ubuntu | Time synchronization
+  ansible.builtin.include_tasks:
+
+    file: time_sync.yml
+
+
 - name: CIS Ubuntu | Job schedulers
   ansible.builtin.include_tasks:
     file: schedulers.yml
+
+
+- name: CIS Ubuntu | Network protocol modules
+  ansible.builtin.include_tasks:
+
+    file: network_modules.yml
 
 
 - name: CIS Ubuntu | Network hardening

@@ -54,12 +54,47 @@
     crucible_cis_execution_controls: []
 
 
+- name: Initialize Wave 1 control groups
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_automated_controls: []
+
+    crucible_cis_wave1_conditional_controls: []
+
+    crucible_cis_execution_controls: []
+
+
+- name: Validate time synchronization provider
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_time_sync_provider
+        in
+        [
+          'systemd-timesyncd',
+          'chrony'
+        ]
+
+      - crucible_cis_time_servers is iterable
+
+      - crucible_cis_time_servers is not string
+
+      - crucible_cis_time_servers | length > 0
+
+    fail_msg: >
+      time_sync_provider must be either
+      systemd-timesyncd or chrony and at least one
+      authorized time server must be configured.
+
+
 - name: Resolve automated Wave 1 controls
   ansible.builtin.set_fact:
 
-    crucible_cis_execution_controls: >-
+    crucible_cis_wave1_automated_controls: >-
       {{
-        crucible_cis_execution_controls
+        crucible_cis_wave1_automated_controls
         +
         [
           item
@@ -78,9 +113,50 @@
       crucible_hardening.controls.metadata[item].tags
 
 
+- name: Resolve conditional Wave 1 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_conditional_controls: >-
+      {{
+        crucible_cis_wave1_conditional_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+    }}
+
+  when:
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Build final Wave 1 execution set
+  ansible.builtin.set_fact:
+
+    crucible_cis_execution_controls: >-
+      {{
+        (
+          crucible_cis_wave1_automated_controls
+          +
+          crucible_cis_wave1_conditional_controls
+        )
+        | unique
+        | list
+      }}
+
+
 - name: Display hardening execution summary
   ansible.builtin.debug:
+
     msg:
+
       - >-
         Benchmark:
         {{ crucible_hardening.benchmark.display_name }}
@@ -91,16 +167,43 @@
         {{ crucible_hardening.profile.display_name }}
 
       - >-
+        Machine capabilities:
+        {{
+          crucible_machine.capabilities
+          | default([])
+          | join(', ')
+          or 'none'
+        }}
+
+      - >-
         Applicable controls:
         {{ crucible_hardening.counts.applicable }}
 
       - >-
-        Wave 1 automated controls selected:
+        Wave 1 automated controls:
+        {{ crucible_cis_wave1_automated_controls | length }}
+
+      - >-
+        Wave 1 conditional controls:
+        {{ crucible_cis_wave1_conditional_controls | length }}
+
+      - >-
+        Wave 1 execution controls:
         {{ crucible_cis_execution_controls | length }}
 
       - >-
-        Conditional controls:
-        {{ crucible_hardening.counts.conditional }}
+        User exceptions:
+        {{
+          crucible_hardening.counts.user_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Derived capability exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
 
       - >-
         Audit-only controls:
@@ -109,3 +212,17 @@
       - >-
         Satisfied elsewhere:
         {{ crucible_hardening.counts.satisfied_elsewhere }}
+
+
+- name: Display derived hardening exceptions
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_hardening.controls.derived_exception_reasons
+
+  when:
+    - >-
+      crucible_hardening.controls.derived_exceptions
+      | default([])
+      | length
+      > 0

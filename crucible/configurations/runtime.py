@@ -4,6 +4,7 @@ from typing import Any
 
 from crucible.configurations.catalog import (
     ConfigurationDefinition,
+    combine_configuration_capabilities,
     resolve_configuration_parameters,
 )
 from crucible.hardening.planner import (
@@ -223,6 +224,12 @@ def build_configuration_runtime_context(
         {},
     )
 
+    capabilities = (
+        combine_configuration_capabilities(
+            definitions
+        )
+    )
+
     context = {
         "crucible_machine": {
             "name": (
@@ -254,6 +261,10 @@ def build_configuration_runtime_context(
 
             "network": (
                 network
+            ),
+            
+            "capabilities": list(
+                capabilities
             ),
         },
 

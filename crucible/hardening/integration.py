@@ -4,6 +4,7 @@ from typing import Any
 
 from crucible.configurations.catalog import (
     ConfigurationDefinition,
+    combine_configuration_capabilities,
     resolve_configuration_parameters,
 )
 
@@ -110,6 +111,12 @@ def validate_manifest_hardening(
         )
     )
 
+    capabilities = (
+        combine_configuration_capabilities(
+            definitions
+        )
+    )
+
     plans: dict[
         str,
         HardeningPlan
@@ -190,6 +197,9 @@ def validate_manifest_hardening(
                 ),
                 requested_profile=(
                     requested_profile
+                ),
+                capabilities=(
+                    capabilities
                 ),
                 exceptions=[
                     str(

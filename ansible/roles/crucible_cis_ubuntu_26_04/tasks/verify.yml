@@ -90,6 +90,166 @@
   changed_when: false
 
 
+# ============================================================
+# Time synchronization
+# ============================================================
+
+- name: Verify systemd-timesyncd is active
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - systemd-timesyncd.service
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+- name: Verify chrony is active
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - chrony.service
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Verify chronyd runs as _chrony
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/pgrep
+      - -u
+      - _chrony
+      - chronyd
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+# ============================================================
+# Network protocol modules
+# ============================================================
+
+- name: Verify disabled network protocol modules cannot load
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/modprobe
+      - -n
+      - -v
+      - "{{ item.module }}"
+
+  register:
+    crucible_cis_module_probe_test
+
+  changed_when: false
+
+  loop: >-
+    {{
+      crucible_cis_network_protocol_modules
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+
+- name: Verify network module deny policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        '/bin/false'
+        in
+        item.stdout
+
+    fail_msg: >
+      A CIS-disabled network protocol module remains
+      loadable.
+
+  loop: >-
+    {{
+      crucible_cis_module_probe_test.results
+      | default([])
+    }}
+
+  when:
+
+    - not item.skipped | default(false)
+
+
+# ============================================================
+# Forwarding
+# ============================================================
+
+- name: Verify non-router IPv4 forwarding is disabled
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - net.ipv4.ip_forward
+
+  register:
+    crucible_cis_ipv4_forward
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '3.3.1.1'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Assert non-router IPv4 forwarding is disabled
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_ipv4_forward.stdout
+        | trim
+        ==
+        '0'
+
+  when:
+
+    - >-
+      '3.3.1.1'
+      in
+      crucible_cis_execution_controls
+
+
 - name: Verify controller connection after hardening
   ansible.builtin.wait_for_connection:
 

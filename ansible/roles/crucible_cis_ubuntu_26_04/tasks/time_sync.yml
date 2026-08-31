@@ -1,0 +1,336 @@
+---
+
+#
+# CIS requires exactly one active synchronization
+# daemon. Crucible supports either systemd-timesyncd
+# or chrony and makes the choice explicit.
+#
+
+# ============================================================
+# systemd-timesyncd
+# ============================================================
+
+- name: Install systemd-timesyncd
+  ansible.builtin.apt:
+
+    name: systemd-timesyncd
+
+    state: present
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+- name: Detect chrony unit
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - list-unit-files
+      - chrony.service
+      - --no-legend
+      - --no-pager
+
+  register:
+    crucible_cis_chrony_unit
+
+  changed_when: false
+
+  failed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+- name: Stop and mask chrony when timesyncd is selected
+  ansible.builtin.systemd_service:
+
+    name: chrony.service
+
+    state: stopped
+
+    enabled: false
+
+    masked: true
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+    - >-
+      crucible_cis_chrony_unit.stdout
+      | default('')
+      | trim
+      | length
+      > 0
+
+
+- name: Create systemd-timesyncd configuration directory
+  ansible.builtin.file:
+
+    path: /etc/systemd/timesyncd.conf.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+- name: Configure authorized systemd-timesyncd servers
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/systemd/timesyncd.conf.d/
+      60-crucible-cis.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      [Time]
+      NTP={{ crucible_cis_time_servers | join(' ') }}
+      FallbackNTP=
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+  notify:
+
+    - Restart systemd-timesyncd
+
+
+- name: Enable systemd-timesyncd
+  ansible.builtin.systemd_service:
+
+    name: systemd-timesyncd.service
+
+    enabled: true
+
+    masked: false
+
+    state: started
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+# ============================================================
+# chrony
+# ============================================================
+
+- name: Install chrony
+  ansible.builtin.apt:
+
+    name: chrony
+
+    state: present
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Detect systemd-timesyncd unit
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - list-unit-files
+      - systemd-timesyncd.service
+      - --no-legend
+      - --no-pager
+
+  register:
+    crucible_cis_timesyncd_unit
+
+  changed_when: false
+
+  failed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Stop and mask systemd-timesyncd when chrony is selected
+  ansible.builtin.systemd_service:
+
+    name: systemd-timesyncd.service
+
+    state: stopped
+
+    enabled: false
+
+    masked: true
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+    - >-
+      crucible_cis_timesyncd_unit.stdout
+      | default('')
+      | trim
+      | length
+      > 0
+
+
+- name: Create chrony source directory
+  ansible.builtin.file:
+
+    path: /etc/chrony/sources.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Ensure chrony loads managed source directory
+  ansible.builtin.lineinfile:
+
+    path: /etc/chrony/chrony.conf
+
+    regexp: '^\s*sourcedir\s+/etc/chrony/sources\.d\s*$'
+
+    line: "sourcedir /etc/chrony/sources.d"
+
+    state: present
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+  notify:
+
+    - Restart chrony
+
+
+- name: Remove unmanaged chrony server and pool entries
+  ansible.builtin.replace:
+
+    path: /etc/chrony/chrony.conf
+
+    regexp: >-
+      (?m)^\s*(server|pool|peer)\s+.*$
+
+    replace: ""
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+  notify:
+
+    - Restart chrony
+
+
+- name: Configure authorized chrony servers
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/chrony/sources.d/
+      60-crucible-cis.sources
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      {% for server in crucible_cis_time_servers %}
+      server {{ server }} iburst
+      {% endfor %}
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+  notify:
+
+    - Restart chrony
+
+
+- name: Enable chrony
+  ansible.builtin.systemd_service:
+
+    name: chrony.service
+
+    enabled: true
+
+    masked: false
+
+    state: started
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Flush time synchronization handlers
+  ansible.builtin.meta:
+
+    flush_handlers

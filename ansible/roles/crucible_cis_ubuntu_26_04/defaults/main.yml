@@ -112,3 +112,21 @@ crucible_cis_ssh_max_startups: >-
     crucible_cis_parameters.ssh_max_startups
     | default('10:30:60')
   }}
+
+
+crucible_cis_time_sync_provider: >-
+  {{
+    crucible_cis_parameters.time_sync_provider
+    | default('systemd-timesyncd')
+  }}
+
+
+crucible_cis_time_servers: >-
+  {{
+    crucible_cis_parameters.time_servers
+    | default(
+        [
+          'ntp.ubuntu.com'
+        ]
+      )
+  }}
