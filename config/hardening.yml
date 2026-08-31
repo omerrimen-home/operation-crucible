@@ -1,0 +1,30 @@
+schema_version: 1
+
+benchmarks:
+
+  cis-ubuntu-linux-26.04:
+    display_name: CIS Ubuntu Linux 26.04 LTS
+
+    description: >
+      CIS security benchmark for Ubuntu Linux 26.04 LTS.
+      The benchmark definition is registered with Crucible,
+      but its control inventory and automation implementation
+      remain intentionally disabled until the source benchmark
+      has been reviewed.
+
+    authority: CIS
+
+    benchmark_version: "1.0.0"
+
+    status: planned
+
+    target:
+      type: os
+
+      supported_profiles:
+        - ubuntu-26.04-server
+        - ubuntu-26.04-desktop
+
+    profiles: {}
+
+    controls_file: null

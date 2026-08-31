@@ -21,7 +21,17 @@ from crucible.configurations.catalog import (
 from crucible.configurations.runtime import (
     build_configuration_runtime_context,
 )
+from crucible.hardening.catalog import (
+    load_hardening_catalog,
+)
 
+from crucible.hardening.integration import (
+    validate_manifest_hardening,
+)
+
+from crucible.hardening.reporting import (
+    write_hardening_execution_report,
+)
 
 REPO_ROOT = (
     Path(__file__)
@@ -55,6 +65,11 @@ EXECUTION_STATE_DIR = (
     / "configurations"
 )
 
+HARDENING_CATALOG_PATH = (
+    REPO_ROOT
+    / "config"
+    / "hardening.yml"
+)
 
 class ConfigurationExecutionError(
     RuntimeError
@@ -287,6 +302,25 @@ def execute_machine_configurations(
         )
     )
 
+    hardening_catalog = (
+        load_hardening_catalog(
+            repo_root
+            / "config"
+            / "hardening.yml",
+            repo_root=(
+                repo_root
+            ),
+        )
+    )
+
+    hardening_plans = (
+        validate_manifest_hardening(
+            manifest,
+            definitions,
+            hardening_catalog,
+        )
+    )
+
     if not definitions:
 
         print()
@@ -412,8 +446,40 @@ def execute_machine_configurations(
                 current_configuration_id=(
                     definition.id
                 ),
+                hardening_plans=(
+                    hardening_plans
+                ),
             )
         )
+
+        hardening_plan = (
+            hardening_plans.get(
+                definition.id
+            )
+        )
+
+        if hardening_plan is not None:
+
+            write_hardening_execution_report(
+                repo_root=(
+                    repo_root
+                ),
+                machine_name=(
+                    machine_name
+                ),
+                instance_serial=(
+                    instance_serial
+                ),
+                configuration_id=(
+                    definition.id
+                ),
+                plan=(
+                    hardening_plan
+                ),
+                execution_status=(
+                    "running"
+                ),
+            )
 
         vars_path = (
             repo_root
@@ -514,6 +580,34 @@ def execute_machine_configurations(
                 ),
             )
 
+            if hardening_plan is not None:
+
+                write_hardening_execution_report(
+                    repo_root=(
+                        repo_root
+                    ),
+                    machine_name=(
+                        machine_name
+                    ),
+                    instance_serial=(
+                        instance_serial
+                    ),
+                    configuration_id=(
+                        definition.id
+                    ),
+                    plan=(
+                        hardening_plan
+                    ),
+                    execution_status=(
+                        "playbook_failed"
+                    ),
+                    message=(
+                        "ansible-playbook "
+                        f"returned "
+                        f"{result.returncode}"
+                    ),
+                )
+
             raise ConfigurationExecutionError(
                 f"Configuration "
                 f"'{definition.id}' failed."
@@ -531,6 +625,29 @@ def execute_machine_configurations(
             ),
             status="applied",
         )
+
+        if hardening_plan is not None:
+
+            write_hardening_execution_report(
+                repo_root=(
+                    repo_root
+                ),
+                machine_name=(
+                    machine_name
+                ),
+                instance_serial=(
+                    instance_serial
+                ),
+                configuration_id=(
+                    definition.id
+                ),
+                plan=(
+                    hardening_plan
+                ),
+                execution_status=(
+                    "playbook_succeeded"
+                ),
+            )
 
         applied.append(
             definition.id

@@ -6,7 +6,10 @@ from crucible.configurations.catalog import (
     ConfigurationDefinition,
     resolve_configuration_parameters,
 )
-
+from crucible.hardening.planner import (
+    HardeningPlan,
+    hardening_plan_to_runtime,
+)
 from crucible.networking.management import (
     MANAGEMENT_HOST_IP,
 )
@@ -86,6 +89,10 @@ def build_configuration_runtime_context(
     ],
     *,
     current_configuration_id: str,
+    hardening_plans: (
+        dict[str, HardeningPlan]
+        | None
+    ) = None,
 ) -> dict[str, Any]:
     """
     Build variables passed to an Ansible
@@ -216,36 +223,9 @@ def build_configuration_runtime_context(
         {},
     )
 
-    return {
+    context = {
         "crucible_machine": {
-            "name": (
-                str(
-                    manifest.get(
-                        "name",
-                        "",
-                    )
-                )
-            ),
-
-            "profile": (
-                str(
-                    manifest.get(
-                        "profile",
-                        "",
-                    )
-                )
-            ),
-
-            "instance_serial": (
-                str(
-                    instance.get(
-                        "serial",
-                        "",
-                    )
-                )
-            ),
-
-            "network": network,
+            # existing contents unchanged
         },
 
         "crucible_configurations": (
@@ -270,3 +250,23 @@ def build_configuration_runtime_context(
             ),
         },
     }
+
+    if hardening_plans is not None:
+
+        hardening_plan = (
+            hardening_plans.get(
+                current_configuration_id
+            )
+        )
+
+        if hardening_plan is not None:
+
+            context[
+                "crucible_hardening"
+            ] = (
+                hardening_plan_to_runtime(
+                    hardening_plan
+                )
+            )
+
+    return context

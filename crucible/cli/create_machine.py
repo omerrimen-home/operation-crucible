@@ -37,6 +37,13 @@ from crucible.configurations.catalog import (
     load_configuration_catalog,
     validate_manifest_configurations,
 )
+from crucible.hardening.catalog import (
+    load_hardening_catalog,
+)
+
+from crucible.hardening.integration import (
+    validate_manifest_hardening,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -46,6 +53,11 @@ CONFIGURATION_CONFIG = (
     REPO_ROOT
     / "config"
     / "configurations.yml"
+)
+HARDENING_CONFIG = (
+    REPO_ROOT
+    / "config"
+    / "hardening.yml"
 )
 
 
@@ -325,6 +337,43 @@ def create_machine(
             "      -> configuration execution "
             "deferred to post-forge configuration stage"
         )
+
+    hardening_catalog = (
+        load_hardening_catalog(
+            HARDENING_CONFIG,
+            repo_root=(
+                REPO_ROOT
+            ),
+        )
+    )
+
+    hardening_plans = (
+        validate_manifest_hardening(
+            manifest,
+            selected_configurations,
+            hardening_catalog,
+        )
+    )
+
+    if hardening_plans:
+
+        print(
+            "      -> validated "
+            f"{len(hardening_plans)} "
+            "hardening plan(s)"
+        )
+
+        for (
+            configuration_id,
+            plan,
+        ) in hardening_plans.items():
+
+            print(
+                "         "
+                f"{configuration_id}: "
+                f"{plan.benchmark.id} / "
+                f"{plan.profile.id}"
+            )
 
     installer = profile.get(
         "installer",

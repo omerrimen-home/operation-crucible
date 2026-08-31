@@ -59,11 +59,14 @@ configurations:
 
 
   ubuntu-cis:
-    display_name: Ubuntu CIS-Aligned Baseline
+    display_name: CIS Ubuntu Linux 26.04 LTS Hardening
 
     description: >
-      Applies a CIS-aligned security baseline to Ubuntu 26.04
-      LTS Server.
+      Applies the Operation Crucible implementation of the
+      CIS Ubuntu Linux 26.04 LTS benchmark. Benchmark
+      controls are being implemented during Crucible
+      milestone BA and this configuration remains
+      unavailable until its control set has been reviewed.
 
     selectable: false
 
@@ -71,7 +74,6 @@ configurations:
       - family: linux
         distribution: ubuntu
         version: "26.04"
-        flavor: server
 
     requirements:
       network:
@@ -80,17 +82,24 @@ configurations:
         min_internal_network_interfaces: 0
         min_static_internal_interfaces: 0
 
-    firewall:
-      inbound: []
-      forward: []
-
     relationships:
       requires: []
       conflicts: []
 
     implementation: null
 
-    parameters: {}
+    parameters:
+      profile: auto
+      exceptions: []
+
+    hardening:
+      benchmark: cis-ubuntu-linux-26.04
+      profile_parameter: profile
+      exceptions_parameter: exceptions
+
+    firewall:
+      inbound: []
+      forward: []
 
 
   active-directory-domain-controller:

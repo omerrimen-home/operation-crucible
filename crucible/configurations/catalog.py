@@ -22,6 +22,13 @@ SUPPORTED_OS_SELECTOR_FIELDS = {
     "architecture",
 }
 
+PARAMETER_NAME_PATTERN = re.compile(
+    r"^[a-z][a-z0-9_]{0,63}$"
+)
+
+HARDENING_BENCHMARK_ID_PATTERN = re.compile(
+    r"^[a-z][a-z0-9._-]{0,127}$"
+)
 
 class ConfigurationCatalogError(
     ValueError
@@ -163,6 +170,11 @@ class ConfigurationDefinition:
         str,
         Any
     ]
+
+    hardening: (
+        dict[str, str]
+        | None
+    ) = None
 
 
 @dataclass(
@@ -1155,6 +1167,173 @@ def _parse_firewall_contract(
 
     return result
 
+def _parse_hardening_reference(
+    configuration_id: str,
+    value: Any,
+    *,
+    parameters: dict[str, Any],
+) -> dict[str, str] | None:
+    """
+    Parse the optional benchmark relationship carried
+    by a hardening configuration.
+
+    The actual benchmark definition lives in
+    config/hardening.yml.
+    """
+
+    if value is None:
+        return None
+
+    if not isinstance(
+        value,
+        dict,
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            "hardening must be a mapping."
+        )
+
+    unknown = (
+        set(
+            value
+        )
+        -
+        {
+            "benchmark",
+            "profile_parameter",
+            "exceptions_parameter",
+        }
+    )
+
+    if unknown:
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            "contains unsupported "
+            "hardening field(s): "
+            +
+            ", ".join(
+                sorted(
+                    unknown
+                )
+            )
+        )
+
+    benchmark = str(
+        value.get(
+            "benchmark",
+            "",
+        )
+    ).strip()
+
+    if not (
+        HARDENING_BENCHMARK_ID_PATTERN
+        .fullmatch(
+            benchmark
+        )
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            "contains invalid "
+            f"hardening benchmark "
+            f"'{benchmark}'."
+        )
+
+    profile_parameter = str(
+        value.get(
+            "profile_parameter",
+            "profile",
+        )
+    ).strip()
+
+    exceptions_parameter = str(
+        value.get(
+            "exceptions_parameter",
+            "exceptions",
+        )
+    ).strip()
+
+    for (
+        field_name,
+        parameter_name,
+    ) in (
+        (
+            "profile_parameter",
+            profile_parameter,
+        ),
+        (
+            "exceptions_parameter",
+            exceptions_parameter,
+        ),
+    ):
+
+        if not (
+            PARAMETER_NAME_PATTERN
+            .fullmatch(
+                parameter_name
+            )
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                f"hardening.{field_name} "
+                "contains invalid parameter "
+                f"name '{parameter_name}'."
+            )
+
+        if (
+            parameter_name
+            not in parameters
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                f"hardening.{field_name} "
+                "references undefined "
+                f"configuration parameter "
+                f"'{parameter_name}'."
+            )
+
+    if not isinstance(
+        parameters[
+            profile_parameter
+        ],
+        str,
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            f"hardening profile parameter "
+            f"'{profile_parameter}' "
+            "must have a string default."
+        )
+
+    if not isinstance(
+        parameters[
+            exceptions_parameter
+        ],
+        list,
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            f"hardening exceptions parameter "
+            f"'{exceptions_parameter}' "
+            "must have a list default."
+        )
+
+    return {
+        "benchmark": benchmark,
+        "profile_parameter": (
+            profile_parameter
+        ),
+        "exceptions_parameter": (
+            exceptions_parameter
+        ),
+    }
+
 def load_configuration_catalog(
     path: Path,
 ) -> ConfigurationCatalog:
@@ -1369,6 +1548,18 @@ def load_configuration_catalog(
                 "be a mapping."
             )
 
+        hardening = (
+            _parse_hardening_reference(
+                configuration_id,
+                raw_definition.get(
+                    "hardening"
+                ),
+                parameters=(
+                    parameters
+                ),
+            )
+        )
+
         definitions[
             configuration_id
         ] = (
@@ -1413,6 +1604,9 @@ def load_configuration_catalog(
 
                 firewall=(
                     firewall
+                ),
+                hardening=(
+                    hardening
                 ),
             )
         )

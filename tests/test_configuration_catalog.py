@@ -193,7 +193,7 @@ class ConfigurationCatalogTests(
         )
 
 
-    def test_ubuntu_desktop_does_not_match_cis_server(
+    def test_ubuntu_desktop_matches_future_ubuntu_cis(
         self,
     ):
         configurations = (
@@ -215,7 +215,7 @@ class ConfigurationCatalogTests(
             ids,
         )
 
-        self.assertNotIn(
+        self.assertIn(
             "ubuntu-cis",
             ids,
         )
@@ -622,6 +622,40 @@ class ConfigurationCatalogTests(
                     "totally_fake_option": True,
                 },
             )
+
+    def test_ubuntu_cis_references_hardening_benchmark(
+        self,
+    ):
+        definition = (
+            self.catalog.get(
+                "ubuntu-cis"
+            )
+        )
+
+        self.assertIsNotNone(
+            definition.hardening
+        )
+
+        self.assertEqual(
+            definition.hardening[
+                "benchmark"
+            ],
+            "cis-ubuntu-linux-26.04",
+        )
+
+        self.assertEqual(
+            definition.hardening[
+                "profile_parameter"
+            ],
+            "profile",
+        )
+
+        self.assertEqual(
+            definition.hardening[
+                "exceptions_parameter"
+            ],
+            "exceptions",
+        )
 
 
 if __name__ == "__main__":
