@@ -10,6 +10,28 @@ $LogPath = Join-Path -Path $StateRoot -ChildPath "bootstrap.log"
 $CompletePath = Join-Path -Path $StateRoot -ChildPath "bootstrap-complete"
 $FailurePath = Join-Path -Path $StateRoot -ChildPath "bootstrap-failed"
 
+$PersistentBootstrapPath = Join-Path `
+    -Path $StateRoot `
+    -ChildPath "bootstrap.ps1"
+
+$PersistentConfigPath = Join-Path `
+    -Path $StateRoot `
+    -ChildPath "crucible-bootstrap.json"
+
+$WindowsUpdateCompletePath = Join-Path `
+    -Path $StateRoot `
+    -ChildPath "windows-update-complete"
+
+$WindowsUpdateCyclePath = Join-Path `
+    -Path $StateRoot `
+    -ChildPath "windows-update-cycle"
+
+$BootstrapResumeTaskName = (
+    "Operation Crucible Bootstrap Resume"
+)
+
+$MaxWindowsUpdateReboots = 6
+
 $TranscriptStarted = $false
 $BootstrapExitCode = 0
 
@@ -90,6 +112,448 @@ function Find-CrucibleNetAdapterByMac {
     )
 }
 
+function Register-CrucibleBootstrapResumeTask {
+
+    Write-CrucibleLog (
+        "Registering bootstrap resume task."
+    )
+
+    $PowerShellPath = (
+        "$env:SystemRoot\" +
+        "System32\WindowsPowerShell\" +
+        "v1.0\powershell.exe"
+    )
+
+    $ActionArguments = (
+        '-NoProfile ' +
+        '-ExecutionPolicy Bypass ' +
+        '-File "' +
+        $PersistentBootstrapPath +
+        '"'
+    )
+
+    $Action = New-ScheduledTaskAction `
+        -Execute $PowerShellPath `
+        -Argument $ActionArguments
+
+    $Trigger = New-ScheduledTaskTrigger `
+        -AtStartup
+
+    $Principal = New-ScheduledTaskPrincipal `
+        -UserId "SYSTEM" `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName $BootstrapResumeTaskName `
+        -Action $Action `
+        -Trigger $Trigger `
+        -Principal $Principal `
+        -Force |
+        Out-Null
+}
+
+
+function Remove-CrucibleBootstrapResumeTask {
+
+    $ExistingTask = Get-ScheduledTask `
+        -TaskName $BootstrapResumeTaskName `
+        -ErrorAction SilentlyContinue
+
+    if ($null -eq $ExistingTask) {
+        return
+    }
+
+    Write-CrucibleLog (
+        "Removing bootstrap resume task."
+    )
+
+    Unregister-ScheduledTask `
+        -TaskName $BootstrapResumeTaskName `
+        -Confirm:$false
+}
+
+function Invoke-CrucibleWindowsUpdatePass {
+
+    Write-CrucibleLog (
+        "Starting Windows Update discovery."
+    )
+
+
+    # ---------------------------------------------------------
+    # Ensure core Windows Update services can operate
+    # ---------------------------------------------------------
+
+    foreach ($ServiceName in @(
+        "wuauserv",
+        "bits"
+    )) {
+
+        $Service = Get-Service `
+            -Name $ServiceName `
+            -ErrorAction SilentlyContinue
+
+        if ($null -eq $Service) {
+            continue
+        }
+
+        if ($Service.Status -ne "Running") {
+
+            Write-CrucibleLog (
+                "Starting Windows Update service: {0}" -f `
+                $ServiceName
+            )
+
+            Start-Service `
+                -Name $ServiceName `
+                -ErrorAction Stop
+        }
+    }
+
+
+    # ---------------------------------------------------------
+    # Open native Windows Update Agent session
+    # ---------------------------------------------------------
+
+    $UpdateSession = New-Object `
+        -ComObject Microsoft.Update.Session
+
+    $UpdateSession.ClientApplicationID = (
+        "Operation Crucible"
+    )
+
+    $UpdateSearcher = (
+        $UpdateSession.CreateUpdateSearcher()
+    )
+
+
+    # ---------------------------------------------------------
+    # Find applicable software updates
+    #
+    # Drivers are deliberately excluded.
+    # Hidden updates are deliberately excluded.
+    # ---------------------------------------------------------
+
+    $SearchCriteria = (
+        "IsInstalled=0 " +
+        "and IsHidden=0 " +
+        "and Type='Software'"
+    )
+
+    Write-CrucibleLog (
+        "Searching Windows Update using criteria: {0}" -f `
+        $SearchCriteria
+    )
+
+    $SearchResult = (
+        $UpdateSearcher.Search(
+            $SearchCriteria
+        )
+    )
+
+    $AvailableCount = (
+        $SearchResult.Updates.Count
+    )
+
+    Write-CrucibleLog (
+        "Windows Update found {0} applicable update(s)." -f `
+        $AvailableCount
+    )
+
+    if ($AvailableCount -eq 0) {
+
+        return @{
+            UpdatesInstalled = 0
+            RebootRequired = $false
+        }
+    }
+
+
+    # ---------------------------------------------------------
+    # Build update collection
+    # ---------------------------------------------------------
+
+    $UpdatesToInstall = New-Object `
+        -ComObject Microsoft.Update.UpdateColl
+
+    for (
+        $Index = 0;
+        $Index -lt $AvailableCount;
+        $Index++
+    ) {
+
+        $Update = (
+            $SearchResult.Updates.Item(
+                $Index
+            )
+        )
+
+        Write-CrucibleLog (
+            "Applicable update: {0}" -f `
+            $Update.Title
+        )
+
+        if (-not $Update.EulaAccepted) {
+
+            Write-CrucibleLog (
+                "Accepting update EULA: {0}" -f `
+                $Update.Title
+            )
+
+            $Update.AcceptEula()
+        }
+
+        if (
+            $Update.InstallationBehavior.CanRequestUserInput
+        ) {
+
+            throw (
+                "Windows Update requires interactive " +
+                "input and cannot be installed by the " +
+                "Crucible bootstrap: {0}" -f `
+                $Update.Title
+            )
+        }
+
+        [void]$UpdatesToInstall.Add(
+            $Update
+        )
+    }
+
+
+    # ---------------------------------------------------------
+    # Download
+    # ---------------------------------------------------------
+
+    Write-CrucibleLog (
+        "Downloading Windows updates."
+    )
+
+    $Downloader = (
+        $UpdateSession.CreateUpdateDownloader()
+    )
+
+    $Downloader.Updates = (
+        $UpdatesToInstall
+    )
+
+    $DownloadResult = (
+        $Downloader.Download()
+    )
+
+    # Windows Update OperationResultCode:
+    #
+    #   2 = Succeeded
+    #   3 = SucceededWithErrors
+    #   4 = Failed
+    #   5 = Aborted
+
+    if (
+        $DownloadResult.ResultCode -ne 2 -and
+        $DownloadResult.ResultCode -ne 3
+    ) {
+
+        throw (
+            "Windows Update download failed. " +
+            "ResultCode={0}" -f `
+            $DownloadResult.ResultCode
+        )
+    }
+
+
+    # ---------------------------------------------------------
+    # Verify all chosen updates were downloaded
+    # ---------------------------------------------------------
+
+    for (
+        $Index = 0;
+        $Index -lt $UpdatesToInstall.Count;
+        $Index++
+    ) {
+
+        $Update = (
+            $UpdatesToInstall.Item(
+                $Index
+            )
+        )
+
+        if (-not $Update.IsDownloaded) {
+
+            throw (
+                "Windows update did not finish " +
+                "downloading: {0}" -f `
+                $Update.Title
+            )
+        }
+    }
+
+
+    # ---------------------------------------------------------
+    # Install
+    # ---------------------------------------------------------
+
+    Write-CrucibleLog (
+        "Installing Windows updates."
+    )
+
+    $Installer = (
+        $UpdateSession.CreateUpdateInstaller()
+    )
+
+    $Installer.AllowSourcePrompts = $false
+
+    $Installer.Updates = (
+        $UpdatesToInstall
+    )
+
+    if (
+        $Installer.RebootRequiredBeforeInstallation
+    ) {
+
+        Write-CrucibleLog (
+            "Windows requires a reboot before " +
+            "additional updates may be installed."
+        )
+
+        return @{
+            UpdatesInstalled = 0
+            RebootRequired = $true
+        }
+    }
+
+    $InstallationResult = (
+        $Installer.Install()
+    )
+
+    Write-CrucibleLog (
+        "Windows Update installation result: {0}" -f `
+        $InstallationResult.ResultCode
+    )
+
+
+    # ---------------------------------------------------------
+    # Check each update individually
+    # ---------------------------------------------------------
+
+    for (
+        $Index = 0;
+        $Index -lt $UpdatesToInstall.Count;
+        $Index++
+    ) {
+
+        $Update = (
+            $UpdatesToInstall.Item(
+                $Index
+            )
+        )
+
+        $UpdateResult = (
+            $InstallationResult.GetUpdateResult(
+                $Index
+            )
+        )
+
+        Write-CrucibleLog (
+            "Update result [{0}]: ResultCode={1}, " +
+            "HResult=0x{2:X8}" -f `
+            $Update.Title, `
+            $UpdateResult.ResultCode, `
+            ([uint32]$UpdateResult.HResult)
+        )
+
+        if (
+            $UpdateResult.ResultCode -eq 4 -or
+            $UpdateResult.ResultCode -eq 5
+        ) {
+
+            throw (
+                "Windows update failed: {0}" -f `
+                $Update.Title
+            )
+        }
+    }
+
+
+    if (
+        $InstallationResult.ResultCode -eq 4 -or
+        $InstallationResult.ResultCode -eq 5
+    ) {
+
+        throw (
+            "Windows Update installation failed. " +
+            "ResultCode={0}" -f `
+            $InstallationResult.ResultCode
+        )
+    }
+
+
+    return @{
+        UpdatesInstalled = (
+            $UpdatesToInstall.Count
+        )
+
+        RebootRequired = (
+            [bool]$InstallationResult.RebootRequired
+        )
+    }
+}
+
+function Invoke-CrucibleWindowsUpdates {
+
+    param(
+        [int] $MaxPasses = 6
+    )
+
+    for (
+        $Pass = 1;
+        $Pass -le $MaxPasses;
+        $Pass++
+    ) {
+
+        Write-CrucibleLog (
+            "Windows Update pass {0}/{1}." -f `
+            $Pass, `
+            $MaxPasses
+        )
+
+        $Result = (
+            Invoke-CrucibleWindowsUpdatePass
+        )
+
+        if ($Result.RebootRequired) {
+
+            return @{
+                FullyUpdated = $false
+                RebootRequired = $true
+            }
+        }
+
+        if ($Result.UpdatesInstalled -eq 0) {
+
+            Write-CrucibleLog (
+                "No additional Windows software " +
+                "updates are applicable."
+            )
+
+            return @{
+                FullyUpdated = $true
+                RebootRequired = $false
+            }
+        }
+
+        Write-CrucibleLog (
+            "Update pass installed {0} update(s); " +
+            "searching again." -f `
+            $Result.UpdatesInstalled
+        )
+    }
+
+    throw (
+        "Windows Update did not converge after " +
+        "$MaxPasses passes."
+    )
+}
+
 try {
 
     # ---------------------------------------------------------
@@ -101,6 +565,44 @@ try {
         -Path $StateRoot `
         -Force |
         Out-Null
+
+    # ---------------------------------------------------------
+    # Persist bootstrap locally
+    #
+    # The initial execution comes from CRUCIBLE_WIN media.
+    # Windows Update may require one or more reboots, so the
+    # bootstrap must be able to resume entirely from C:.
+    # ---------------------------------------------------------
+
+    $CurrentScriptPath = (
+        [System.IO.Path]::GetFullPath(
+            $PSCommandPath
+        )
+    )
+
+    $PersistentScriptFullPath = (
+        [System.IO.Path]::GetFullPath(
+            $PersistentBootstrapPath
+        )
+    )
+
+    if (
+        -not $CurrentScriptPath.Equals(
+            $PersistentScriptFullPath,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+    ) {
+
+        Copy-Item `
+            -LiteralPath $PSCommandPath `
+            -Destination $PersistentBootstrapPath `
+            -Force
+
+        Write-CrucibleLog (
+            "Windows bootstrap persisted to {0}." -f `
+            $PersistentBootstrapPath
+        )
+    }
 
     Remove-Item `
         -Path $CompletePath `
@@ -141,35 +643,79 @@ try {
 
 
     # ---------------------------------------------------------
-    # Read machine-specific Crucible configuration
+    # Persist and load machine-specific Crucible configuration
     # ---------------------------------------------------------
 
-    $ConfigPath = Join-Path `
+    $SourceConfigPath = Join-Path `
         -Path $PSScriptRoot `
         -ChildPath "crucible-bootstrap.json"
 
-    if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        throw "Bootstrap configuration not found: $ConfigPath"
+    if (
+        Test-Path `
+            -LiteralPath $SourceConfigPath
+    ) {
+
+        $SourceConfigFullPath = (
+            [System.IO.Path]::GetFullPath(
+                $SourceConfigPath
+            )
+        )
+
+        $PersistentConfigFullPath = (
+            [System.IO.Path]::GetFullPath(
+                $PersistentConfigPath
+            )
+        )
+
+        if (
+            -not $SourceConfigFullPath.Equals(
+                $PersistentConfigFullPath,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+        ) {
+
+            Copy-Item `
+                -LiteralPath $SourceConfigPath `
+                -Destination $PersistentConfigPath `
+                -Force
+
+            Write-CrucibleLog (
+                "Bootstrap configuration persisted to {0}." -f `
+                $PersistentConfigPath
+            )
+        }
     }
 
-    Write-CrucibleLog "Loading bootstrap configuration from $ConfigPath."
+    if (
+        -not (
+            Test-Path `
+                -LiteralPath $PersistentConfigPath
+        )
+    ) {
+
+        throw (
+            "Persistent bootstrap configuration " +
+            "not found: $PersistentConfigPath"
+        )
+    }
+
+    Write-CrucibleLog (
+        "Loading bootstrap configuration from {0}." -f `
+        $PersistentConfigPath
+    )
 
     $ConfigText = Get-Content `
-        -LiteralPath $ConfigPath `
+        -LiteralPath $PersistentConfigPath `
         -Raw
 
-    $Config = $ConfigText | ConvertFrom-Json
+    $Config = (
+        $ConfigText |
+        ConvertFrom-Json
+    )
 
-    $StoredConfigPath = Join-Path `
-        -Path $StateRoot `
-        -ChildPath "bootstrap-config.json"
-
-    Copy-Item `
-        -LiteralPath $ConfigPath `
-        -Destination $StoredConfigPath `
-        -Force
-
-    Write-CrucibleLog "Bootstrap configuration loaded."
+    Write-CrucibleLog (
+        "Bootstrap configuration loaded."
+    )
 
 
     # ---------------------------------------------------------
@@ -742,6 +1288,145 @@ try {
     }
 
     Write-CrucibleLog "Persistent topology interface configuration complete."
+
+    # ---------------------------------------------------------
+    # Fully update Windows
+    #
+    # Operation Crucible requires Internet connectivity.
+    #
+    # Windows Update is part of bootstrap completion.
+    # A machine is not considered bootstrap-complete until:
+    #
+    #   - all currently applicable software updates have
+    #     been installed;
+    #   - any update-required reboot has occurred;
+    #   - a subsequent Windows Update search finds no
+    #     additional applicable software updates.
+    # ---------------------------------------------------------
+
+    if (
+        -not (
+            Test-Path `
+                -LiteralPath $WindowsUpdateCompletePath
+        )
+    ) {
+
+        Write-CrucibleLog (
+            "Beginning Crucible Windows Update stage."
+        )
+
+        $WindowsUpdateResult = (
+            Invoke-CrucibleWindowsUpdates
+        )
+
+        if (
+            $WindowsUpdateResult.RebootRequired
+        ) {
+
+            $UpdateCycle = 0
+
+            if (
+                Test-Path `
+                    -LiteralPath $WindowsUpdateCyclePath
+            ) {
+
+                $RawCycle = Get-Content `
+                    -LiteralPath $WindowsUpdateCyclePath `
+                    -Raw
+
+                $ParsedCycle = 0
+
+                if (
+                    [int]::TryParse(
+                        $RawCycle.Trim(),
+                        [ref]$ParsedCycle
+                    )
+                ) {
+
+                    $UpdateCycle = (
+                        $ParsedCycle
+                    )
+                }
+            }
+
+            $UpdateCycle++
+
+            if (
+                $UpdateCycle -gt
+                $MaxWindowsUpdateReboots
+            ) {
+
+                throw (
+                    "Windows Update exceeded the " +
+                    "maximum of {0} bootstrap reboot(s)." -f `
+                    $MaxWindowsUpdateReboots
+                )
+            }
+
+            Set-Content `
+                -LiteralPath $WindowsUpdateCyclePath `
+                -Value $UpdateCycle `
+                -Encoding ASCII
+
+            Write-CrucibleLog (
+                "Windows Update requires reboot {0}/{1}." -f `
+                $UpdateCycle, `
+                $MaxWindowsUpdateReboots
+            )
+
+            Register-CrucibleBootstrapResumeTask
+
+            Write-CrucibleLog (
+                "Restarting Windows to continue bootstrap."
+            )
+
+            if ($TranscriptStarted) {
+
+                Stop-Transcript |
+                    Out-Null
+
+                $TranscriptStarted = $false
+            }
+
+            Restart-Computer `
+                -Force
+
+            exit 0
+        }
+
+
+        if (
+            -not $WindowsUpdateResult.FullyUpdated
+        ) {
+
+            throw (
+                "Windows Update stage returned without " +
+                "rebooting but did not report completion."
+            )
+        }
+
+
+        Set-Content `
+            -LiteralPath $WindowsUpdateCompletePath `
+            -Value (Get-Date).ToString("o") `
+            -Encoding ASCII
+
+        Write-CrucibleLog (
+            "Windows Update stage complete."
+        )
+    }
+
+
+    # ---------------------------------------------------------
+    # Clean up reboot-resume state
+    # ---------------------------------------------------------
+
+    Remove-CrucibleBootstrapResumeTask
+
+    Remove-Item `
+        -LiteralPath $WindowsUpdateCyclePath `
+        -Force `
+        -ErrorAction SilentlyContinue
 
     # ---------------------------------------------------------
     # Signal successful bootstrap completion

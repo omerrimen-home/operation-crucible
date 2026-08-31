@@ -16,7 +16,7 @@ echo " Operation Crucible - Linux Bootstrap"
 echo "=========================================="
 
 echo
-echo "[1/4] Verifying Crucible prerequisites..."
+echo "[1/5] Verifying Crucible prerequisites..."
 
 if [[ ! -x /usr/sbin/sshd ]]; then
     echo "ERROR: OpenSSH server is not installed."
@@ -33,6 +33,12 @@ if [[ ! -x /usr/bin/sudo ]]; then
     exit 1
 fi
 
+if [[ ! -x /usr/bin/apt-get ]]; then
+    echo "ERROR: apt-get is not installed."
+    echo "All current Crucible Linux profiles require an APT-based guest."
+    exit 1
+fi
+
 if ! id "$CRUCIBLE_USER" >/dev/null 2>&1; then
     echo "ERROR: Crucible user does not exist: $CRUCIBLE_USER"
     exit 1
@@ -45,8 +51,69 @@ fi
 
 echo "Required packages are available."
 
+
+# ------------------------------------------------------------
+# System update
+#
+# Operation Crucible now requires Internet connectivity.
+#
+# apt-get is used instead of apt because apt-get provides a
+# stable command-line interface intended for automation.
+#
+# dist-upgrade provides the same dependency-changing behaviour
+# required from a full system upgrade:
+#
+#   - upgrade installed packages;
+#   - install new dependencies when required;
+#   - remove obsolete/conflicting dependencies when required.
+#
+# This is particularly important for Kali Rolling.
+# ------------------------------------------------------------
+
 echo
-echo "[2/4] Configuring Crucible privilege escalation..."
+echo "[2/5] Updating installed operating system..."
+
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export APT_LISTCHANGES_FRONTEND=none
+
+APT_OPTIONS=(
+    -o DPkg::Lock::Timeout=600
+    -o Acquire::Retries=5
+    -o Acquire::http::Timeout=30
+    -o Acquire::https::Timeout=30
+    -o Dpkg::Options::=--force-confdef
+    -o Dpkg::Options::=--force-confold
+)
+
+echo "Refreshing APT package metadata..."
+
+apt-get \
+    "${APT_OPTIONS[@]}" \
+    update
+
+echo
+echo "Performing full system upgrade..."
+
+apt-get \
+    "${APT_OPTIONS[@]}" \
+    -y \
+    dist-upgrade
+
+echo
+echo "System package upgrade complete."
+
+if [[ -f /var/run/reboot-required ]]; then
+    echo "A reboot is required to activate one or more installed updates."
+fi
+
+
+# ------------------------------------------------------------
+# Crucible privilege escalation
+# ------------------------------------------------------------
+
+echo
+echo "[3/5] Configuring Crucible privilege escalation..."
 
 install -d -m 0755 /etc/sudoers.d
 
@@ -66,8 +133,13 @@ fi
 
 echo "Passwordless sudo configured for $CRUCIBLE_USER."
 
+
+# ------------------------------------------------------------
+# SSH
+# ------------------------------------------------------------
+
 echo
-echo "[3/4] Configuring SSH..."
+echo "[4/5] Configuring SSH..."
 
 install -d -m 0755 /etc/ssh/sshd_config.d
 
@@ -80,15 +152,27 @@ EOF
 
 systemctl enable ssh.service
 
+# Ubuntu may execute this bootstrap through curtin/in-target
+# before the installed OS has booted normally.
+#
+# Kali executes the same bootstrap during first boot.
+#
+# Therefore the restart is intentionally best-effort.
 systemctl restart ssh.service >/dev/null 2>&1 || true
 
+
+# ------------------------------------------------------------
+# Completion
+# ------------------------------------------------------------
+
 echo
-echo "[4/4] Marking bootstrap complete..."
+echo "[5/5] Marking bootstrap complete..."
 
 date --iso-8601=seconds > "$MARKER_FILE"
 
 echo
 echo "Crucible bootstrap complete."
+echo "Operating system fully upgraded."
 echo "SSH enabled."
 echo "Python available for Ansible."
 echo "Privilege escalation available for configuration roles."
