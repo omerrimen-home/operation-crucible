@@ -2,8 +2,6 @@
 
 - name: Discover local interactive users
   ansible.builtin.shell: |
-    set -o pipefail
-
     UID_MIN="$(
       awk \
         '$1 == "UID_MIN" {print $2}' \
@@ -21,19 +19,15 @@
       -v uid_min="$UID_MIN" \
       -v uid_max="$UID_MAX" \
       '
-        $3 >= uid_min
-        &&
-        $3 <= uid_max
-        &&
-        $7 !~ /(nologin|false)$/
-        {
+        $3 >= uid_min &&
+        $3 <= uid_max &&
+        $7 !~ /(nologin|false)$/ {
           print $1 "|" $6
         }
       ' \
       /etc/passwd
 
   args:
-
     executable: /bin/bash
 
   register:

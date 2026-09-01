@@ -14,12 +14,7 @@
 
     path: /etc/apt/sources.list
 
-    regexp: >-
-      http://(
-      (?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com
-      |security\.ubuntu\.com
-      |ports\.ubuntu\.com
-      )
+    regexp: 'http://((?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com|security\.ubuntu\.com|ports\.ubuntu\.com)'
 
     replace: 'https://\1'
 
@@ -56,12 +51,7 @@
 
     path: "{{ item.path }}"
 
-    regexp: >-
-      http://(
-      (?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com
-      |security\.ubuntu\.com
-      |ports\.ubuntu\.com
-      )
+    regexp: 'http://((?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com|security\.ubuntu\.com|ports\.ubuntu\.com)'
 
     replace: 'https://\1'
 
@@ -134,12 +124,17 @@
         !=
         0
 
-    fail_msg: >
+    fail_msg: |
       One or more active HTTP APT repositories remain.
+
       Crucible converted recognized official Ubuntu
       repositories to HTTPS, but will not guess whether
       an unknown third-party repository safely supports
       HTTPS.
+
+      Remaining repository definitions:
+
+      {{ crucible_cis_http_repositories.stdout }}
 
   when:
 

@@ -137,8 +137,6 @@
 
 - name: Find system accounts with interactive shells
   ansible.builtin.shell: |
-    set -o pipefail
-
     UID_MIN="$(
       awk \
         '$1 == "UID_MIN" {print $2}' \
@@ -149,19 +147,15 @@
       -F: \
       -v uid_min="$UID_MIN" \
       '
-        $3 < uid_min
-        &&
-        $1 !~ /^(root|sync|shutdown|halt)$/
-        &&
-        $7 !~ /(nologin|false)$/
-        {
+        $3 < uid_min &&
+        $1 !~ /^(root|sync|shutdown|halt)$/ &&
+        $7 !~ /(nologin|false)$/ {
           print $1
         }
       ' \
       /etc/passwd
 
   args:
-
     executable: /bin/bash
 
   register:
@@ -170,7 +164,6 @@
   changed_when: false
 
   when:
-
     - >-
       '5.4.2.7'
       in
@@ -201,8 +194,6 @@
 
 - name: Find non-login system accounts
   ansible.builtin.shell: |
-    set -o pipefail
-
     UID_MIN="$(
       awk \
         '$1 == "UID_MIN" {print $2}' \
@@ -213,19 +204,15 @@
       -F: \
       -v uid_min="$UID_MIN" \
       '
-        $3 < uid_min
-        &&
-        $1 != "root"
-        &&
-        $7 ~ /(nologin|false)$/
-        {
+        $3 < uid_min &&
+        $1 != "root" &&
+        $7 ~ /(nologin|false)$/ {
           print $1
         }
       ' \
       /etc/passwd
 
   args:
-
     executable: /bin/bash
 
   register:
@@ -234,7 +221,6 @@
   changed_when: false
 
   when:
-
     - >-
       '5.4.2.8'
       in
