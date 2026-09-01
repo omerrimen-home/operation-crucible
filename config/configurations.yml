@@ -108,7 +108,7 @@ configurations:
 
       implementation_wave: "1"
 
-      banner_text: >
+      banner_text: >-
         Authorized users only. Activity may be
         monitored and reported.
 
@@ -183,6 +183,36 @@ configurations:
 
       secure_world_writable_files: false
 
+      # ------------------------------------------------------
+      # Wave 3 high-risk hardening
+      # ------------------------------------------------------
+
+      pam_faillock_deny: 5
+
+      pam_faillock_unlock_time: 900
+
+      pam_faillock_root_unlock_time: 60
+
+      pam_pwquality_difok: 2
+
+      pam_pwquality_min_length: 14
+
+      pam_pwquality_max_repeat: 3
+
+      pam_pwquality_max_sequence: 3
+
+      pam_pwhistory_remember: 24
+
+      audit_backlog_limit: 8192
+
+      # CIS leaves audit storage sizing to site policy.
+      # 64 MiB is a Crucible lab default, not a CIS mandate.
+      audit_max_log_file_mb: 64
+
+      audit_space_left_action: syslog
+
+      audit_admin_space_left_action: syslog
+
     hardening:
       benchmark: cis-ubuntu-linux-26.04
 
@@ -192,7 +222,7 @@ configurations:
 
       risk_parameter: implementation_wave
 
-      max_implemented_wave: 2
+      max_implemented_wave: 3
 
     firewall:
       inbound: []

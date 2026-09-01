@@ -94,8 +94,13 @@
     file: wave2_filesystem.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 APT hardening
@@ -104,8 +109,13 @@
     file: wave2_apt.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 process hardening
@@ -114,8 +124,13 @@
     file: wave2_process.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 GDM hardening
@@ -124,8 +139,13 @@
     file: wave2_gdm.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 network hardening
@@ -134,8 +154,13 @@
     file: wave2_network.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 access hardening
@@ -144,8 +169,13 @@
     file: wave2_access.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 logging hardening
@@ -154,8 +184,13 @@
     file: wave2_logging.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 permission hardening
@@ -164,8 +199,13 @@
     file: wave2_permissions.yml
 
   when:
-
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
 
 - name: CIS Ubuntu | Wave 2 user hardening
@@ -174,8 +214,53 @@
     file: wave2_users.yml
 
   when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
-    - crucible_cis_implementation_wave == "2"
+
+- name: CIS Ubuntu | Wave 3 PAM hardening
+  ansible.builtin.include_tasks:
+
+    file: wave3_pam.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Ubuntu | Wave 3 auditd hardening
+  ansible.builtin.include_tasks:
+
+    file: wave3_auditd.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Ubuntu | Wave 3 integrity monitoring
+  ansible.builtin.include_tasks:
+
+    file: wave3_aide.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Ubuntu | Wave 3 validation
+  ansible.builtin.include_tasks:
+
+    file: wave3_verify.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
 
 
 - name: CIS Ubuntu | Validate hardened guest

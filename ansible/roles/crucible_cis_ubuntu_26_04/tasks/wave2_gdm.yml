@@ -59,7 +59,7 @@
 
       [org/gnome/login-screen]
       banner-message-enable=true
-      banner-message-text='{{ crucible_cis_banner_text | replace("'", "\\'") }}'
+      banner-message-text='{{ crucible_cis_banner_text | trim | replace("'", "\\'") }}'
       disable-user-list=true
 
   notify:

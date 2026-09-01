@@ -1,0 +1,192 @@
+---
+
+- name: Install AIDE
+  ansible.builtin.apt:
+
+    name:
+
+      - aide
+      - aide-common
+
+    state: present
+
+  when:
+
+    - >-
+      '6.3.1'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Create AIDE configuration fragment directory
+  ansible.builtin.file:
+
+    path: /etc/aide/aide.conf.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+
+- name: Install audit-tool AIDE policy
+  ansible.builtin.template:
+
+    src: aide-audit-tools.conf.j2
+
+    dest: >-
+      /etc/aide/aide.conf.d/
+      99_crucible_cis_audit_tools
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  when:
+
+    - >-
+      '6.3.3'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Install daily AIDE service
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/systemd/system/
+      dailyaidecheck.service
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      [Unit]
+      Description=Daily AIDE filesystem integrity check
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/aide.wrapper --check
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Install daily AIDE timer
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/systemd/system/
+      dailyaidecheck.timer
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      [Unit]
+      Description=Daily AIDE filesystem integrity check
+
+      [Timer]
+      OnCalendar=*-*-* 05:00:00
+      Persistent=true
+      RandomizedDelaySec=0
+      Unit=dailyaidecheck.service
+
+      [Install]
+      WantedBy=timers.target
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Reload systemd for AIDE
+  ansible.builtin.systemd_service:
+
+    daemon_reload: true
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls
+
+
+# ============================================================
+# Initialize AIDE only once
+# ============================================================
+
+- name: Check existing AIDE database
+  ansible.builtin.stat:
+
+    path: /var/lib/aide/aide.db
+
+  register:
+    crucible_cis_aide_database
+
+
+- name: Check compressed AIDE database
+  ansible.builtin.stat:
+
+    path: /var/lib/aide/aide.db.gz
+
+  register:
+    crucible_cis_aide_database_gz
+
+
+- name: Initialize AIDE baseline
+  ansible.builtin.command:
+
+    argv:
+
+      - /usr/sbin/aideinit
+
+      - --yes
+
+      - --force
+
+  when:
+
+    - >-
+      '6.3.1'
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_aide_database.stat.exists
+
+    - not crucible_cis_aide_database_gz.stat.exists
+
+  changed_when: true
+
+
+- name: Enable daily AIDE integrity checking
+  ansible.builtin.systemd_service:
+
+    name: dailyaidecheck.timer
+
+    enabled: true
+
+    state: started
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls

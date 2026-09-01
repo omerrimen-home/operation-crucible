@@ -722,7 +722,7 @@ class ConfigurationCatalogTests(
             definition.hardening[
                 "max_implemented_wave"
             ],
-            2,
+            3,
         )
 
         self.assertEqual(

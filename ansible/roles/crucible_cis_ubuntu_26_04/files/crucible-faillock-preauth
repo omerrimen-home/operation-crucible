@@ -1,0 +1,6 @@
+Name: Crucible faillock preauth
+Default: yes
+Priority: 1025
+Auth-Type: Additional
+Auth:
+ requisite pam_faillock.so preauth

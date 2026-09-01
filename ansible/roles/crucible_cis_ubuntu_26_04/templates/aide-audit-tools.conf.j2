@@ -1,0 +1,11 @@
+# Managed by Operation Crucible
+#
+# CIS 6.3.3
+#
+# Protect audit tooling through AIDE.
+
+{% for result in crucible_cis_audit_tools.results | default([]) %}
+{% if result.rc == 0 and result.stdout | trim %}
+{{ result.stdout | trim }} p+i+n+u+g+s+b+acl+xattrs+sha512
+{% endif %}
+{% endfor %}

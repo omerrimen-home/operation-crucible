@@ -1,0 +1,644 @@
+---
+
+- name: Determine whether auditd controls apply
+  ansible.builtin.set_fact:
+
+    crucible_cis_auditd_required: >-
+      {{
+        crucible_cis_wave3_audit_controls
+        | default([])
+        | length
+        > 0
+      }}
+
+
+- name: Display Level 1 auditd applicability
+  ansible.builtin.debug:
+
+    msg: >
+      CIS auditd recommendations are not applicable
+      to this benchmark profile. High-risk hardening
+      will continue with authentication and AIDE
+      controls.
+
+  when:
+
+    - not crucible_cis_auditd_required | bool
+
+
+- name: Install auditd packages
+  ansible.builtin.apt:
+
+    name:
+
+      - auditd
+      - audispd-plugins
+
+    state: present
+
+  when:
+
+    - crucible_cis_auditd_required | bool
+
+
+- name: Unmask and enable auditd
+  ansible.builtin.systemd_service:
+
+    name: auditd.service
+
+    masked: false
+
+    enabled: true
+
+    state: started
+
+  when:
+
+    - crucible_cis_auditd_required | bool
+
+
+# ============================================================
+# Boot-time auditing
+# ============================================================
+
+- name: Create GRUB drop-in directory
+  ansible.builtin.file:
+
+    path: /etc/default/grub.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - crucible_cis_auditd_required | bool
+
+
+- name: Configure boot-time auditing
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/default/grub.d/
+      60-crucible-cis-audit.cfg
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX} audit=1 audit_backlog_limit={{ crucible_cis_audit_backlog_limit }}"
+
+  register:
+    crucible_cis_audit_grub
+
+  when:
+
+    - crucible_cis_auditd_required | bool
+
+
+- name: Update GRUB after audit configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/update-grub
+
+  when:
+
+    - crucible_cis_audit_grub.changed
+      | default(false)
+
+
+- name: Record required reboot
+  ansible.builtin.set_fact:
+
+    crucible_cis_reboot_required: true
+
+  when:
+
+    - crucible_cis_audit_grub.changed
+      | default(false)
+
+
+# ============================================================
+# Audit storage policy
+# ============================================================
+
+- name: Configure audit log size
+  ansible.builtin.lineinfile:
+
+    path: /etc/audit/auditd.conf
+
+    regexp: '^\s*max_log_file\s*='
+
+    line: >-
+      max_log_file = {{
+        crucible_cis_audit_max_log_file_mb
+      }}
+
+  notify:
+    - Restart auditd
+
+
+- name: Preserve audit logs
+  ansible.builtin.lineinfile:
+
+    path: /etc/audit/auditd.conf
+
+    regexp: '^\s*max_log_file_action\s*='
+
+    line: max_log_file_action = keep_logs
+
+  notify:
+    - Restart auditd
+
+
+- name: Configure audit low-space action
+  ansible.builtin.lineinfile:
+
+    path: /etc/audit/auditd.conf
+
+    regexp: '^\s*space_left_action\s*='
+
+    line: >-
+      space_left_action = {{
+        crucible_cis_audit_space_left_action
+      }}
+
+  notify:
+    - Restart auditd
+
+
+- name: Configure audit administrator low-space action
+  ansible.builtin.lineinfile:
+
+    path: /etc/audit/auditd.conf
+
+    regexp: '^\s*admin_space_left_action\s*='
+
+    line: >-
+      admin_space_left_action = {{
+        crucible_cis_audit_admin_space_left_action
+      }}
+
+  notify:
+    - Restart auditd
+
+
+- name: Use adm for audit log access
+  ansible.builtin.lineinfile:
+
+    path: /etc/audit/auditd.conf
+
+    regexp: '^\s*log_group\s*='
+
+    line: log_group = adm
+
+  notify:
+    - Restart auditd
+
+
+- name: Apply auditd configuration before loading rules
+  ansible.builtin.meta:
+
+    flush_handlers
+
+
+# ============================================================
+# Resolve UID_MIN
+# ============================================================
+
+- name: Read UID_MIN
+  ansible.builtin.shell: |
+    awk \
+      '$1 == "UID_MIN" {print $2}' \
+      /etc/login.defs
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_uid_min_result
+
+  changed_when: false
+
+
+- name: Validate UID_MIN
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_uid_min_result.stdout
+        | trim
+        | int
+        > 0
+
+
+- name: Store UID_MIN
+  ansible.builtin.set_fact:
+
+    crucible_cis_uid_min: >-
+      {{
+        crucible_cis_uid_min_result.stdout
+        | trim
+        | int
+      }}
+
+    crucible_cis_audit_arches:
+
+      - b64
+      - b32
+
+
+# ============================================================
+# Optional watched paths
+# ============================================================
+
+- name: Inspect optional audit paths
+  ansible.builtin.stat:
+
+    path: "{{ item }}"
+
+  loop:
+
+    - /var/log/sudo.log
+    - /etc/network
+    - /etc/netplan
+    - /etc/NetworkManager
+    - /etc/security/opasswd
+    - /etc/pam.conf
+    - /var/run/utmp
+    - /var/log/wtmp
+    - /var/log/btmp
+    - /var/log/lastlog
+    - /var/run/faillock
+    - /etc/apparmor
+
+  register:
+    crucible_cis_audit_path_stats
+
+
+- name: Initialize existing audit paths
+  ansible.builtin.set_fact:
+
+    crucible_cis_audit_existing_paths: []
+
+
+- name: Record existing audit paths
+  ansible.builtin.set_fact:
+
+    crucible_cis_audit_existing_paths: >-
+      {{
+        crucible_cis_audit_existing_paths
+        +
+        [
+          item.item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_audit_path_stats.results
+    }}
+
+  when:
+
+    - item.stat.exists
+
+
+- name: Discover privileged executables
+  ansible.builtin.shell: |
+    find / \
+      -xdev \
+      -type f \
+      -perm /6000 \
+      -print \
+      2>/dev/null \
+      | sort -u
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_privileged_command_result
+
+  changed_when: false
+
+
+- name: Store privileged executables
+  ansible.builtin.set_fact:
+
+    crucible_cis_privileged_commands: >-
+      {{
+        crucible_cis_privileged_command_result
+        .stdout_lines
+        | default([])
+      }}
+
+
+- name: Discover security-sensitive commands
+  ansible.builtin.shell: |
+    command -v '{{ item.command }}'
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_audit_command_results
+
+  changed_when: false
+
+  failed_when: false
+
+  loop:
+
+    - control: "6.2.3.27"
+      command: chcon
+      key: perm_chng
+
+    - control: "6.2.3.28"
+      command: setfacl
+      key: perm_chng
+
+    - control: "6.2.3.29"
+      command: chacl
+      key: perm_chng
+
+    - control: "6.2.3.30"
+      command: usermod
+      key: usermod
+
+    - control: "6.2.3.31"
+      command: kmod
+      key: modules
+
+    - control: "6.2.3.31"
+      command: modprobe
+      key: modules
+
+    - control: "6.2.3.31"
+      command: insmod
+      key: modules
+
+    - control: "6.2.3.31"
+      command: rmmod
+      key: modules
+
+
+- name: Check running audit state
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/auditctl
+      - -s
+
+  register:
+    crucible_cis_audit_state
+
+  changed_when: false
+
+
+- name: Refuse an already immutable running audit policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_audit_state.stdout
+        is not search(
+          'enabled\s+2'
+        )
+
+    fail_msg: >
+      The running Linux audit configuration is already
+      immutable (enabled=2). Crucible cannot safely
+      replace its audit rules without a reboot.
+
+
+- name: Detect immutable rules on disk
+  ansible.builtin.shell: |
+    grep \
+      -RPE \
+      '^\s*-e\s+2\s*$' \
+      /etc/audit/rules.d \
+      2>/dev/null
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_disk_immutable_audit
+
+  changed_when: false
+
+  failed_when: false
+
+
+- name: Refuse unmanaged immutable audit rule
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_disk_immutable_audit.rc
+        !=
+        0
+
+    fail_msg: >
+      An audit rule containing "-e 2" already exists
+      on disk. Crucible deliberately does not enable
+      immutable audit mode during Forge because it
+      would prevent later configuration convergence.
+
+
+- name: Configure audit rule loader to continue after errors
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/audit/rules.d/
+      01-crucible-initialize.rules
+
+    owner: root
+    group: root
+
+    mode: "0640"
+
+    content: |
+      # Managed by Operation Crucible
+      -c
+
+  when:
+
+    - >-
+      '6.2.3.34'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Install Crucible CIS audit rules
+  ansible.builtin.template:
+
+    src: audit-rules.j2
+
+    dest: >-
+      /etc/audit/rules.d/
+      50-crucible-cis.rules
+
+    owner: root
+    group: root
+
+    mode: "0640"
+
+
+- name: Merge and load audit rules
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/augenrules
+      - --load
+
+  register:
+    crucible_cis_augenrules_load
+
+  changed_when: true
+
+
+- name: Validate merged audit rules
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/augenrules
+      - --check
+
+  register:
+    crucible_cis_augenrules_check
+
+  changed_when: false
+
+
+# ============================================================
+# Audit file permissions
+# ============================================================
+
+- name: Ensure audit log directory exists
+  ansible.builtin.file:
+
+    path: /var/log/audit
+
+    state: directory
+
+    owner: root
+    group: adm
+
+    mode: "0750"
+
+
+- name: Find audit logs
+  ansible.builtin.find:
+
+    paths:
+      - /var/log/audit
+
+    recurse: true
+
+    file_type: file
+
+  register:
+    crucible_cis_audit_logs
+
+
+- name: Protect audit logs
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: adm
+
+    mode: "0640"
+
+  loop: >-
+    {{
+      crucible_cis_audit_logs.files
+    }}
+
+
+- name: Find audit configuration files
+  ansible.builtin.find:
+
+    paths:
+      - /etc/audit
+
+    recurse: true
+
+    file_type: file
+
+  register:
+    crucible_cis_audit_configuration_files
+
+
+- name: Protect audit configuration files
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0640"
+
+  loop: >-
+    {{
+      crucible_cis_audit_configuration_files.files
+    }}
+
+
+- name: Discover audit tools
+  ansible.builtin.shell: |
+    command -v '{{ item }}'
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_audit_tools
+
+  changed_when: false
+
+  failed_when: false
+
+  loop:
+
+    - auditctl
+    - auditd
+    - ausearch
+    - aureport
+    - augenrules
+
+
+- name: Protect audit tools
+  ansible.builtin.file:
+
+    path: "{{ item.stdout | trim }}"
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  loop: >-
+    {{
+      crucible_cis_audit_tools.results
+    }}
+
+  when:
+
+    - item.rc == 0
+
+    - item.stdout | trim | length > 0

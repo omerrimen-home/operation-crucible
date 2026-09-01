@@ -53,3 +53,32 @@
     argv:
       - /usr/sbin/update-initramfs
       - -u
+
+- name: Update dconf
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/dconf
+      - update
+
+  changed_when: true
+
+
+- name: Restart auditd
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/service
+      - auditd
+      - restart
+
+  changed_when: true
+
+
+- name: Update grub
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/update-grub
+
+  changed_when: true

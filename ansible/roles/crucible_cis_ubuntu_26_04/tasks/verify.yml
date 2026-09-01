@@ -299,7 +299,13 @@
 
   when:
 
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
     - not crucible_cis_topology_has_gateway | default(false)
 
@@ -337,7 +343,13 @@
 
   when:
 
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
     - not crucible_cis_allow_debugging | bool
 

@@ -262,3 +262,103 @@ crucible_cis_secure_world_writable_files: >-
     crucible_cis_parameters.secure_world_writable_files
     | default(false)
   }}
+
+
+# ============================================================
+# Wave 3
+# ============================================================
+
+crucible_cis_pam_faillock_deny: >-
+  {{
+    crucible_cis_parameters.pam_faillock_deny
+    | default(5)
+    | int
+  }}
+
+
+crucible_cis_pam_faillock_unlock_time: >-
+  {{
+    crucible_cis_parameters.pam_faillock_unlock_time
+    | default(900)
+    | int
+  }}
+
+
+crucible_cis_pam_faillock_root_unlock_time: >-
+  {{
+    crucible_cis_parameters.pam_faillock_root_unlock_time
+    | default(60)
+    | int
+  }}
+
+
+crucible_cis_pam_pwquality_difok: >-
+  {{
+    crucible_cis_parameters.pam_pwquality_difok
+    | default(2)
+    | int
+  }}
+
+
+crucible_cis_pam_pwquality_min_length: >-
+  {{
+    crucible_cis_parameters.pam_pwquality_min_length
+    | default(14)
+    | int
+  }}
+
+
+crucible_cis_pam_pwquality_max_repeat: >-
+  {{
+    crucible_cis_parameters.pam_pwquality_max_repeat
+    | default(3)
+    | int
+  }}
+
+
+crucible_cis_pam_pwquality_max_sequence: >-
+  {{
+    crucible_cis_parameters.pam_pwquality_max_sequence
+    | default(3)
+    | int
+  }}
+
+
+crucible_cis_pam_pwhistory_remember: >-
+  {{
+    crucible_cis_parameters.pam_pwhistory_remember
+    | default(24)
+    | int
+  }}
+
+
+crucible_cis_audit_backlog_limit: >-
+  {{
+    crucible_cis_parameters.audit_backlog_limit
+    | default(8192)
+    | int
+  }}
+
+
+crucible_cis_audit_max_log_file_mb: >-
+  {{
+    crucible_cis_parameters.audit_max_log_file_mb
+    | default(64)
+    | int
+  }}
+
+
+crucible_cis_audit_space_left_action: >-
+  {{
+    crucible_cis_parameters.audit_space_left_action
+    | default('syslog')
+    | lower
+  }}
+
+
+crucible_cis_audit_admin_space_left_action: >-
+  {{
+    crucible_cis_parameters.audit_admin_space_left_action
+    | default('syslog')
+    | lower
+  }}

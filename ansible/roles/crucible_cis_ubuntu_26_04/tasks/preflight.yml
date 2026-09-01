@@ -48,12 +48,13 @@
         in
         [
           '1',
-          '2'
+          '2',
+          '3'
         ]
 
     fail_msg: >
       Ubuntu CIS implementation_wave must currently
-      be either "1" or "2".
+      be either "1", "2", or "3".
 
 
 - name: Initialize Wave 1 execution controls
@@ -111,6 +112,12 @@
     crucible_cis_wave2_conditional_controls: []
 
     crucible_cis_execution_controls: []
+
+    crucible_cis_wave3_auth_controls: []
+
+    crucible_cis_wave3_audit_controls: []
+
+    crucible_cis_wave3_integrity_controls: []
 
 
 - name: Resolve automated Wave 1 controls
@@ -182,7 +189,13 @@
 
   when:
 
-    - crucible_cis_implementation_wave == "2"
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
 
     - >-
       'wave:2'
@@ -203,6 +216,168 @@
       )
 
 
+- name: Validate Wave 3 authentication parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - crucible_cis_pam_faillock_deny | int >= 1
+
+      - crucible_cis_pam_faillock_unlock_time | int >= 0
+
+      - crucible_cis_pam_faillock_root_unlock_time | int >= 60
+
+      - crucible_cis_pam_pwquality_difok | int >= 2
+
+      - crucible_cis_pam_pwquality_min_length | int >= 14
+
+      - crucible_cis_pam_pwquality_max_repeat | int >= 1
+
+      - crucible_cis_pam_pwquality_max_repeat | int <= 3
+
+      - crucible_cis_pam_pwquality_max_sequence | int >= 1
+
+      - crucible_cis_pam_pwquality_max_sequence | int <= 3
+
+      - crucible_cis_pam_pwhistory_remember | int >= 24
+
+      - crucible_cis_audit_backlog_limit | int >= 8192
+
+      - crucible_cis_audit_max_log_file_mb | int > 0
+
+      - >-
+        crucible_cis_audit_space_left_action
+        in
+        [
+          'syslog',
+          'email',
+          'exec',
+          'suspend',
+          'single',
+          'halt'
+        ]
+
+      - >-
+        crucible_cis_audit_admin_space_left_action
+        in
+        [
+          'syslog',
+          'email',
+          'exec',
+          'suspend',
+          'single',
+          'halt'
+        ]
+
+  when:
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: Resolve Wave 3 authentication controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_auth_controls: >-
+      {{
+        crucible_cis_wave3_auth_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:auth'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 3 audit controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_audit_controls: >-
+      {{
+        crucible_cis_wave3_audit_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:audit'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 3 integrity controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_integrity_controls: >-
+      {{
+        crucible_cis_wave3_integrity_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
 - name: Build final CIS execution set
   ansible.builtin.set_fact:
 
@@ -214,6 +389,12 @@
           crucible_cis_wave1_conditional_controls
           +
           crucible_cis_wave2_conditional_controls
+          +
+          crucible_cis_wave3_auth_controls
+          +
+          crucible_cis_wave3_audit_controls
+          +
+          crucible_cis_wave3_integrity_controls
         )
         | unique
         | list
@@ -249,6 +430,18 @@
       - >-
         Wave 2 conditional:
         {{ crucible_cis_wave2_conditional_controls | length }}
+      
+      - >-
+        Wave 3 authentication:
+        {{ crucible_cis_wave3_auth_controls | length }}
+
+      - >-
+        Wave 3 audit:
+        {{ crucible_cis_wave3_audit_controls | length }}
+
+      - >-
+        Wave 3 integrity:
+        {{ crucible_cis_wave3_integrity_controls | length }}
 
       - >-
         Total execution controls:
