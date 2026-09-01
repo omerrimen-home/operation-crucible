@@ -5,9 +5,7 @@
 
     src: network-modules.conf.j2
 
-    dest: >-
-      /etc/modprobe.d/
-      60-crucible-cis-network-modules.conf
+    dest: /etc/modprobe.d/60-crucible-cis-network-modules.conf
 
     owner: root
     group: root

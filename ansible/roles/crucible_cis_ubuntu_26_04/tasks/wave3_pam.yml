@@ -26,9 +26,8 @@
 - name: Check PAM safety backup
   ansible.builtin.stat:
 
-    path: >-
-      /var/lib/crucible/
-      pam-wave3-backup-complete
+    path:
+      /var/lib/crucible/pam-wave3-backup-complete
 
   register:
     crucible_cis_pam_backup_marker
@@ -37,9 +36,8 @@
 - name: Create PAM safety backup directory
   ansible.builtin.file:
 
-    path: >-
-      /var/lib/crucible/
-      pam-wave3-backup
+    path:
+      /var/lib/crucible/pam-wave3-backup
 
     state: directory
 
@@ -79,10 +77,7 @@
 
     src: "{{ item.path }}"
 
-    dest: >-
-      /var/lib/crucible/
-      pam-wave3-backup/
-      {{ item.path | basename }}
+    dest: "/var/lib/crucible/pam-wave3-backup/{{ item.path | basename }}"
 
     remote_src: true
 
@@ -107,10 +102,7 @@
 
     src: /usr/share/pam-configs/unix
 
-    dest: >-
-      /var/lib/crucible/
-      pam-wave3-backup/
-      unix
+    dest: /var/lib/crucible/pam-wave3-backup/unix
 
     remote_src: true
 
@@ -127,9 +119,8 @@
 - name: Mark PAM safety backup complete
   ansible.builtin.file:
 
-    path: >-
-      /var/lib/crucible/
-      pam-wave3-backup-complete
+    path:
+      /var/lib/crucible/pam-wave3-backup-complete
 
     state: touch
 
@@ -245,9 +236,7 @@
 - name: Configure CIS password quality
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/security/pwquality.conf.d/
-      99-crucible-cis.conf
+    dest: /etc/security/pwquality.conf.d/99-crucible-cis.conf
 
     owner: root
     group: root
@@ -300,9 +289,7 @@
 
     src: crucible-faillock-preauth
 
-    dest: >-
-      /usr/share/pam-configs/
-      crucible-faillock-preauth
+    dest: /usr/share/pam-configs/crucible-faillock-preauth
 
     owner: root
     group: root
@@ -315,39 +302,7 @@
 
     src: crucible-faillock-authfail
 
-    dest: >-
-      /usr/share/pam-configs/
-      crucible-faillock-authfail
-
-    owner: root
-    group: root
-
-    mode: "0644"
-
-
-- name: Install Crucible faillock account profile
-  ansible.builtin.copy:
-
-    src: crucible-faillock-account
-
-    dest: >-
-      /usr/share/pam-configs/
-      crucible-faillock-account
-
-    owner: root
-    group: root
-
-    mode: "0644"
-
-
-- name: Install Crucible pwquality profile
-  ansible.builtin.copy:
-
-    src: crucible-pwquality
-
-    dest: >-
-      /usr/share/pam-configs/
-      crucible-pwquality
+    dest: /usr/share/pam-configs/crucible-faillock-authfail
 
     owner: root
     group: root
@@ -360,9 +315,7 @@
 
     src: crucible-pwhistory
 
-    dest: >-
-      /usr/share/pam-configs/
-      crucible-pwhistory
+    dest: /usr/share/pam-configs/crucible-pwhistory
 
     owner: root
     group: root
@@ -373,9 +326,8 @@
 - name: Remove obsolete Crucible faillock profile
   ansible.builtin.file:
 
-    path: >-
-      /usr/share/pam-configs/
-      crucible-faillock-notify
+    path:
+      /usr/share/pam-configs/crucible-faillock-notify
 
     state: absent
 
@@ -413,12 +365,6 @@
 
       - --enable
       - crucible-faillock-authfail
-
-      - --enable
-      - crucible-faillock-account
-
-      - --enable
-      - crucible-pwquality
 
       - --enable
       - crucible-pwhistory

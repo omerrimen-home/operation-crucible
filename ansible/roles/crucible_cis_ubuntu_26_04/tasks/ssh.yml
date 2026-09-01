@@ -89,9 +89,7 @@
 
     src: sshd-cis.conf.j2
 
-    dest: >-
-      /etc/ssh/sshd_config.d/
-      10-crucible-cis.conf
+    dest: /etc/ssh/sshd_config.d/10-crucible-cis.conf
 
     owner: root
     group: root

@@ -36,9 +36,7 @@
 
     src: aide-audit-tools.conf.j2
 
-    dest: >-
-      /etc/aide/aide.conf.d/
-      99_crucible_cis_audit_tools
+    dest: /etc/aide/aide.conf.d/99_crucible_cis_audit_tools
 
     owner: root
     group: root
@@ -56,9 +54,7 @@
 - name: Install daily AIDE service
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/systemd/system/
-      dailyaidecheck.service
+    dest: /etc/systemd/system/dailyaidecheck.service
 
     owner: root
     group: root
@@ -85,9 +81,7 @@
 - name: Install daily AIDE timer
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/systemd/system/
-      dailyaidecheck.timer
+    dest: /etc/systemd/system/dailyaidecheck.timer
 
     owner: root
     group: root

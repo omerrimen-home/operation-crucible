@@ -61,9 +61,7 @@
 - name: Disable user core dumps
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/security/limits.d/
-      60-crucible-cis-core.conf
+    dest: /etc/security/limits.d/60-crucible-cis-core.conf
 
     owner: root
     group: root
@@ -121,9 +119,7 @@
 - name: Disable persistent systemd core dumps
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/systemd/coredump.conf.d/
-      60-crucible-cis.conf
+    dest: /etc/systemd/coredump.conf.d/60-crucible-cis.conf
 
     owner: root
     group: root

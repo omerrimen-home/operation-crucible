@@ -105,9 +105,7 @@
 - name: Configure interactive shell timeout
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/profile.d/
-      61-crucible-cis-timeout.sh
+    dest: /etc/profile.d/61-crucible-cis-timeout.sh
 
     owner: root
     group: root

@@ -21,9 +21,7 @@
 - name: Configure remote rsyslog forwarding
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/rsyslog.d/
-      40-crucible-cis-remote.conf
+    dest: /etc/rsyslog.d/40-crucible-cis-remote.conf
 
     owner: root
     group: root

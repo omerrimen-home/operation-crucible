@@ -24,9 +24,7 @@
 
     argv:
       - /usr/bin/cat
-      - >-
-        /etc/security/pwquality.conf.d/
-        99-crucible-cis.conf
+      - /etc/security/pwquality.conf.d/99-crucible-cis.conf
 
   register:
     crucible_cis_pwquality_verify

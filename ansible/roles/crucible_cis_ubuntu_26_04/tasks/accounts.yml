@@ -102,9 +102,7 @@
 - name: Configure shell default umask
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/profile.d/
-      60-crucible-cis-umask.sh
+    dest: /etc/profile.d/60-crucible-cis-umask.sh
 
     owner: root
     group: root

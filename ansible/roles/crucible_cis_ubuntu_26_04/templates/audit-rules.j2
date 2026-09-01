@@ -23,7 +23,7 @@
 {% endif %}
 
 {% if '6.2.3.3' in controls and '/var/log/sudo.log' in crucible_cis_audit_existing_paths %}
--a always,exit -F arch={{ arch }} -F path=/var/log/sudo.log -F perm=wa -F auid>=${UID_MIN} -F auid!=unset -k sudo_log_file
+-a always,exit -F arch={{ arch }} -F path=/var/log/sudo.log -F perm=wa -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k sudo_log_file
 {% endif %}
 
 {% if '6.2.3.4' in controls %}
@@ -58,8 +58,8 @@
 {% endif %}
 
 {% if '6.2.3.11' in controls %}
--a always,exit -F arch={{ arch }} -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>=${UID_MIN} -F auid!=unset -k access
--a always,exit -F arch={{ arch }} -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>=${UID_MIN} -F auid!=unset -k access
+-a always,exit -F arch={{ arch }} -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k access
+-a always,exit -F arch={{ arch }} -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k access
 {% endif %}
 
 {% if '6.2.3.12' in controls %}
@@ -93,19 +93,19 @@
 {% endif %}
 
 {% if '6.2.3.18' in controls %}
--a always,exit -F arch={{ arch }} -S chmod,fchmod,fchmodat -F auid>=${UID_MIN} -F auid!=unset -k perm_mod
+-a always,exit -F arch={{ arch }} -S chmod,fchmod,fchmodat -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k perm_mod
 {% endif %}
 
 {% if '6.2.3.19' in controls %}
--a always,exit -F arch={{ arch }} -S chown,fchown,lchown,fchownat -F auid>=${UID_MIN} -F auid!=unset -k perm_mod
+-a always,exit -F arch={{ arch }} -S chown,fchown,lchown,fchownat -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k perm_mod
 {% endif %}
 
 {% if '6.2.3.20' in controls %}
--a always,exit -F arch={{ arch }} -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=${UID_MIN} -F auid!=unset -k perm_mod
+-a always,exit -F arch={{ arch }} -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k perm_mod
 {% endif %}
 
 {% if '6.2.3.21' in controls %}
--a always,exit -F arch={{ arch }} -S mount -F auid>=${UID_MIN} -F auid!=unset -k mounts
+-a always,exit -F arch={{ arch }} -S mount -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k mounts
 {% endif %}
 
 {% if '6.2.3.22' in controls %}
@@ -130,11 +130,11 @@
 {% endif %}
 
 {% if '6.2.3.24' in controls %}
--a always,exit -F arch={{ arch }} -S unlink,unlinkat -F auid>=${UID_MIN} -F auid!=unset -k delete
+-a always,exit -F arch={{ arch }} -S unlink,unlinkat -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k delete
 {% endif %}
 
 {% if '6.2.3.25' in controls %}
--a always,exit -F arch={{ arch }} -S rename,renameat,renameat2 -F auid>=${UID_MIN} -F auid!=unset -k delete
+-a always,exit -F arch={{ arch }} -S rename,renameat,renameat2 -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k delete
 {% endif %}
 
 {% if '6.2.3.26' in controls %}
@@ -145,11 +145,11 @@
 {% endif %}
 
 {% if '6.2.3.32' in controls %}
--a always,exit -F arch={{ arch }} -S init_module,finit_module -F auid>=${UID_MIN} -F auid!=unset -k modules
+-a always,exit -F arch={{ arch }} -S init_module,finit_module -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k modules
 {% endif %}
 
 {% if '6.2.3.33' in controls %}
--a always,exit -F arch={{ arch }} -S delete_module -F auid>=${UID_MIN} -F auid!=unset -k modules
+-a always,exit -F arch={{ arch }} -S delete_module -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k modules
 {% endif %}
 
 {% endfor %}
@@ -162,7 +162,7 @@
 {% if '6.2.3.10' in controls %}
 {% for command in crucible_cis_privileged_commands %}
 {% for arch in crucible_cis_audit_arches %}
--a always,exit -F arch={{ arch }} -F path={{ command }} -F perm=x -F auid>=${UID_MIN} -F auid!=unset -k privileged
+-a always,exit -F arch={{ arch }} -F path={{ command }} -F perm=x -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k privileged
 {% endfor %}
 {% endfor %}
 {% endif %}
@@ -176,7 +176,7 @@
 {% if result.rc == 0 and result.stdout | trim %}
 {% if result.item.control in controls %}
 {% for arch in crucible_cis_audit_arches %}
--a always,exit -F arch={{ arch }} -F path={{ result.stdout | trim }} -F perm=x -F auid>=${UID_MIN} -F auid!=unset -k {{ result.item.key }}
+-a always,exit -F arch={{ arch }} -F path={{ result.stdout | trim }} -F perm=x -F auid>={{ crucible_cis_uid_min }} -F auid!=unset -k {{ result.item.key }}
 {% endfor %}
 {% endif %}
 {% endif %}

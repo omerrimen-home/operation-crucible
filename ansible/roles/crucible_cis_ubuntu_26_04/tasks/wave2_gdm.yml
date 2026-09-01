@@ -45,9 +45,7 @@
 - name: Configure GDM login policy
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/dconf/db/gdm.d/
-      01-crucible-cis-login
+    dest: /etc/dconf/db/gdm.d/01-crucible-cis-login
 
     owner: root
     group: root
@@ -104,9 +102,7 @@
 - name: Configure desktop locking and media handling
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/dconf/db/local.d/
-      01-crucible-cis-desktop
+    dest: /etc/dconf/db/local.d/01-crucible-cis-desktop
 
     owner: root
     group: root

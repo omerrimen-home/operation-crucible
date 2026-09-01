@@ -24,9 +24,7 @@
 - name: Configure CIS journald baseline
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/systemd/journald.conf.d/
-      60-crucible-cis.conf
+    dest: /etc/systemd/journald.conf.d/60-crucible-cis.conf
 
     owner: root
     group: root
@@ -49,9 +47,7 @@
 - name: Configure rsyslog file creation mode
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/rsyslog.d/
-      20-crucible-cis-permissions.conf
+    dest: /etc/rsyslog.d/20-crucible-cis-permissions.conf
 
     owner: root
     group: root

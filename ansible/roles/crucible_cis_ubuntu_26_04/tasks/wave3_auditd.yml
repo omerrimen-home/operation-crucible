@@ -81,9 +81,7 @@
 - name: Configure boot-time auditing
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/default/grub.d/
-      60-crucible-cis-audit.cfg
+    dest: /etc/default/grub.d/60-crucible-cis-audit.cfg
 
     owner: root
     group: root
@@ -460,9 +458,7 @@
 - name: Configure audit rule loader to continue after errors
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/audit/rules.d/
-      01-crucible-initialize.rules
+    dest: /etc/audit/rules.d/01-crucible-initialize.rules
 
     owner: root
     group: root
@@ -486,9 +482,7 @@
 
     src: audit-rules.j2
 
-    dest: >-
-      /etc/audit/rules.d/
-      50-crucible-cis.rules
+    dest: /etc/audit/rules.d/50-crucible-cis.rules
 
     owner: root
     group: root

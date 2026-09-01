@@ -99,9 +99,7 @@
 - name: Configure authorized systemd-timesyncd servers
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/systemd/timesyncd.conf.d/
-      60-crucible-cis.conf
+    dest: /etc/systemd/timesyncd.conf.d/60-crucible-cis.conf
 
     owner: root
     group: root
@@ -284,9 +282,7 @@
 - name: Configure authorized chrony servers
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/chrony/sources.d/
-      60-crucible-cis.sources
+    dest: /etc/chrony/sources.d/60-crucible-cis.sources
 
     owner: root
     group: root

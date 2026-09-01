@@ -147,9 +147,7 @@
 - name: Enforce secure APT repository behavior
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/apt/apt.conf.d/
-      99-crucible-cis-repository-security
+    dest: /etc/apt/apt.conf.d/99-crucible-cis-repository-security
 
     owner: root
     group: root

@@ -1,6 +1,9 @@
-Name: Crucible faillock preauth
+Name: Crucible faillock preauth and account
 Default: yes
-Priority: 1025
-Auth-Type: Additional
+Priority: 1024
+Auth-Type: Primary
 Auth:
  requisite pam_faillock.so preauth
+Account-Type: Primary
+Account:
+ required pam_faillock.so

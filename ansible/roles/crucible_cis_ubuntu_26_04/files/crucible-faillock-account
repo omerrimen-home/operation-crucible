@@ -1,6 +1,0 @@
-Name: Crucible faillock account
-Default: yes
-Priority: 1024
-Account-Type: Additional
-Account:
- required pam_faillock.so

@@ -7,9 +7,7 @@
 - name: Disable USB storage kernel module
   ansible.builtin.copy:
 
-    dest: >-
-      /etc/modprobe.d/
-      60-crucible-cis-usb-storage.conf
+    dest: /etc/modprobe.d/60-crucible-cis-usb-storage.conf
 
     owner: root
     group: root
