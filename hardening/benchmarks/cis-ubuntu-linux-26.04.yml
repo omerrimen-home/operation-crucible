@@ -149,6 +149,7 @@ controls:
     - source-profile:level2-workstation
     - hardware-aware
     - lab-use-sensitive
+    - preserve-if-capability:hardware:usb-storage
   1.1.1.11:
     title: Ensure unused filesystems kernel modules are not available
     profiles:
@@ -225,6 +226,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - lab-use-sensitive
+    - preserve-if-capability:filesystem:tmp-exec
   1.1.2.2.1:
     title: Ensure /dev/shm is tmpfs or a separate partition
     profiles:
@@ -286,6 +288,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - application-aware
+    - preserve-if-capability:filesystem:dev-shm-exec
   1.1.2.3.1:
     title: Ensure separate partition exists for /home
     profiles:
@@ -940,6 +943,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - debugging-sensitive
+    - preserve-if-capability:debugging:ptrace
   1.5.4:
     title: Ensure fs.suid_dumpable is configured
     profiles:
@@ -956,6 +960,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
   1.5.5:
     title: Ensure kernel.dmesg_restrict is configured
     profiles:
@@ -1047,6 +1052,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
   1.5.11:
     title: Ensure systemd-coredump ProcessSizeMax is configured
     profiles:
@@ -1063,6 +1069,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
   1.5.12:
     title: Ensure systemd-coredump Storage is configured
     profiles:
@@ -1079,6 +1086,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
   1.6.1:
     title: Ensure /etc/motd is configured
     profiles:
@@ -1366,6 +1374,7 @@ controls:
     - source-profile:level2-workstation
     - gdm-present
     - x11-compatibility
+    - preserve-if-capability:desktop:x11-compatibility
   2.1.1:
     title: Ensure autofs services are not in use
     profiles:
@@ -2462,6 +2471,7 @@ controls:
     - source-profile:level1-workstation
     - multihoming-aware
     - preserve-if-capability:network:ipv4-router
+    - preserve-if-capability:network:asymmetric-routing
   3.3.1.13:
     title: Ensure net.ipv4.conf.default.rp_filter is configured
     profiles:
@@ -2479,6 +2489,7 @@ controls:
     - source-profile:level1-workstation
     - multihoming-aware
     - preserve-if-capability:network:ipv4-router
+    - preserve-if-capability:network:asymmetric-routing
   3.3.1.14:
     title: Ensure net.ipv4.conf.all.accept_source_route is configured
     profiles:
@@ -2685,6 +2696,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - ipv6-topology-aware
+    - preserve-if-capability:network:ipv6-ra-client
   3.3.2.8:
     title: Ensure net.ipv6.conf.default.accept_ra is configured
     profiles:
@@ -2701,6 +2713,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - ipv6-topology-aware
+    - preserve-if-capability:network:ipv6-ra-client
   4.1.1:
     title: Ensure ufw is installed
     profiles:
@@ -2916,6 +2929,7 @@ controls:
     - source-profile:level1-workstation
     - source-profile:level1-server
     - lab-use-sensitive
+    - preserve-if-capability:ssh:forwarding
   5.1.10:
     title: Ensure sshd GSSAPIAuthentication is disabled
     profiles:
@@ -3246,6 +3260,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - lab-use-sensitive
+    - preserve-if-capability:access:su
   5.3.1.1:
     title: Ensure latest version of pam is installed
     profiles:
@@ -3900,6 +3915,7 @@ controls:
     - source-profile:level1-server
     - source-profile:level1-workstation
     - lab-use-sensitive
+    - preserve-if-capability:shell:long-running
   5.4.3.3:
     title: Ensure default user umask is configured
     profiles:

@@ -182,7 +182,7 @@ class ConfigurationDefinition:
     ] = ()
 
     hardening: (
-        dict[str, str]
+        dict[str, Any]
         | None
     ) = None
 
@@ -1182,7 +1182,7 @@ def _parse_hardening_reference(
     value: Any,
     *,
     parameters: dict[str, Any],
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     """
     Parse the optional benchmark relationship carried
     by a hardening configuration.
@@ -1213,6 +1213,8 @@ def _parse_hardening_reference(
             "benchmark",
             "profile_parameter",
             "exceptions_parameter",
+            "risk_parameter",
+            "max_implemented_wave",
         }
     )
 
@@ -1264,6 +1266,136 @@ def _parse_hardening_reference(
             "exceptions",
         )
     ).strip()
+
+    raw_risk_parameter = (
+        value.get(
+            "risk_parameter"
+        )
+    )
+
+    risk_parameter: (
+        str
+        | None
+    ) = None
+
+    max_implemented_wave: (
+        int
+        | None
+    ) = None
+
+
+    if raw_risk_parameter is not None:
+
+        risk_parameter = str(
+            raw_risk_parameter
+        ).strip()
+
+        if not (
+            PARAMETER_NAME_PATTERN
+            .fullmatch(
+                risk_parameter
+            )
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "hardening.risk_parameter "
+                "contains invalid parameter "
+                f"name '{risk_parameter}'."
+            )
+
+        if (
+            risk_parameter
+            not in parameters
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "hardening.risk_parameter "
+                "references undefined "
+                f"configuration parameter "
+                f"'{risk_parameter}'."
+            )
+
+        risk_default = (
+            parameters[
+                risk_parameter
+            ]
+        )
+
+        if (
+            not isinstance(
+                risk_default,
+                str,
+            )
+            or
+            risk_default
+            not in {
+                "1",
+                "2",
+                "3",
+            }
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                f"parameter '{risk_parameter}' "
+                "must have a string default "
+                "of '1', '2', or '3'."
+            )
+
+
+        raw_max_wave = (
+            value.get(
+                "max_implemented_wave",
+                1,
+            )
+        )
+
+        if isinstance(
+            raw_max_wave,
+            bool,
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "max_implemented_wave "
+                "must be an integer."
+            )
+
+        try:
+
+            max_implemented_wave = int(
+                raw_max_wave
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "max_implemented_wave "
+                "must be an integer."
+            ) from exc
+
+
+        if (
+            max_implemented_wave
+            not in {
+                1,
+                2,
+                3,
+            }
+        ):
+            raise ConfigurationCatalogError(
+                f"Configuration "
+                f"'{configuration_id}' "
+                "max_implemented_wave "
+                "must be 1, 2, or 3."
+            )
 
     for (
         field_name,
@@ -1334,15 +1466,34 @@ def _parse_hardening_reference(
             "must have a list default."
         )
 
-    return {
+    hardening = {
         "benchmark": benchmark,
+
         "profile_parameter": (
             profile_parameter
         ),
+
         "exceptions_parameter": (
             exceptions_parameter
         ),
     }
+
+
+    if risk_parameter is not None:
+
+        hardening[
+            "risk_parameter"
+        ] = risk_parameter
+
+        hardening[
+            "max_implemented_wave"
+        ] = (
+            max_implemented_wave
+        )
+
+
+    return hardening
+
 
 def _parse_capabilities(
     configuration_id: str,

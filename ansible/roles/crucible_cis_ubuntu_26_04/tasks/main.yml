@@ -88,6 +88,96 @@
     file: permissions.yml
 
 
+- name: CIS Ubuntu | Wave 2 filesystem hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_filesystem.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 APT hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_apt.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 process hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_process.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 GDM hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_gdm.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 network hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_network.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 access hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_access.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 logging hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_logging.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 permission hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_permissions.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
+- name: CIS Ubuntu | Wave 2 user hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_users.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+
 - name: CIS Ubuntu | Validate hardened guest
   ansible.builtin.include_tasks:
     file: verify.yml

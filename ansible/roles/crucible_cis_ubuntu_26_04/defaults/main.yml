@@ -130,3 +130,135 @@ crucible_cis_time_servers: >-
         ]
       )
   }}
+
+
+crucible_cis_disable_usb_storage: >-
+  {{
+    crucible_cis_parameters.disable_usb_storage
+    | default(true)
+  }}
+
+
+crucible_cis_tmp_noexec: >-
+  {{
+    crucible_cis_parameters.tmp_noexec
+    | default(true)
+  }}
+
+
+crucible_cis_dev_shm_noexec: >-
+  {{
+    crucible_cis_parameters.dev_shm_noexec
+    | default(true)
+  }}
+
+
+crucible_cis_allow_debugging: >-
+  {{
+    crucible_cis_parameters.allow_debugging
+    | default(false)
+  }}
+
+
+crucible_cis_enforce_all_apparmor_profiles: >-
+  {{
+    crucible_cis_parameters.enforce_all_apparmor_profiles
+    | default(false)
+  }}
+
+
+crucible_cis_disable_xwayland: >-
+  {{
+    crucible_cis_parameters.disable_xwayland
+    | default(false)
+  }}
+
+
+crucible_cis_allow_ipv6_ra: >-
+  {{
+    crucible_cis_parameters.allow_ipv6_router_advertisements
+    | default(false)
+  }}
+
+
+crucible_cis_allow_ssh_forwarding: >-
+  {{
+    crucible_cis_parameters.allow_ssh_forwarding
+    | default(false)
+  }}
+
+
+crucible_cis_restrict_su: >-
+  {{
+    crucible_cis_parameters.restrict_su
+    | default(true)
+  }}
+
+
+crucible_cis_shell_timeout: >-
+  {{
+    crucible_cis_parameters.shell_timeout_seconds
+    | default(900)
+    | int
+  }}
+
+
+crucible_cis_gdm_idle_delay: >-
+  {{
+    crucible_cis_parameters.gdm_idle_delay_seconds
+    | default(900)
+    | int
+  }}
+
+
+crucible_cis_gdm_lock_delay: >-
+  {{
+    crucible_cis_parameters.gdm_lock_delay_seconds
+    | default(5)
+    | int
+  }}
+
+
+crucible_cis_remote_log_host: >-
+  {{
+    crucible_cis_parameters.remote_log_host
+    | default('')
+    | trim
+  }}
+
+
+crucible_cis_remote_log_protocol: >-
+  {{
+    crucible_cis_parameters.remote_log_protocol
+    | default('tcp')
+    | lower
+  }}
+
+
+crucible_cis_remote_log_port: >-
+  {{
+    crucible_cis_parameters.remote_log_port
+    | default(514)
+    | int
+  }}
+
+
+crucible_cis_system_account_shell_exceptions: >-
+  {{
+    crucible_cis_parameters.system_account_shell_exceptions
+    | default([])
+  }}
+
+
+crucible_cis_system_account_lock_exceptions: >-
+  {{
+    crucible_cis_parameters.system_account_lock_exceptions
+    | default([])
+  }}
+
+
+crucible_cis_secure_world_writable_files: >-
+  {{
+    crucible_cis_parameters.secure_world_writable_files
+    | default(false)
+  }}

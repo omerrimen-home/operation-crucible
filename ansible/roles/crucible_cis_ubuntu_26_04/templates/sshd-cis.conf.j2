@@ -24,6 +24,13 @@ IgnoreRhosts yes
 MaxAuthTries {{ crucible_cis_ssh_max_auth_tries }}
 MaxSessions {{ crucible_cis_ssh_max_sessions }}
 MaxStartups {{ crucible_cis_ssh_max_startups }}
+{% if
+  '5.1.9' in crucible_cis_execution_controls
+  and
+  not crucible_cis_allow_ssh_forwarding | bool
+%}
+DisableForwarding yes
+{% endif %}
 
 PermitEmptyPasswords no
 PermitRootLogin no

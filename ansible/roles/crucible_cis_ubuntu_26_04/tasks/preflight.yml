@@ -38,14 +38,22 @@
         ]
 
 
-- name: Restrict initial implementation to Wave 1
+- name: Validate supported CIS implementation wave
   ansible.builtin.assert:
+
     that:
-      - crucible_cis_implementation_wave == "1"
+
+      - >-
+        crucible_cis_implementation_wave
+        in
+        [
+          '1',
+          '2'
+        ]
 
     fail_msg: >
-      The initial Ubuntu CIS Ansible implementation
-      currently supports implementation_wave=1 only.
+      Ubuntu CIS implementation_wave must currently
+      be either "1" or "2".
 
 
 - name: Initialize Wave 1 execution controls
@@ -89,6 +97,22 @@
       authorized time server must be configured.
 
 
+# ============================================================
+# Resolve implementation waves
+# ============================================================
+
+- name: Initialize CIS execution control groups
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_automated_controls: []
+
+    crucible_cis_wave1_conditional_controls: []
+
+    crucible_cis_wave2_conditional_controls: []
+
+    crucible_cis_execution_controls: []
+
+
 - name: Resolve automated Wave 1 controls
   ansible.builtin.set_fact:
 
@@ -107,6 +131,7 @@
     }}
 
   when:
+
     - >-
       'wave:1'
       in
@@ -131,13 +156,54 @@
     }}
 
   when:
+
     - >-
       'wave:1'
       in
       crucible_hardening.controls.metadata[item].tags
 
 
-- name: Build final Wave 1 execution set
+- name: Resolve reviewed conditional Wave 2 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave2_conditional_controls: >-
+      {{
+        crucible_cis_wave2_conditional_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+    - >-
+      (
+        'risk:low'
+        in
+        crucible_hardening.controls.metadata[item].tags
+      )
+      or
+      (
+        'risk:medium'
+        in
+        crucible_hardening.controls.metadata[item].tags
+      )
+
+
+- name: Build final CIS execution set
   ansible.builtin.set_fact:
 
     crucible_cis_execution_controls: >-
@@ -146,6 +212,8 @@
           crucible_cis_wave1_automated_controls
           +
           crucible_cis_wave1_conditional_controls
+          +
+          crucible_cis_wave2_conditional_controls
         )
         | unique
         | list
@@ -167,51 +235,31 @@
         {{ crucible_hardening.profile.display_name }}
 
       - >-
-        Machine capabilities:
-        {{
-          crucible_machine.capabilities
-          | default([])
-          | join(', ')
-          or 'none'
-        }}
+        Implementation wave:
+        {{ crucible_cis_implementation_wave }}
 
       - >-
-        Applicable controls:
-        {{ crucible_hardening.counts.applicable }}
-
-      - >-
-        Wave 1 automated controls:
+        Wave 1 automated:
         {{ crucible_cis_wave1_automated_controls | length }}
 
       - >-
-        Wave 1 conditional controls:
+        Wave 1 conditional:
         {{ crucible_cis_wave1_conditional_controls | length }}
 
       - >-
-        Wave 1 execution controls:
+        Wave 2 conditional:
+        {{ crucible_cis_wave2_conditional_controls | length }}
+
+      - >-
+        Total execution controls:
         {{ crucible_cis_execution_controls | length }}
 
       - >-
-        User exceptions:
-        {{
-          crucible_hardening.counts.user_exceptions
-          | default(0)
-        }}
-
-      - >-
-        Derived capability exceptions:
+        Derived exceptions:
         {{
           crucible_hardening.counts.derived_exceptions
           | default(0)
         }}
-
-      - >-
-        Audit-only controls:
-        {{ crucible_hardening.counts.audit_only }}
-
-      - >-
-        Satisfied elsewhere:
-        {{ crucible_hardening.counts.satisfied_elsewhere }}
 
 
 - name: Display derived hardening exceptions

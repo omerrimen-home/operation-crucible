@@ -1,0 +1,234 @@
+---
+
+- name: Discover local interactive users
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    UID_MIN="$(
+      awk \
+        '$1 == "UID_MIN" {print $2}' \
+        /etc/login.defs
+    )"
+
+    UID_MAX="$(
+      awk \
+        '$1 == "UID_MAX" {print $2}' \
+        /etc/login.defs
+    )"
+
+    awk \
+      -F: \
+      -v uid_min="$UID_MIN" \
+      -v uid_max="$UID_MAX" \
+      '
+        $3 >= uid_min
+        &&
+        $3 <= uid_max
+        &&
+        $7 !~ /(nologin|false)$/
+        {
+          print $1 "|" $6
+        }
+      ' \
+      /etc/passwd
+
+  args:
+
+    executable: /bin/bash
+
+  register:
+    crucible_cis_interactive_users
+
+  changed_when: false
+
+
+- name: Build interactive user records
+  ansible.builtin.set_fact:
+
+    crucible_cis_interactive_user_records: >-
+      {{
+        crucible_cis_interactive_user_records
+        | default([])
+        +
+        [
+          {
+            'name':
+              item.split('|')[0],
+
+            'home':
+              item.split('|')[1]
+          }
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_interactive_users.stdout_lines
+    }}
+
+
+- name: Ensure interactive user home ownership
+  ansible.builtin.file:
+
+    path: "{{ item.home }}"
+
+    owner: "{{ item.name }}"
+
+    state: directory
+
+  loop: >-
+    {{
+      crucible_cis_interactive_user_records
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      '7.2.9'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Remove group-write and all other access from user homes
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/chmod
+      - g-w,o-rwx
+      - "{{ item.home }}"
+
+  loop: >-
+    {{
+      crucible_cis_interactive_user_records
+      | default([])
+    }}
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '7.2.9'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Find interactive-user dotfiles
+  ansible.builtin.find:
+
+    paths:
+      - "{{ item.home }}"
+
+    recurse: false
+
+    hidden: true
+
+    file_type: file
+
+    patterns:
+      - ".*"
+
+  loop: >-
+    {{
+      crucible_cis_interactive_user_records
+      | default([])
+    }}
+
+  register:
+    crucible_cis_user_dotfiles
+
+  when:
+
+    - >-
+      '7.2.10'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Remove group and other write from dotfiles
+  ansible.builtin.file:
+
+    path: "{{ item.1.path }}"
+
+    mode: "go-w"
+
+  loop: >-
+    {{
+      query(
+        'subelements',
+        crucible_cis_user_dotfiles.results
+        | default([]),
+        'files',
+        {
+          'skip_missing': true
+        }
+      )
+    }}
+
+  when:
+
+    - >-
+      '7.2.10'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Find interactive-user dot directories
+  ansible.builtin.find:
+
+    paths:
+      - "{{ item.home }}"
+
+    recurse: false
+
+    hidden: true
+
+    file_type: directory
+
+    patterns:
+      - ".*"
+
+  loop: >-
+    {{
+      crucible_cis_interactive_user_records
+      | default([])
+    }}
+
+  register:
+    crucible_cis_user_dotdirs
+
+  when:
+
+    - >-
+      '7.2.11'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Restrict dot-directory access
+  ansible.builtin.file:
+
+    path: "{{ item.1.path }}"
+
+    mode: "g-w,o-rwx"
+
+  loop: >-
+    {{
+      query(
+        'subelements',
+        crucible_cis_user_dotdirs.results
+        | default([]),
+        'files',
+        {
+          'skip_missing': true
+        }
+      )
+    }}
+
+  when:
+
+    - >-
+      '7.2.11'
+      in
+      crucible_cis_execution_controls

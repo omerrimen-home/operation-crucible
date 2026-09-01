@@ -532,9 +532,9 @@ def ask_configuration_selection(
 
     print(
         f"{DIM}"
-        "During milestone AC, selections "
-        "are recorded in the machine manifest "
-        "but are not executed yet."
+        "Selected configurations are applied "
+        "after unattended installation and "
+        "management readiness checks complete."
         f"{RESET}"
     )
 
@@ -671,6 +671,278 @@ def ask_configuration_selection(
             )
 
         return configuration_ids
+
+def ask_hardening_risk_parameters(
+    configuration_ids: list[str],
+    catalog: ConfigurationCatalog,
+) -> dict[
+    str,
+    dict[str, Any]
+]:
+    """
+    Ask for Forge-time hardening risk tiers.
+
+    Hardening waves are cumulative:
+
+        1 = Low risk
+        2 = Moderate risk
+        3 = High risk
+
+    The risk tier controls Crucible remediation
+    behavior. It is separate from the source
+    benchmark's own Level 1 / Level 2 profile.
+    """
+
+    overrides: dict[
+        str,
+        dict[str, Any]
+    ] = {}
+
+
+    risk_labels = {
+        1: (
+            "Low risk",
+            (
+                "Wave 1 only. Applies reviewed "
+                "low-risk hardening controls."
+            ),
+        ),
+
+        2: (
+            "Moderate risk",
+            (
+                "Waves 1-2. Adds reviewed "
+                "conditional controls with "
+                "moderate operational impact."
+            ),
+        ),
+
+        3: (
+            "High risk",
+            (
+                "Waves 1-3. Adds authentication, "
+                "audit, integrity, and other "
+                "controls with greater potential "
+                "to affect system behavior."
+            ),
+        ),
+    }
+
+
+    for configuration_id in (
+        configuration_ids
+    ):
+
+        definition = catalog.get(
+            configuration_id
+        )
+
+        hardening = (
+            definition.hardening
+        )
+
+        if hardening is None:
+            continue
+
+
+        risk_parameter = (
+            hardening.get(
+                "risk_parameter"
+            )
+        )
+
+        if not risk_parameter:
+            continue
+
+
+        max_implemented_wave = int(
+            hardening.get(
+                "max_implemented_wave",
+                1,
+            )
+        )
+
+
+        print()
+        print(
+            f"{BOLD}"
+            f"{definition.display_name}"
+            f"{RESET}"
+        )
+
+        print(
+            f"{BOLD}"
+            "Hardening risk tier"
+            f"{RESET}"
+        )
+
+        print()
+
+        print(
+            f"{DIM}"
+            "This controls Crucible's remediation "
+            "risk, not the CIS Level 1/Level 2 "
+            "benchmark profile."
+            f"{RESET}"
+        )
+
+        print()
+
+        for wave in (
+            1,
+            2,
+            3,
+        ):
+
+            label, description = (
+                risk_labels[
+                    wave
+                ]
+            )
+
+            if (
+                wave
+                <=
+                max_implemented_wave
+            ):
+
+                print(
+                    f"  [{wave}] "
+                    f"{label}"
+                )
+
+                print(
+                    f"      {description}"
+                )
+
+            else:
+
+                print(
+                    f"{DIM}"
+                    f"  [{wave}] "
+                    f"{label} "
+                    "(planned)"
+                    f"{RESET}"
+                )
+
+                print(
+                    f"{DIM}"
+                    f"      {description}"
+                    f"{RESET}"
+                )
+
+            print()
+
+
+        while True:
+
+            answer = input(
+                "Hardening risk tier "
+                "[1]: "
+            ).strip().lower()
+
+
+            aliases = {
+                "": 1,
+
+                "1": 1,
+                "low": 1,
+                "low-risk": 1,
+
+                "2": 2,
+                "moderate": 2,
+                "medium": 2,
+                "moderate-risk": 2,
+
+                "3": 3,
+                "high": 3,
+                "high-risk": 3,
+            }
+
+
+            selected_wave = (
+                aliases.get(
+                    answer
+                )
+            )
+
+
+            if selected_wave is None:
+
+                print(
+                    f"{RED}"
+                    "Enter 1, 2, or 3 "
+                    "(or low, moderate, high)."
+                    f"{RESET}"
+                )
+
+                continue
+
+
+            if (
+                selected_wave
+                >
+                max_implemented_wave
+            ):
+
+                print(
+                    f"{YELLOW}"
+                    f"{risk_labels[selected_wave][0]} "
+                    "hardening is not implemented "
+                    "for this configuration yet."
+                    f"{RESET}"
+                )
+
+                print(
+                    "Choose one of the currently "
+                    "implemented tiers."
+                )
+
+                continue
+
+
+            overrides[
+                configuration_id
+            ] = {
+                str(
+                    risk_parameter
+                ): str(
+                    selected_wave
+                ),
+            }
+
+
+            label = (
+                risk_labels[
+                    selected_wave
+                ][
+                    0
+                ]
+            )
+
+            print()
+
+            print(
+                f"{GREEN}[✓]{RESET} "
+                f"Hardening risk: "
+                f"{label}"
+            )
+
+            print(
+                "    Includes implementation "
+                f"Wave 1"
+                +
+                (
+                    f"-{selected_wave}"
+                    if selected_wave > 1
+                    else ""
+                )
+            )
+
+            break
+
+
+    return overrides
 
 def show_network_slot_plan(
     topology_interfaces: (
@@ -2936,6 +3208,10 @@ def build_machine_manifest(
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
     configuration_ids: list[str],
+    configuration_parameters: dict[
+        str,
+        dict[str, Any]
+    ],
     management_address: str,
     instance_serial: str,
 ) -> dict[str, Any]:
@@ -3077,7 +3353,13 @@ def build_machine_manifest(
                 "id": (
                     configuration_id
                 ),
-                "parameters": {},
+
+                "parameters": dict(
+                    configuration_parameters.get(
+                        configuration_id,
+                        {},
+                    )
+                ),
             }
 
             for configuration_id
@@ -3137,6 +3419,10 @@ def generate_manifests(
     hardware: dict[str, Any],
     autoinstall: dict[str, Any],
     configuration_ids: list[str],
+    configuration_parameters: dict[
+        str,
+        dict[str, Any]
+    ],
     instance_serial: str,
 ) -> tuple[Path, Path]:
 
@@ -3163,6 +3449,7 @@ def generate_manifests(
             hardware,
             autoinstall,
             configuration_ids,
+            configuration_parameters,
             management_address,
             instance_serial,
         )
@@ -4661,6 +4948,13 @@ def main() -> int:
             )
         )
 
+        configuration_parameters = (
+            ask_hardening_risk_parameters(
+                configuration_ids,
+                configuration_catalog,
+            )
+        )
+
         vm_name = ask_vm_name(
             os_info
         )
@@ -4748,6 +5042,7 @@ def main() -> int:
                 hardware,
                 autoinstall,
                 configuration_ids,
+                configuration_parameters,
                 instance_serial,
             )
         )

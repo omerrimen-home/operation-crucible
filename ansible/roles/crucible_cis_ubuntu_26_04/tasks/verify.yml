@@ -273,3 +273,112 @@
         Conditional, authentication-sensitive,
         audit, installer-time, and deferred controls
         have not been blindly remediated.
+
+
+# ============================================================
+# Wave 2 validation
+# ============================================================
+
+- name: Verify strict reverse-path filtering
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - "{{ item }}"
+
+  register:
+    crucible_cis_rp_filter_verify
+
+  changed_when: false
+
+  loop:
+
+    - net.ipv4.conf.all.rp_filter
+    - net.ipv4.conf.default.rp_filter
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+    - not crucible_cis_topology_has_gateway | default(false)
+
+
+- name: Assert strict reverse-path filtering
+  ansible.builtin.assert:
+
+    that:
+
+      - item.stdout | trim == "1"
+
+  loop: >-
+    {{
+      crucible_cis_rp_filter_verify.results
+      | default([])
+    }}
+
+  when:
+
+    - not item.skipped | default(false)
+
+
+- name: Verify SUID core dumps are disabled
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - fs.suid_dumpable
+
+  register:
+    crucible_cis_suid_dumpable_verify
+
+  changed_when: false
+
+  when:
+
+    - crucible_cis_implementation_wave == "2"
+
+    - not crucible_cis_allow_debugging | bool
+
+
+- name: Assert SUID core dumps are disabled
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_suid_dumpable_verify.stdout
+        | trim
+        ==
+        '0'
+
+  when:
+
+    - crucible_cis_suid_dumpable_verify is not skipped
+
+
+- name: Validate rsyslog syntax
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/rsyslogd
+      - -N1
+
+  changed_when: false
+
+
+- name: Revalidate SSH syntax after Wave 2
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -t
+
+  changed_when: false
+
+
+- name: Confirm management connectivity after Wave 2
+  ansible.builtin.wait_for_connection:
+
+    timeout: 90

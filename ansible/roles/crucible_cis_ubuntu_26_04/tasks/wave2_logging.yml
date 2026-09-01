@@ -1,0 +1,78 @@
+---
+
+- name: Validate remote logging protocol
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_remote_log_protocol
+        in
+        [
+          'tcp',
+          'udp'
+        ]
+
+      - crucible_cis_remote_log_port | int > 0
+
+      - crucible_cis_remote_log_port | int <= 65535
+
+
+- name: Configure remote rsyslog forwarding
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/rsyslog.d/
+      40-crucible-cis-remote.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      *.* action(
+          type="omfwd"
+          target="{{ crucible_cis_remote_log_host }}"
+          port="{{ crucible_cis_remote_log_port }}"
+          protocol="{{ crucible_cis_remote_log_protocol }}"
+          action.resumeRetryCount="-1"
+          queue.type="linkedList"
+          queue.saveOnShutdown="on"
+      )
+
+    validate: >-
+      /usr/sbin/rsyslogd -N1 -f %s
+
+  notify:
+
+    - Restart rsyslog
+
+  when:
+
+    - >-
+      '6.1.2.5'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_remote_log_host | length > 0
+
+
+- name: Report unavailable remote logging target
+  ansible.builtin.debug:
+
+    msg: >
+      CIS remote log forwarding is applicable but no
+      remote_log_host was supplied. Crucible will not
+      invent or guess an external logging destination.
+
+  when:
+
+    - >-
+      '6.1.2.5'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_remote_log_host | length == 0

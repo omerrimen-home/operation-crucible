@@ -1,0 +1,167 @@
+---
+
+- name: Check legacy APT sources.list
+  ansible.builtin.stat:
+
+    path: /etc/apt/sources.list
+
+  register:
+    crucible_cis_sources_list
+
+
+- name: Convert official Ubuntu repositories to HTTPS in sources.list
+  ansible.builtin.replace:
+
+    path: /etc/apt/sources.list
+
+    regexp: >-
+      http://(
+      (?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com
+      |security\.ubuntu\.com
+      |ports\.ubuntu\.com
+      )
+
+    replace: 'https://\1'
+
+    backup: true
+
+  when:
+
+    - crucible_cis_sources_list.stat.exists
+
+    - >-
+      '1.2.1.10'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Find APT source definitions
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apt/sources.list.d
+
+    file_type: file
+
+    patterns:
+      - "*.list"
+      - "*.sources"
+
+  register:
+    crucible_cis_repository_files
+
+
+- name: Convert official Ubuntu repository definitions to HTTPS
+  ansible.builtin.replace:
+
+    path: "{{ item.path }}"
+
+    regexp: >-
+      http://(
+      (?:[A-Za-z0-9.-]+\.)?archive\.ubuntu\.com
+      |security\.ubuntu\.com
+      |ports\.ubuntu\.com
+      )
+
+    replace: 'https://\1'
+
+    backup: true
+
+  loop: >-
+    {{
+      crucible_cis_repository_files.files
+    }}
+
+  when:
+
+    - >-
+      '1.2.1.11'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Detect remaining active HTTP APT repositories
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    {
+      [ -f /etc/apt/sources.list ] \
+        && cat /etc/apt/sources.list
+
+      find /etc/apt/sources.list.d \
+        -maxdepth 1 \
+        -type f \
+        \( -name '*.list' -o -name '*.sources' \) \
+        -exec cat {} +
+    } \
+      | grep -P \
+        '^\s*(deb\b|URIs?:\s+)http://'
+
+  args:
+
+    executable: /bin/bash
+
+  register:
+    crucible_cis_http_repositories
+
+  changed_when: false
+
+  failed_when: false
+
+  when:
+
+    - >-
+      (
+        '1.2.1.10'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '1.2.1.11'
+        in
+        crucible_cis_execution_controls
+      )
+
+
+- name: Refuse to rewrite unknown HTTP repositories
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_http_repositories.rc
+        !=
+        0
+
+    fail_msg: >
+      One or more active HTTP APT repositories remain.
+      Crucible converted recognized official Ubuntu
+      repositories to HTTPS, but will not guess whether
+      an unknown third-party repository safely supports
+      HTTPS.
+
+  when:
+
+    - crucible_cis_http_repositories is not skipped
+
+
+- name: Validate repository configuration
+  ansible.builtin.apt:
+
+    update_cache: true
+
+  when:
+
+    - >-
+      (
+        '1.2.1.10'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '1.2.1.11'
+        in
+        crucible_cis_execution_controls
+      )

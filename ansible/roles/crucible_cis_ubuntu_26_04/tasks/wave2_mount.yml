@@ -1,0 +1,78 @@
+---
+
+- name: Find existing mount record
+  ansible.builtin.set_fact:
+
+    crucible_cis_current_mounts: >-
+      {{
+        ansible_facts.mounts
+        |
+        selectattr(
+          'mount',
+          'equalto',
+          crucible_cis_mount_policy.path
+        )
+        |
+        list
+      }}
+
+
+- name: Harden existing dedicated mount
+  ansible.posix.mount:
+
+    path: >-
+      {{
+        crucible_cis_mount_policy.path
+      }}
+
+    src: >-
+      {{
+        crucible_cis_current_mounts[0].device
+      }}
+
+    fstype: >-
+      {{
+        crucible_cis_current_mounts[0].fstype
+      }}
+
+    opts: >-
+      {{
+        (
+          (
+            crucible_cis_current_mounts[0]
+            .options
+            .split(',')
+            |
+            difference(
+              crucible_cis_mount_policy
+              .remove_options
+            )
+          )
+          +
+          crucible_cis_mount_policy
+          .add_options
+        )
+        |
+        unique
+        |
+        join(',')
+      }}
+
+    state: mounted
+
+  when:
+
+    - crucible_cis_current_mounts | length == 1
+
+
+- name: Report non-separate mount
+  ansible.builtin.debug:
+
+    msg: >-
+      {{ crucible_cis_mount_policy.path }}
+      is not a separate mount. Existing-mount-only
+      CIS controls were not applied.
+
+  when:
+
+    - crucible_cis_current_mounts | length == 0

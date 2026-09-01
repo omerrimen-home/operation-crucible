@@ -66,11 +66,11 @@ configurations:
     description: >
       Applies the Operation Crucible implementation of
       the CIS Ubuntu Linux 26.04 LTS Benchmark.
-      The initial implementation automatically applies
-      the reviewed low-risk Wave 1 baseline while
-      conditional, authentication-sensitive, audit,
-      installation-time, and deferred controls remain
-      explicitly reported.
+      Forge-time hardening risk selection controls how
+      aggressively applicable recommendations are
+      remediated. Hardening tiers are cumulative, while
+      manual, installation-time, deferred, and intentionally
+      excepted controls remain explicitly reported.
 
     selectable: true
 
@@ -142,7 +142,46 @@ configurations:
 
       time_servers:
       - ntp.ubuntu.com
+      
+      # ------------------------------------------------------
+      # Wave 2 conditional hardening
+      # ------------------------------------------------------
 
+      disable_usb_storage: true
+
+      tmp_noexec: true
+
+      dev_shm_noexec: true
+
+      allow_debugging: false
+
+      enforce_all_apparmor_profiles: false
+
+      disable_xwayland: false
+
+      allow_ipv6_router_advertisements: false
+
+      allow_ssh_forwarding: false
+
+      restrict_su: true
+
+      shell_timeout_seconds: 900
+
+      gdm_idle_delay_seconds: 900
+
+      gdm_lock_delay_seconds: 5
+
+      remote_log_host: ""
+
+      remote_log_protocol: tcp
+
+      remote_log_port: 514
+
+      system_account_shell_exceptions: []
+
+      system_account_lock_exceptions: []
+
+      secure_world_writable_files: false
 
     hardening:
       benchmark: cis-ubuntu-linux-26.04
@@ -150,6 +189,10 @@ configurations:
       profile_parameter: profile
 
       exceptions_parameter: exceptions
+
+      risk_parameter: implementation_wave
+
+      max_implemented_wave: 2
 
     firewall:
       inbound: []

@@ -1,0 +1,95 @@
+---
+
+- name: Find world-writable directories without sticky bit
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/find
+      - /
+      - -xdev
+      - -type
+      - d
+      - -perm
+      - -0002
+      - "!"
+      - -perm
+      - -1000
+      - -print
+
+  register:
+    crucible_cis_world_writable_directories
+
+  changed_when: false
+
+
+- name: Add sticky bit to world-writable directories
+  ansible.builtin.file:
+
+    path: "{{ item }}"
+
+    mode: "o+t"
+
+  loop: >-
+    {{
+      crucible_cis_world_writable_directories
+      .stdout_lines
+    }}
+
+
+- name: Find world-writable files
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/find
+      - /
+      - -xdev
+      - -type
+      - f
+      - -perm
+      - -0002
+      - -print
+
+  register:
+    crucible_cis_world_writable_files
+
+  changed_when: false
+
+
+- name: Remove other-write from world-writable files when explicitly enabled
+  ansible.builtin.file:
+
+    path: "{{ item }}"
+
+    mode: "o-w"
+
+  loop: >-
+    {{
+      crucible_cis_world_writable_files
+      .stdout_lines
+    }}
+
+  when:
+
+    - crucible_cis_secure_world_writable_files | bool
+
+
+- name: Report world-writable files requiring review
+  ansible.builtin.debug:
+
+    msg: >-
+      World-writable files were discovered but were
+      not automatically modified because arbitrary
+      application files may intentionally require
+      shared-write semantics:
+      {{
+        crucible_cis_world_writable_files.stdout_lines
+      }}
+
+  when:
+
+    - not crucible_cis_secure_world_writable_files | bool
+
+    - >-
+      crucible_cis_world_writable_files.stdout_lines
+      | length
+      > 0

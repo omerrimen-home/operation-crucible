@@ -1,0 +1,242 @@
+---
+
+# ============================================================
+# USB mass storage
+# ============================================================
+
+- name: Disable USB storage kernel module
+  ansible.builtin.copy:
+
+    dest: >-
+      /etc/modprobe.d/
+      60-crucible-cis-usb-storage.conf
+
+    owner: root
+    group: root
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      # CIS 1.1.1.10
+
+      install usb-storage /bin/false
+      blacklist usb-storage
+
+  when:
+
+    - >-
+      '1.1.1.10'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_disable_usb_storage | bool
+
+
+- name: Check whether usb-storage is loaded
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/lsmod
+
+  register:
+    crucible_cis_lsmod_usb
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '1.1.1.10'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_disable_usb_storage | bool
+
+
+- name: Unload usb-storage if currently loaded
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/modprobe
+      - -r
+      - usb-storage
+
+  when:
+
+    - >-
+      '1.1.1.10'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_disable_usb_storage | bool
+
+    - >-
+      'usb_storage'
+      in
+      crucible_cis_lsmod_usb.stdout
+
+  failed_when: false
+
+
+# ============================================================
+# /tmp and /dev/shm noexec
+# ============================================================
+
+- name: Add noexec to /tmp
+  ansible.posix.mount:
+
+    path: /tmp
+
+    src: tmpfs
+
+    fstype: tmpfs
+
+    opts: >-
+      defaults,rw,nosuid,nodev,noexec,relatime,size={{
+        crucible_cis_tmp_size
+      }}
+
+    state: mounted
+
+  when:
+
+    - >-
+      '1.1.2.1.4'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_tmp_noexec | bool
+
+
+- name: Add noexec to /dev/shm
+  ansible.posix.mount:
+
+    path: /dev/shm
+
+    src: tmpfs
+
+    fstype: tmpfs
+
+    opts: >-
+      defaults,rw,nosuid,nodev,noexec,relatime,size={{
+        crucible_cis_dev_shm_size
+      }}
+
+    state: mounted
+
+  when:
+
+    - >-
+      '1.1.2.2.4'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_dev_shm_noexec | bool
+
+
+# ============================================================
+# Existing dedicated mounts
+#
+# We DO NOT create new partitions here.
+#
+# These options are only applied when the path is already
+# represented as its own mount.
+# ============================================================
+
+- name: Define Wave 2 existing-mount controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave2_mount_controls:
+
+      - path: /home
+        controls:
+          - "1.1.2.3.2"
+          - "1.1.2.3.3"
+        add_options:
+          - nodev
+          - nosuid
+        remove_options:
+          - dev
+          - suid
+
+      - path: /var
+        controls:
+          - "1.1.2.4.2"
+          - "1.1.2.4.3"
+        add_options:
+          - nodev
+          - nosuid
+        remove_options:
+          - dev
+          - suid
+
+      - path: /var/tmp
+        controls:
+          - "1.1.2.5.2"
+          - "1.1.2.5.3"
+          - "1.1.2.5.4"
+        add_options:
+          - nodev
+          - nosuid
+          - noexec
+        remove_options:
+          - dev
+          - suid
+          - exec
+
+      - path: /var/log
+        controls:
+          - "1.1.2.6.2"
+          - "1.1.2.6.3"
+          - "1.1.2.6.4"
+        add_options:
+          - nodev
+          - nosuid
+          - noexec
+        remove_options:
+          - dev
+          - suid
+          - exec
+
+      - path: /var/log/audit
+        controls:
+          - "1.1.2.7.2"
+          - "1.1.2.7.3"
+          - "1.1.2.7.4"
+        add_options:
+          - nodev
+          - nosuid
+          - noexec
+        remove_options:
+          - dev
+          - suid
+          - exec
+
+
+- name: Harden existing dedicated filesystem mounts
+  ansible.builtin.include_tasks:
+
+    file: wave2_mount.yml
+
+  loop: >-
+    {{
+      crucible_cis_wave2_mount_controls
+    }}
+
+  loop_control:
+
+    loop_var: crucible_cis_mount_policy
+
+  when:
+
+    - >-
+      (
+        crucible_cis_mount_policy.controls
+        |
+        intersect(
+          crucible_cis_execution_controls
+        )
+        |
+        length
+      )
+      > 0

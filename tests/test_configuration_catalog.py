@@ -702,5 +702,35 @@ class ConfigurationCatalogTests(
             definition.capabilities,
         )
 
+    def test_ubuntu_cis_exposes_hardening_risk_parameter(
+        self,
+    ):
+        definition = (
+            self.catalog.get(
+                "ubuntu-cis"
+            )
+        )
+
+        self.assertEqual(
+            definition.hardening[
+                "risk_parameter"
+            ],
+            "implementation_wave",
+        )
+
+        self.assertEqual(
+            definition.hardening[
+                "max_implemented_wave"
+            ],
+            2,
+        )
+
+        self.assertEqual(
+            definition.parameters[
+                "implementation_wave"
+            ],
+            "1",
+        )
+
 if __name__ == "__main__":
     unittest.main()
