@@ -381,6 +381,21 @@
       crucible_hardening.controls.metadata[item].tags
 
 
+- name: Resolve Crucible hardening risk tier
+  ansible.builtin.set_fact:
+
+    crucible_cis_risk_tier: >-
+      {{
+        {
+          '1': 'low',
+          '2': 'moderate',
+          '3': 'high'
+        }[
+          crucible_cis_implementation_wave
+        ]
+      }}
+
+
 - name: Build final CIS execution set
   ansible.builtin.set_fact:
 

@@ -1,0 +1,167 @@
+---
+
+# ============================================================
+# Persist successful implementation-validation state
+# ============================================================
+
+- name: Create Crucible hardening state directory
+  ansible.builtin.file:
+
+    path: /var/lib/crucible/hardening
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0700"
+
+
+- name: Record validated Ubuntu CIS state
+  ansible.builtin.copy:
+
+    dest: /var/lib/crucible/hardening/ubuntu-cis.yml
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+    content: >-
+      {{
+        {
+          'schema_version': 1,
+
+          'configuration':
+            'ubuntu-cis',
+
+          'benchmark': {
+            'id':
+              crucible_hardening.benchmark.id,
+
+            'version':
+              crucible_hardening.benchmark.version
+          },
+
+          'profile': {
+            'id':
+              crucible_hardening.profile.id,
+
+            'display_name':
+              crucible_hardening.profile.display_name
+          },
+
+          'implementation': {
+            'wave':
+              crucible_cis_implementation_wave,
+
+            'risk_tier':
+              crucible_cis_risk_tier,
+
+            'execution_controls':
+              (
+                crucible_cis_execution_controls
+                | sort
+              ),
+
+            'execution_control_count':
+              (
+                crucible_cis_execution_controls
+                | length
+              )
+          },
+
+          'classification': {
+            'applicable':
+              (
+                crucible_hardening.counts.applicable
+                | default(0)
+              ),
+
+            'automated':
+              (
+                crucible_hardening.counts.automated
+                | default(0)
+              ),
+
+            'conditional':
+              (
+                crucible_hardening.counts.conditional
+                | default(0)
+              ),
+
+            'audit_only':
+              (
+                crucible_hardening.counts.audit_only
+                | default(0)
+              ),
+
+            'satisfied_elsewhere':
+              (
+                crucible_hardening.counts.satisfied_elsewhere
+                | default(0)
+              ),
+
+            'manual':
+              (
+                crucible_hardening.counts.manual
+                | default(0)
+              ),
+
+            'not_implemented':
+              (
+                crucible_hardening.counts.not_implemented
+                | default(0)
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.counts.user_exceptions
+                | default(0)
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.counts.derived_exceptions
+                | default(0)
+              )
+          },
+
+          'runtime': {
+            'auditd_required':
+              (
+                crucible_cis_auditd_required
+                | default(false)
+                | bool
+              ),
+
+            'reboot_required':
+              (
+                crucible_cis_reboot_required
+                | default(false)
+                | bool
+              )
+          },
+
+          'validation': {
+            'scope':
+              'crucible-implementation',
+
+            'status':
+              'passed',
+
+            'management_connectivity':
+              'passed'
+          },
+
+          'compliance': {
+            'status':
+              'unverified'
+          }
+        }
+        |
+        to_nice_yaml(
+          indent=2,
+          sort_keys=false
+        )
+      }}

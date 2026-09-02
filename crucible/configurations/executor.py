@@ -458,6 +458,73 @@ def execute_machine_configurations(
             )
         )
 
+        hardening_validation_mode = (
+            "none"
+        )
+
+        hardening_implementation_wave: (
+            str
+            | None
+        ) = None
+
+
+        if (
+            hardening_plan
+            is not None
+            and
+            definition.hardening
+            is not None
+        ):
+
+            hardening_validation_mode = str(
+                definition
+                .hardening
+                .get(
+                    "validation_mode",
+                    "none",
+                )
+            ).strip().lower()
+
+
+            risk_parameter = (
+                definition
+                .hardening
+                .get(
+                    "risk_parameter"
+                )
+            )
+
+
+            if risk_parameter:
+
+                current_parameters = (
+                    runtime_context[
+                        "crucible_current_configuration"
+                    ][
+                        "parameters"
+                    ]
+                )
+
+                raw_wave = (
+                    current_parameters.get(
+                        str(
+                            risk_parameter
+                        )
+                    )
+                )
+
+                if raw_wave is not None:
+
+                    resolved_wave = str(
+                        raw_wave
+                    ).strip()
+
+                    if resolved_wave:
+
+                        hardening_implementation_wave = (
+                            resolved_wave
+                        )
+
         if hardening_plan is not None:
 
             write_hardening_execution_report(
@@ -478,6 +545,13 @@ def execute_machine_configurations(
                 ),
                 execution_status=(
                     "running"
+                ),
+                validation_mode=(
+                    hardening_validation_mode
+                ),
+
+                implementation_wave=(
+                    hardening_implementation_wave
                 ),
             )
 
@@ -606,6 +680,13 @@ def execute_machine_configurations(
                         f"returned "
                         f"{result.returncode}"
                     ),
+                    validation_mode=(
+                        hardening_validation_mode
+                    ),
+
+                    implementation_wave=(
+                        hardening_implementation_wave
+                    ),
                 )
 
             raise ConfigurationExecutionError(
@@ -646,6 +727,13 @@ def execute_machine_configurations(
                 ),
                 execution_status=(
                     "playbook_succeeded"
+                ),
+                validation_mode=(
+                    hardening_validation_mode
+                ),
+
+                implementation_wave=(
+                    hardening_implementation_wave
                 ),
             )
 

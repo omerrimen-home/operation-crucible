@@ -48,7 +48,14 @@
         crucible_cis_sshd_effective.stdout
 
       - >-
-        'maxauthtries 4'
+        (
+          'maxauthtries '
+          ~
+          (
+            crucible_cis_ssh_max_auth_tries
+            | string
+          )
+        )
         in
         crucible_cis_sshd_effective.stdout
 
@@ -256,25 +263,6 @@
     timeout: 90
 
 
-- name: Show partial compliance status
-  ansible.builtin.debug:
-
-    msg:
-      - >-
-        Crucible CIS Ubuntu Wave 1 remediation
-        completed successfully.
-
-      - >-
-        Benchmark compliance remains unverified
-        until per-control audit validation is
-        implemented.
-
-      - >-
-        Conditional, authentication-sensitive,
-        audit, installer-time, and deferred controls
-        have not been blindly remediated.
-
-
 # ============================================================
 # Wave 2 validation
 # ============================================================
@@ -394,3 +382,70 @@
   ansible.builtin.wait_for_connection:
 
     timeout: 90
+
+
+# ============================================================
+# Final BA implementation-validation summary
+# ============================================================
+
+- name: Display final Ubuntu CIS validation summary
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Crucible hardening risk:
+        {{ crucible_cis_risk_tier }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_implementation_wave }}
+
+      - >-
+        Executed controls:
+        {{ crucible_cis_execution_controls | length }}
+
+      - >-
+        User exceptions:
+        {{
+          crucible_hardening.counts.user_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Derived exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Reboot required:
+        {{
+          crucible_cis_reboot_required
+          | default(false)
+          | bool
+        }}
+
+      - >-
+        Crucible implementation validation:
+        PASSED
+
+      - >-
+        CIS benchmark compliance:
+        UNVERIFIED
+
+      - >-
+        Successful implementation validation means
+        Crucible's applicable remediation and safety
+        checks completed. It does not claim complete
+        per-control benchmark compliance.

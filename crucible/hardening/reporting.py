@@ -25,6 +25,37 @@ def _utc_timestamp() -> str:
     )
 
 
+RISK_TIER_LABELS = {
+    "1": "low",
+    "2": "moderate",
+    "3": "high",
+}
+
+
+def _validation_status(
+    *,
+    validation_mode: str,
+    execution_status: str,
+) -> str:
+
+    if validation_mode != "inline":
+        return "not_configured"
+
+    if (
+        execution_status
+        == "playbook_succeeded"
+    ):
+        return "passed"
+
+    if (
+        execution_status
+        == "playbook_failed"
+    ):
+        return "not_completed"
+
+    return "pending"
+
+
 def write_hardening_execution_report(
     *,
     repo_root: Path,
@@ -33,18 +64,26 @@ def write_hardening_execution_report(
     configuration_id: str,
     plan: HardeningPlan,
     execution_status: str,
+    validation_mode: str = "none",
+    implementation_wave: (
+        str
+        | None
+    ) = None,
     message: str | None = None,
 ) -> Path:
     """
     Write controller-side hardening state.
 
-    IMPORTANT:
+    A successful hardening playbook may prove that
+    Crucible's implementation-specific validation
+    completed successfully.
 
-    A successful Ansible playbook does not, by itself,
-    prove benchmark compliance.
+    It does NOT, by itself, prove complete benchmark
+    compliance.
 
-    Until benchmark-specific validation is implemented,
-    compliance_status therefore remains "unverified".
+    Compliance therefore remains "unverified" until
+    explicit per-control compliance evaluation is
+    implemented.
     """
 
     report_dir = (
@@ -69,6 +108,21 @@ def write_hardening_execution_report(
         hardening_plan_to_runtime(
             plan
         )
+    )
+
+    validation_mode = str(
+        validation_mode
+    ).strip().lower()
+
+    implementation_wave = (
+        str(
+            implementation_wave
+        ).strip()
+
+        if implementation_wave
+        is not None
+
+        else None
     )
 
     report: dict[str, Any] = {
@@ -122,10 +176,61 @@ def write_hardening_execution_report(
             ),
         },
 
+        "validation": {
+            "mode": (
+                validation_mode
+            ),
+
+            "scope": (
+                "crucible-implementation"
+            ),
+
+            "status": (
+                _validation_status(
+                    validation_mode=(
+                        validation_mode
+                    ),
+                    execution_status=(
+                        execution_status
+                    ),
+                )
+            ),
+        },
+
         "compliance": {
             "status": "unverified",
+
+            "note": (
+                "Implementation validation does "
+                "not constitute complete benchmark "
+                "compliance."
+            ),
         },
     }
+
+    if implementation_wave:
+
+        implementation = {
+            "wave": (
+                implementation_wave
+            ),
+        }
+
+        risk_tier = (
+            RISK_TIER_LABELS.get(
+                implementation_wave
+            )
+        )
+
+        if risk_tier:
+
+            implementation[
+                "risk_tier"
+            ] = risk_tier
+
+        report[
+            "implementation"
+        ] = implementation
 
     if message:
 

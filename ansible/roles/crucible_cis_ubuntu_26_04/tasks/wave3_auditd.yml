@@ -84,15 +84,43 @@
       | default(false)
 
 
-- name: Record required reboot
+- name: Read running kernel command line
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/cat
+      - /proc/cmdline
+
+  register:
+    crucible_cis_kernel_cmdline
+
+  changed_when: false
+
+
+- name: Determine whether audit boot settings require reboot
   ansible.builtin.set_fact:
 
-    crucible_cis_reboot_required: true
-
-  when:
-
-    - crucible_cis_audit_grub.changed
-      | default(false)
+    crucible_cis_reboot_required: >-
+      {{
+        (
+          'audit=1'
+          not in
+          crucible_cis_kernel_cmdline.stdout.split()
+        )
+        or
+        (
+          (
+            'audit_backlog_limit='
+            ~
+            (
+              crucible_cis_audit_backlog_limit
+              | string
+            )
+          )
+          not in
+          crucible_cis_kernel_cmdline.stdout.split()
+        )
+      }}
 
 
 # ============================================================

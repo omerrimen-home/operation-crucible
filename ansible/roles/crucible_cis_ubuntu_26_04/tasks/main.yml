@@ -272,3 +272,9 @@
 - name: CIS Ubuntu | Validate hardened guest
   ansible.builtin.include_tasks:
     file: verify.yml
+
+
+- name: CIS Ubuntu | Record validated hardening state
+  ansible.builtin.include_tasks:
+
+    file: completion.yml

@@ -1215,6 +1215,7 @@ def _parse_hardening_reference(
             "exceptions_parameter",
             "risk_parameter",
             "max_implemented_wave",
+            "validation_mode",
         }
     )
 
@@ -1283,6 +1284,28 @@ def _parse_hardening_reference(
         | None
     ) = None
 
+    validation_mode = str(
+        value.get(
+            "validation_mode",
+            "none",
+        )
+    ).strip().lower()
+
+
+    if (
+        validation_mode
+        not in {
+            "none",
+            "inline",
+        }
+    ):
+        raise ConfigurationCatalogError(
+            f"Configuration "
+            f"'{configuration_id}' "
+            "hardening.validation_mode "
+            "must be either "
+            "'none' or 'inline'."
+        )
 
     if raw_risk_parameter is not None:
 
@@ -1475,6 +1498,10 @@ def _parse_hardening_reference(
 
         "exceptions_parameter": (
             exceptions_parameter
+        ),
+
+        "validation_mode": (
+            validation_mode
         ),
     }
 

@@ -224,6 +224,8 @@ configurations:
 
       max_implemented_wave: 3
 
+      validation_mode: inline
+
     firewall:
       inbound: []
       forward: []

@@ -732,5 +732,12 @@ class ConfigurationCatalogTests(
             "1",
         )
 
+        self.assertEqual(
+            definition.hardening[
+                "validation_mode"
+            ],
+            "inline",
+        )
+
 if __name__ == "__main__":
     unittest.main()
