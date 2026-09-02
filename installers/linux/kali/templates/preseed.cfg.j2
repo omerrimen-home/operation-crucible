@@ -37,18 +37,33 @@ d-i netcfg/get_domain string unassigned-domain
 d-i netcfg/wireless_wep string
 
 # ------------------------------------------------------------
-# Kali repository
+# Kali installation package source
+#
+# Operation Crucible deliberately performs the tasksel/package
+# installation from the Kali installer ISO rather than mixing
+# the ISO snapshot with the live kali-rolling repository.
+#
+# Kali Rolling changes continuously. Mixing an older installer
+# snapshot with current repository packages during tasksel can
+# produce unsatisfiable dependency transitions.
+#
+# The live kali-rolling repository is installed by the
+# preseed late command after tasksel has completed.
+# Crucible's first-boot bootstrap then performs apt-get update
+# and dist-upgrade so that the complete installed system moves
+# to the current rolling state together.
 # ------------------------------------------------------------
 
-d-i mirror/country string manual
-d-i mirror/http/hostname string http.kali.org
-d-i mirror/http/directory string /kali
-d-i mirror/http/proxy string
+d-i apt-setup/use_mirror boolean false
 
-d-i apt-setup/use_mirror boolean true
 d-i apt-setup/non-free boolean true
 d-i apt-setup/contrib boolean true
-d-i apt-setup/disable-cdrom-entries boolean true
+d-i apt-setup/non-free-firmware boolean true
+
+# Keep the installer ISO available while tasksel installs the
+# default Kali package set.
+d-i apt-setup/disable-cdrom-entries boolean false
+
 d-i apt-setup/enable-source-repositories boolean false
 
 # ------------------------------------------------------------

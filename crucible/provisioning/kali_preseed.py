@@ -544,6 +544,24 @@ def build_preseed(
         .decode("ascii")
     )
 
+    kali_repository = (
+        "Types: deb\n"
+        "URIs: http://http.kali.org/kali\n"
+        "Suites: kali-rolling\n"
+        "Components: main contrib non-free non-free-firmware\n"
+        "Signed-By: /usr/share/keyrings/kali-archive-keyring.gpg\n"
+    )
+
+
+    kali_repository_base64 = (
+        base64.b64encode(
+            kali_repository.encode(
+                "utf-8"
+            )
+        )
+        .decode("ascii")
+    )
+
     networkmanager_policy = (
         "[main]\n"
         "no-auto-default=*\n"
@@ -559,6 +577,47 @@ def build_preseed(
     )
 
     late_commands = [
+
+        # ----------------------------------------------------
+        # Transition from installer ISO package source to the
+        # live Kali Rolling repository.
+        #
+        # This occurs only after tasksel has completed, so the
+        # installer never mixes the ISO package snapshot with
+        # a moving kali-rolling repository.
+        # ----------------------------------------------------
+
+        (
+            "in-target install "
+            "-d -m 0755 "
+            "/etc/apt/sources.list.d"
+        ),
+
+        (
+            "in-target /bin/sh -c "
+            "\"printf '%s' "
+            f"'{kali_repository_base64}' "
+            "| base64 -d "
+            "> /etc/apt/sources.list.d/"
+            "kali.sources\""
+        ),
+
+        (
+            "in-target chmod 0644 "
+            "/etc/apt/sources.list.d/"
+            "kali.sources"
+        ),
+
+        (
+            "in-target /bin/sh -c "
+            "\"if [ -f /etc/apt/sources.list ]; then "
+            "sed -i "
+            "'/^[[:space:]]*deb[[:space:]]\\+cdrom:/"
+            "s/^/# /' "
+            "/etc/apt/sources.list; "
+            "fi\""
+        ),
+
         (
             "in-target install "
             "-d -m 0755 "
