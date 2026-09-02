@@ -242,6 +242,12 @@
 
     - crucible_cis_implementation_wave == "3"
 
+    - >-
+      crucible_cis_wave3_audit_controls
+      | default([])
+      | length
+      > 0
+
 
 - name: CIS Ubuntu | Wave 3 integrity monitoring
   ansible.builtin.include_tasks:

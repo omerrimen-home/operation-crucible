@@ -154,11 +154,15 @@
 # AIDE
 # ============================================================
 
-- name: Verify AIDE generated configuration
+- name: Verify AIDE configuration
   ansible.builtin.command:
 
     argv:
-      - /usr/bin/aide.wrapper
+
+      - /usr/bin/aide
+
+      - --config=/etc/aide/aide.conf
+
       - --config-check
 
   changed_when: false

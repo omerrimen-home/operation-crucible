@@ -1,29 +1,9 @@
 ---
 
-- name: Determine whether auditd controls apply
+- name: Mark auditd hardening as applicable
   ansible.builtin.set_fact:
 
-    crucible_cis_auditd_required: >-
-      {{
-        crucible_cis_wave3_audit_controls
-        | default([])
-        | length
-        > 0
-      }}
-
-
-- name: Display Level 1 auditd applicability
-  ansible.builtin.debug:
-
-    msg: >
-      CIS auditd recommendations are not applicable
-      to this benchmark profile. High-risk hardening
-      will continue with authentication and AIDE
-      controls.
-
-  when:
-
-    - not crucible_cis_auditd_required | bool
+    crucible_cis_auditd_required: true
 
 
 - name: Install auditd packages
@@ -36,10 +16,6 @@
 
     state: present
 
-  when:
-
-    - crucible_cis_auditd_required | bool
-
 
 - name: Unmask and enable auditd
   ansible.builtin.systemd_service:
@@ -51,10 +27,6 @@
     enabled: true
 
     state: started
-
-  when:
-
-    - crucible_cis_auditd_required | bool
 
 
 # ============================================================

@@ -111,14 +111,17 @@
 
     crucible_cis_wave2_conditional_controls: []
 
-    crucible_cis_execution_controls: []
-
     crucible_cis_wave3_auth_controls: []
 
     crucible_cis_wave3_audit_controls: []
 
     crucible_cis_wave3_integrity_controls: []
 
+    crucible_cis_execution_controls: []
+
+    crucible_cis_auditd_required: false
+
+    crucible_cis_reboot_required: false
 
 - name: Resolve automated Wave 1 controls
   ansible.builtin.set_fact:

@@ -1,5 +1,9 @@
 ---
 
+# ============================================================
+# AIDE installation
+# ============================================================
+
 - name: Install AIDE
   ansible.builtin.apt:
 
@@ -17,6 +21,10 @@
       in
       crucible_cis_execution_controls
 
+
+# ============================================================
+# Crucible AIDE policy
+# ============================================================
 
 - name: Create AIDE configuration fragment directory
   ansible.builtin.file:
@@ -51,79 +59,165 @@
       crucible_cis_execution_controls
 
 
-- name: Install daily AIDE service
-  ansible.builtin.copy:
+# ============================================================
+# Migrate obsolete Crucible AIDE units
+# ============================================================
 
-    dest: /etc/systemd/system/dailyaidecheck.service
+- name: Check obsolete Crucible AIDE service override
+  ansible.builtin.stat:
 
-    owner: root
-    group: root
+    path: /etc/systemd/system/dailyaidecheck.service
 
-    mode: "0644"
-
-    content: |
-      [Unit]
-      Description=Daily AIDE filesystem integrity check
-      After=local-fs.target
-
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/bin/aide.wrapper --check
-
-  when:
-
-    - >-
-      '6.3.2'
-      in
-      crucible_cis_execution_controls
+  register:
+    crucible_cis_old_aide_service
 
 
-- name: Install daily AIDE timer
-  ansible.builtin.copy:
+- name: Read obsolete Crucible AIDE service override
+  ansible.builtin.slurp:
 
-    dest: /etc/systemd/system/dailyaidecheck.timer
+    src: /etc/systemd/system/dailyaidecheck.service
 
-    owner: root
-    group: root
-
-    mode: "0644"
-
-    content: |
-      [Unit]
-      Description=Daily AIDE filesystem integrity check
-
-      [Timer]
-      OnCalendar=*-*-* 05:00:00
-      Persistent=true
-      RandomizedDelaySec=0
-      Unit=dailyaidecheck.service
-
-      [Install]
-      WantedBy=timers.target
+  register:
+    crucible_cis_old_aide_service_content
 
   when:
 
-    - >-
-      '6.3.2'
-      in
-      crucible_cis_execution_controls
+    - crucible_cis_old_aide_service.stat.exists
 
 
-- name: Reload systemd for AIDE
+- name: Refuse unknown AIDE service override
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        '/usr/bin/aide.wrapper --check'
+        in
+        (
+          crucible_cis_old_aide_service_content.content
+          | b64decode
+        )
+
+    fail_msg: >
+      An administrator-owned dailyaidecheck.service
+      override already exists. Crucible will not
+      replace it automatically.
+
+  when:
+
+    - crucible_cis_old_aide_service.stat.exists
+
+
+- name: Remove obsolete Crucible AIDE service override
+  ansible.builtin.file:
+
+    path: /etc/systemd/system/dailyaidecheck.service
+
+    state: absent
+
+  when:
+
+    - crucible_cis_old_aide_service.stat.exists
+
+
+- name: Check obsolete Crucible AIDE timer override
+  ansible.builtin.stat:
+
+    path: /etc/systemd/system/dailyaidecheck.timer
+
+  register:
+    crucible_cis_old_aide_timer
+
+
+- name: Read obsolete Crucible AIDE timer override
+  ansible.builtin.slurp:
+
+    src: /etc/systemd/system/dailyaidecheck.timer
+
+  register:
+    crucible_cis_old_aide_timer_content
+
+  when:
+
+    - crucible_cis_old_aide_timer.stat.exists
+
+
+- name: Refuse unknown AIDE timer override
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        'OnCalendar=*-*-* 05:00:00'
+        in
+        (
+          crucible_cis_old_aide_timer_content.content
+          | b64decode
+        )
+
+      - >-
+        'Unit=dailyaidecheck.service'
+        in
+        (
+          crucible_cis_old_aide_timer_content.content
+          | b64decode
+        )
+
+    fail_msg: >
+      An administrator-owned dailyaidecheck.timer
+      override already exists. Crucible will not
+      replace it automatically.
+
+  when:
+
+    - crucible_cis_old_aide_timer.stat.exists
+
+
+- name: Remove obsolete Crucible AIDE timer override
+  ansible.builtin.file:
+
+    path: /etc/systemd/system/dailyaidecheck.timer
+
+    state: absent
+
+  when:
+
+    - crucible_cis_old_aide_timer.stat.exists
+
+
+- name: Reload systemd after AIDE configuration
   ansible.builtin.systemd_service:
 
     daemon_reload: true
 
+
+# ============================================================
+# Validate AIDE configuration before initialization
+# ============================================================
+
+- name: Validate AIDE configuration
+  ansible.builtin.command:
+
+    argv:
+
+      - /usr/bin/aide
+
+      - --config=/etc/aide/aide.conf
+
+      - --config-check
+
+  changed_when: false
+
   when:
 
     - >-
-      '6.3.2'
+      '6.3.1'
       in
       crucible_cis_execution_controls
 
 
 # ============================================================
-# Initialize AIDE only once
+# Initialize AIDE once
 # ============================================================
 
 - name: Check existing AIDE database
@@ -135,13 +229,13 @@
     crucible_cis_aide_database
 
 
-- name: Check compressed AIDE database
+- name: Check new AIDE database
   ansible.builtin.stat:
 
-    path: /var/lib/aide/aide.db.gz
+    path: /var/lib/aide/aide.db.new
 
   register:
-    crucible_cis_aide_database_gz
+    crucible_cis_aide_database_new
 
 
 - name: Initialize AIDE baseline
@@ -164,12 +258,16 @@
 
     - not crucible_cis_aide_database.stat.exists
 
-    - not crucible_cis_aide_database_gz.stat.exists
+    - not crucible_cis_aide_database_new.stat.exists
 
   changed_when: true
 
 
-- name: Enable daily AIDE integrity checking
+# ============================================================
+# Periodic integrity checking
+# ============================================================
+
+- name: Enable native daily AIDE integrity timer
   ansible.builtin.systemd_service:
 
     name: dailyaidecheck.timer
