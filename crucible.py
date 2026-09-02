@@ -115,6 +115,14 @@ ANSIBLE_RUNTIME_DIR = (
     / "ansible"
 )
 
+LINUX_BOOTSTRAP_COMPLETE_PATH = (
+    "/var/lib/crucible/bootstrap-complete"
+)
+
+LINUX_BOOTSTRAP_FAILED_PATH = (
+    "/var/lib/crucible/bootstrap-failed"
+)
+
 WINDOWS_BOOTSTRAP_COMPLETE_PATH = (
     r"C:\ProgramData\Crucible\bootstrap-complete"
 )
@@ -4056,9 +4064,22 @@ def wait_for_bootstrap(
         f"{username}@{host}",
 
         (
-            "test -f "
-            "/var/lib/crucible/"
-            "bootstrap-complete"
+            "if test -f "
+            f"{LINUX_BOOTSTRAP_FAILED_PATH}; "
+            "then "
+            "echo CRUCIBLE_BOOTSTRAP_FAILED; "
+            f"cat {LINUX_BOOTSTRAP_FAILED_PATH}; "
+            "exit 2; "
+            "fi; "
+
+            "if test -f "
+            f"{LINUX_BOOTSTRAP_COMPLETE_PATH}; "
+            "then "
+            "echo CRUCIBLE_BOOTSTRAP_COMPLETE; "
+            "exit 0; "
+            "fi; "
+
+            "exit 1"
         ),
     ]
 
@@ -4075,7 +4096,34 @@ def wait_for_bootstrap(
             check=False,
         )
 
-        if result.returncode == 0:
+        combined_output = (
+            result.stdout
+            + "\n"
+            + result.stderr
+        )
+
+
+        if (
+            "CRUCIBLE_BOOTSTRAP_FAILED"
+            in
+            combined_output
+        ):
+
+            raise CrucibleForgeError(
+                "Linux bootstrap reported failure:\n"
+                +
+                combined_output.strip()
+            )
+
+
+        if (
+            result.returncode == 0
+            and
+            "CRUCIBLE_BOOTSTRAP_COMPLETE"
+            in
+            combined_output
+        ):
+
             print(
                 f"{GREEN}[✓]{RESET} "
                 "Bootstrap complete."

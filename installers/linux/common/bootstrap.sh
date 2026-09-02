@@ -5,11 +5,52 @@ set -Eeuo pipefail
 CRUCIBLE_USER="${1:-crucible}"
 
 LOG_FILE="/var/log/crucible-bootstrap.log"
+
 MARKER_FILE="/var/lib/crucible/bootstrap-complete"
+
+FAILURE_FILE="/var/lib/crucible/bootstrap-failed"
+
 
 mkdir -p /var/lib/crucible
 
+
+rm -f \
+    "$MARKER_FILE" \
+    "$FAILURE_FILE"
+
+
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+
+record_bootstrap_exit() {
+
+    local exit_code=$?
+
+    if [[ "$exit_code" -ne 0 ]]; then
+
+        {
+            echo "Operation Crucible Linux bootstrap failed."
+            echo "Exit code: $exit_code"
+            echo "Time: $(date --iso-8601=seconds)"
+            echo
+            echo "Recent bootstrap log:"
+            echo
+
+            tail \
+                -n 80 \
+                "$LOG_FILE" \
+                2>/dev/null \
+                || true
+
+        } > "$FAILURE_FILE"
+
+    fi
+
+    return "$exit_code"
+}
+
+
+trap record_bootstrap_exit EXIT
 
 echo "=========================================="
 echo " Operation Crucible - Linux Bootstrap"
@@ -86,11 +127,78 @@ APT_OPTIONS=(
     -o Dpkg::Options::=--force-confold
 )
 
+# ------------------------------------------------------------
+# Recover package-manager state
+#
+# Debian Installer/Kali tasksel can occasionally leave packages
+# unpacked but not fully configured when the installed system
+# first boots.
+#
+# apt-get will refuse package-changing operations while dpkg is
+# in this state and returns exit code 100 with:
+#
+#   "dpkg was interrupted, you must manually run
+#    'dpkg --configure -a'"
+#
+# Reconcile that state before attempting the rolling upgrade.
+# This is a no-op on an already-consistent package database.
+# ------------------------------------------------------------
+
+echo
+echo "Checking dpkg package-manager state..."
+
+DPKG_AUDIT="$(
+    dpkg --audit 2>&1 \
+    || true
+)"
+
+if [[ -n "$DPKG_AUDIT" ]]; then
+
+    echo "dpkg reports unfinished package state:"
+    echo
+    printf '%s\n' "$DPKG_AUDIT"
+    echo
+
+    echo "Completing interrupted package configuration..."
+
+    dpkg \
+        --configure \
+        -a \
+        --force-confdef \
+        --force-confold
+
+    echo "Interrupted package configuration completed."
+
+else
+
+    echo "dpkg package state is clean."
+
+fi
+
 echo "Refreshing APT package metadata..."
 
 apt-get \
     "${APT_OPTIONS[@]}" \
     update
+
+echo
+echo "Repairing any unresolved package dependencies..."
+
+apt-get \
+    "${APT_OPTIONS[@]}" \
+    -y \
+    --fix-broken \
+    install
+
+
+echo
+echo "Rechecking dpkg configuration..."
+
+dpkg \
+    --configure \
+    -a \
+    --force-confdef \
+    --force-confold
 
 echo
 echo "Performing full system upgrade..."
@@ -167,6 +275,8 @@ systemctl restart ssh.service >/dev/null 2>&1 || true
 
 echo
 echo "[5/5] Marking bootstrap complete..."
+
+rm -f "$FAILURE_FILE"
 
 date --iso-8601=seconds > "$MARKER_FILE"
 
