@@ -1,0 +1,132 @@
+---
+
+# ============================================================
+# Reverse path filtering
+# ============================================================
+
+- name: Detect topology interfaces with explicit IPv4 gateways
+  ansible.builtin.set_fact:
+
+    crucible_cis_topology_has_gateway: false
+
+
+- name: Mark topology with explicit gateway
+  ansible.builtin.set_fact:
+
+    crucible_cis_topology_has_gateway: true
+
+  loop: >-
+    {{
+      crucible_machine.network.topology
+      | default([])
+    }}
+
+  when:
+
+    - item.ipv4 is defined
+
+    - >-
+      item.ipv4.gateway
+      | default('')
+      | string
+      | trim
+      | length
+      > 0
+
+
+- name: Enable strict reverse-path filtering
+  ansible.posix.sysctl:
+
+    name: "{{ item.name }}"
+
+    value: "1"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      62-crucible-cis-wave2-network.conf
+
+  loop:
+
+    - control: "3.3.1.12"
+      name: net.ipv4.conf.all.rp_filter
+
+    - control: "3.3.1.13"
+      name: net.ipv4.conf.default.rp_filter
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_topology_has_gateway | bool
+
+
+- name: Report conservative rp_filter skip
+  ansible.builtin.debug:
+
+    msg: >
+      Strict reverse path filtering was not applied
+      because at least one persistent topology
+      interface has an explicit gateway. This topology
+      may permit asymmetric routing and requires
+      manual review.
+
+  when:
+
+    - crucible_cis_topology_has_gateway | bool
+
+    - >-
+      (
+        '3.3.1.12'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '3.3.1.13'
+        in
+        crucible_cis_execution_controls
+      )
+
+
+# ============================================================
+# IPv6 router advertisements
+# ============================================================
+
+- name: Disable IPv6 router advertisement acceptance
+  ansible.posix.sysctl:
+
+    name: "{{ item.name }}"
+
+    value: "0"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      62-crucible-cis-wave2-network.conf
+
+  loop:
+
+    - control: "3.3.2.7"
+      name: net.ipv6.conf.all.accept_ra
+
+    - control: "3.3.2.8"
+      name: net.ipv6.conf.default.accept_ra
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_allow_ipv6_ra | bool

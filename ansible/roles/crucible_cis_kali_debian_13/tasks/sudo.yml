@@ -1,0 +1,98 @@
+---
+
+- name: Verify sudo command exists
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/test
+      - -x
+      - /usr/bin/sudo
+
+  changed_when: false
+
+
+- name: Install Crucible CIS sudo policy
+  ansible.builtin.copy:
+
+    dest: /etc/sudoers.d/60-crucible-cis
+
+    owner: root
+    group: root
+
+    mode: "0440"
+
+    content: |
+      # Managed by Operation Crucible
+      Defaults use_pty
+      Defaults timestamp_timeout={{ crucible_cis_sudo_timestamp_timeout }}
+
+    validate: >-
+      /usr/sbin/visudo -cf %s
+
+
+- name: Search sudo configuration for disabled authentication
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    grep -RPs \
+      '(^|[[:space:]])!authenticate([[:space:],]|$)' \
+      /etc/sudoers \
+      /etc/sudoers.d \
+      2>/dev/null
+
+  args:
+
+    executable: /bin/bash
+
+  register: crucible_cis_sudo_no_authenticate
+
+  changed_when: false
+
+  failed_when: false
+
+
+- name: Reject global sudo authentication bypass
+  ansible.builtin.assert:
+
+    that:
+      - crucible_cis_sudo_no_authenticate.rc != 0
+
+    fail_msg: >
+      A sudo !authenticate directive was found.
+      Crucible will not automatically rewrite unknown
+      sudo policy.
+
+
+- name: Configure dedicated sudo logging through rsyslog
+  ansible.builtin.copy:
+
+    dest: /etc/rsyslog.d/30-crucible-sudo.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      authpriv.*    /var/log/sudo.log
+
+  notify:
+    - Restart rsyslog
+
+
+- name: Create sudo log
+  ansible.builtin.file:
+
+    path: /var/log/sudo.log
+
+    owner: root
+    group: adm
+
+    mode: "0640"
+
+    state: touch
+
+    modification_time: preserve
+
+    access_time: preserve

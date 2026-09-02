@@ -233,6 +233,179 @@ configurations:
     capabilities: []
 
 
+  kali-cis:
+    display_name: CIS Debian Linux 13-derived Kali Hardening
+
+    description: >
+      Applies the Operation Crucible Kali compatibility
+      implementation derived from the CIS Debian Linux 13
+      Benchmark. Forge-time hardening risk selection controls
+      how aggressively applicable recommendations are remediated.
+      Hardening tiers are cumulative, while manual,
+      installation-time, deferred, incompatible, and intentionally
+      excepted controls remain explicitly reported.
+
+    selectable: true
+
+    supported_os:
+      - family: linux
+        distribution: kali
+        version: rolling
+
+    requirements:
+      network:
+        min_topology_interfaces: 0
+        min_static_ipv4_interfaces: 0
+        min_internal_network_interfaces: 0
+        min_static_internal_interfaces: 0
+
+    relationships:
+      requires:
+        - nftables
+
+      conflicts: []
+
+    implementation:
+      backend: ansible
+
+      playbook: >
+        ansible/playbooks/configurations/kali_cis.yml
+
+      order: 950
+
+    parameters:
+
+      profile: auto
+
+      exceptions: []
+
+      implementation_wave: "1"
+
+      banner_text: >-
+        Authorized users only. Activity may be
+        monitored and reported.
+
+      tmp_size: "25%"
+
+      dev_shm_size: "50%"
+
+      sudo_timestamp_timeout_minutes: 15
+
+      password_max_days: 365
+
+      password_warn_days: 7
+
+      password_inactive_days: 45
+
+      default_umask: "027"
+
+      ssh_client_alive_interval: 15
+
+      ssh_client_alive_count_max: 3
+
+      ssh_login_grace_time: 60
+
+      ssh_max_auth_tries: 4
+
+      ssh_max_sessions: 10
+
+      ssh_max_startups: "10:30:60"
+
+      time_sync_provider: systemd-timesyncd
+
+      time_servers:
+        - pool.ntp.org
+
+      # ------------------------------------------------------
+      # Wave 2 conditional hardening
+      # ------------------------------------------------------
+
+      disable_usb_storage: true
+
+      tmp_noexec: true
+
+      dev_shm_noexec: true
+
+      allow_debugging: false
+
+      enforce_all_apparmor_profiles: false
+
+      disable_xwayland: false
+
+      allow_ipv6_router_advertisements: false
+
+      allow_ssh_forwarding: false
+
+      restrict_su: true
+
+      shell_timeout_seconds: 900
+
+      gdm_idle_delay_seconds: 900
+
+      gdm_lock_delay_seconds: 5
+
+      remote_log_host: ""
+
+      remote_log_protocol: tcp
+
+      remote_log_port: 514
+
+      system_account_shell_exceptions: []
+
+      system_account_lock_exceptions: []
+
+      secure_world_writable_files: false
+
+      # ------------------------------------------------------
+      # Wave 3 high-risk hardening
+      # ------------------------------------------------------
+
+      pam_faillock_deny: 5
+
+      pam_faillock_unlock_time: 900
+
+      pam_faillock_root_unlock_time: 60
+
+      pam_pwquality_difok: 2
+
+      pam_pwquality_min_length: 14
+
+      pam_pwquality_max_repeat: 3
+
+      pam_pwquality_max_sequence: 3
+
+      pam_pwhistory_remember: 24
+
+      audit_backlog_limit: 8192
+
+      # CIS leaves audit storage sizing to site policy.
+      # 64 MiB is a Crucible lab default, not a CIS mandate.
+      audit_max_log_file_mb: 64
+
+      audit_space_left_action: syslog
+
+      audit_admin_space_left_action: syslog
+
+    hardening:
+      benchmark: cis-debian-linux-13
+
+      profile_parameter: profile
+
+      exceptions_parameter: exceptions
+
+      risk_parameter: implementation_wave
+
+      max_implemented_wave: 3
+
+      validation_mode: inline
+
+    firewall:
+      inbound: []
+      forward: []
+
+    capabilities: []
+
+
   active-directory-domain-controller:
     display_name: Active Directory Domain Controller
 

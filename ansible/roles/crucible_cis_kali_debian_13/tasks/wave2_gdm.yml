@@ -1,0 +1,194 @@
+---
+
+- name: Gather installed packages for GDM hardening
+  ansible.builtin.package_facts:
+
+    manager: auto
+
+
+- name: Determine whether GDM is installed
+  ansible.builtin.set_fact:
+
+    crucible_cis_gdm_present: >-
+      {{
+        (
+          'gdm3'
+          in
+          ansible_facts.packages
+        )
+        or
+        (
+          'gdm'
+          in
+          ansible_facts.packages
+        )
+      }}
+
+
+- name: Create GDM dconf directory
+  ansible.builtin.file:
+
+    path: /etc/dconf/db/gdm.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+
+- name: Configure GDM login policy
+  ansible.builtin.copy:
+
+    dest: /etc/dconf/db/gdm.d/01-crucible-cis-login
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      [org/gnome/login-screen]
+      banner-message-enable=true
+      banner-message-text='{{ crucible_cis_banner_text | trim | replace("'", "\\'") }}'
+      disable-user-list=true
+
+  notify:
+
+    - Update dconf
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+    - >-
+      (
+        '1.7.1'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '1.7.2'
+        in
+        crucible_cis_execution_controls
+      )
+
+
+- name: Create local dconf directory
+  ansible.builtin.file:
+
+    path: /etc/dconf/db/local.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+
+- name: Configure desktop locking and media handling
+  ansible.builtin.copy:
+
+    dest: /etc/dconf/db/local.d/01-crucible-cis-desktop
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      [org/gnome/desktop/session]
+      idle-delay=uint32 {{ crucible_cis_gdm_idle_delay }}
+
+      [org/gnome/desktop/screensaver]
+      lock-delay=uint32 {{ crucible_cis_gdm_lock_delay }}
+
+      [org/gnome/desktop/media-handling]
+      automount=false
+      automount-open=false
+      autorun-never=true
+
+  notify:
+
+    - Update dconf
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+
+- name: Ensure XDMCP is disabled
+  community.general.ini_file:
+
+    path: /etc/gdm3/custom.conf
+
+    section: xdmcp
+
+    option: Enable
+
+    value: "false"
+
+    no_extra_spaces: true
+
+    backup: true
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+    - >-
+      '1.7.6'
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      'gdm3'
+      in
+      ansible_facts.packages
+
+
+- name: Apply optional CIS Xwayland-related setting
+  community.general.ini_file:
+
+    path: /etc/gdm3/custom.conf
+
+    section: daemon
+
+    option: WaylandEnable
+
+    value: "false"
+
+    no_extra_spaces: true
+
+    backup: true
+
+  when:
+
+    - crucible_cis_gdm_present | bool
+
+    - >-
+      '1.7.7'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_disable_xwayland | bool
+
+    - >-
+      'gdm3'
+      in
+      ansible_facts.packages

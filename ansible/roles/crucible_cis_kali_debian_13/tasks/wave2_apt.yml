@@ -1,0 +1,140 @@
+---
+
+# ============================================================
+# Debian CIS 1.2.1.10 / 1.2.1.11
+#
+# Kali compatibility note:
+#
+# The CIS Debian Linux 13 Benchmark requires APT
+# repositories to use HTTPS.
+#
+# Kali Rolling currently documents its official repository
+# through http://http.kali.org/kali, which acts as Kali's
+# mirror-selection endpoint.
+#
+# Operation Crucible therefore audits these controls on Kali
+# but deliberately does not rewrite the vendor-supported
+# repository configuration.
+# ============================================================
+
+
+- name: Check legacy APT sources.list
+  ansible.builtin.stat:
+
+    path: /etc/apt/sources.list
+
+  register:
+    crucible_cis_sources_list
+
+
+- name: Find APT source definitions
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apt/sources.list.d
+
+    file_type: file
+
+    recurse: false
+
+    patterns:
+      - "*.list"
+      - "*.sources"
+
+  register:
+    crucible_cis_repository_files
+
+
+- name: Audit active HTTP APT repositories
+  ansible.builtin.shell: |
+    set -o pipefail
+
+    {
+      if [ -f /etc/apt/sources.list ]; then
+        grep \
+          -HPE \
+          '^\s*deb\s+.*http://' \
+          /etc/apt/sources.list \
+          2>/dev/null \
+          || true
+      fi
+
+      find \
+        /etc/apt/sources.list.d \
+        -maxdepth 1 \
+        -type f \
+        \( -name '*.list' -o -name '*.sources' \) \
+        -exec \
+          grep \
+          -HPE \
+          '^\s*(deb\b.*http://|URIs?:\s+.*http://)' \
+          {} + \
+        2>/dev/null \
+        || true
+    }
+
+  args:
+
+    executable: /bin/bash
+
+  register:
+    crucible_cis_http_repositories
+
+  changed_when: false
+
+  failed_when: false
+
+  when:
+
+    - >-
+      (
+        '1.2.1.10'
+        in
+        crucible_hardening.controls.audit_only
+      )
+      or
+      (
+        '1.2.1.11'
+        in
+        crucible_hardening.controls.audit_only
+      )
+
+
+- name: Report Kali APT HTTPS compatibility finding
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        CIS Debian Linux 13 controls 1.2.1.10 and
+        1.2.1.11 are audit-only for Kali Rolling.
+
+      - >-
+        Kali's documented official repository uses
+        the http.kali.org mirror-selection endpoint.
+        Crucible will not rewrite the vendor-supported
+        repository configuration automatically.
+
+      - >-
+        Active HTTP repositories:
+        {{
+          (
+            crucible_cis_http_repositories.stdout_lines
+            | default([])
+          )
+          if
+          (
+            crucible_cis_http_repositories.stdout_lines
+            | default([])
+            | length
+            > 0
+          )
+          else
+          [
+            'none detected'
+          ]
+        }}
+
+  when:
+
+    - crucible_cis_http_repositories is defined

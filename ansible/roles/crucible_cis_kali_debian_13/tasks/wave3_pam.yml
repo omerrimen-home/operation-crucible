@@ -1,0 +1,517 @@
+---
+
+# ============================================================
+# Install authentication modules
+# ============================================================
+
+- name: Install Wave 3 PAM packages
+  ansible.builtin.apt:
+
+    name:
+
+      - libpam-modules
+      - libpam-runtime
+      - libpam-pwquality
+      - cracklib-runtime
+
+    state: present
+
+    update_cache: false
+
+
+# ============================================================
+# Preserve pre-hardening PAM state
+# ============================================================
+
+- name: Check PAM safety backup
+  ansible.builtin.stat:
+
+    path:
+      /var/lib/crucible/pam-wave3-backup-complete
+
+  register:
+    crucible_cis_pam_backup_marker
+
+
+- name: Create PAM safety backup directory
+  ansible.builtin.file:
+
+    path:
+      /var/lib/crucible/pam-wave3-backup
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0700"
+
+  when:
+
+    - not crucible_cis_pam_backup_marker.stat.exists
+
+
+- name: Find common PAM files
+  ansible.builtin.find:
+
+    paths:
+      - /etc/pam.d
+
+    recurse: false
+
+    file_type: file
+
+    patterns:
+      - "common-*"
+
+  register:
+    crucible_cis_common_pam_files
+
+  when:
+
+    - not crucible_cis_pam_backup_marker.stat.exists
+
+
+- name: Back up common PAM files
+  ansible.builtin.copy:
+
+    src: "{{ item.path }}"
+
+    dest: "/var/lib/crucible/pam-wave3-backup/{{ item.path | basename }}"
+
+    remote_src: true
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  loop: >-
+    {{
+      crucible_cis_common_pam_files.files
+      | default([])
+    }}
+
+  when:
+
+    - not crucible_cis_pam_backup_marker.stat.exists
+
+
+- name: Back up Unix PAM profile
+  ansible.builtin.copy:
+
+    src: /usr/share/pam-configs/unix
+
+    dest: /var/lib/crucible/pam-wave3-backup/unix
+
+    remote_src: true
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  when:
+
+    - not crucible_cis_pam_backup_marker.stat.exists
+
+
+- name: Mark PAM safety backup complete
+  ansible.builtin.file:
+
+    path:
+      /var/lib/crucible/pam-wave3-backup-complete
+
+    state: touch
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+    modification_time: preserve
+
+    access_time: preserve
+
+  when:
+
+    - not crucible_cis_pam_backup_marker.stat.exists
+
+
+# ============================================================
+# Central pam_faillock configuration
+# ============================================================
+
+- name: Configure failed-login threshold
+  ansible.builtin.lineinfile:
+
+    path: /etc/security/faillock.conf
+
+    regexp: '^\s*#?\s*deny\s*='
+
+    line: >-
+      deny = {{ crucible_cis_pam_faillock_deny }}
+
+    create: true
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Configure failed-login unlock time
+  ansible.builtin.lineinfile:
+
+    path: /etc/security/faillock.conf
+
+    regexp: '^\s*#?\s*unlock_time\s*='
+
+    line: >-
+      unlock_time = {{
+        crucible_cis_pam_faillock_unlock_time
+      }}
+
+    create: true
+
+
+- name: Configure root lockout
+  ansible.builtin.lineinfile:
+
+    path: /etc/security/faillock.conf
+
+    regexp: '^\s*#?\s*even_deny_root\b'
+
+    line: even_deny_root
+
+    create: true
+
+  when:
+
+    - >-
+      '5.3.3.1.3'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Configure root lockout recovery
+  ansible.builtin.lineinfile:
+
+    path: /etc/security/faillock.conf
+
+    regexp: '^\s*#?\s*root_unlock_time\s*='
+
+    line: >-
+      root_unlock_time = {{
+        crucible_cis_pam_faillock_root_unlock_time
+      }}
+
+    create: true
+
+  when:
+
+    - >-
+      '5.3.3.1.3'
+      in
+      crucible_cis_execution_controls
+
+
+# ============================================================
+# Password quality
+# ============================================================
+
+- name: Create pwquality configuration directory
+  ansible.builtin.file:
+
+    path: /etc/security/pwquality.conf.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+
+- name: Configure CIS password quality
+  ansible.builtin.copy:
+
+    dest: /etc/security/pwquality.conf.d/99-crucible-cis.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      difok = {{ crucible_cis_pam_pwquality_difok }}
+      minlen = {{ crucible_cis_pam_pwquality_min_length }}
+      maxrepeat = {{ crucible_cis_pam_pwquality_max_repeat }}
+      maxsequence = {{ crucible_cis_pam_pwquality_max_sequence }}
+      dictcheck = 1
+      enforcing = 1
+      enforce_for_root
+
+
+# ============================================================
+# Password history
+# ============================================================
+
+- name: Configure password history
+  ansible.builtin.blockinfile:
+
+    path: /etc/security/pwhistory.conf
+
+    create: true
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+    marker: >-
+      # {mark} OPERATION CRUCIBLE CIS
+
+    block: |
+      remember = {{ crucible_cis_pam_pwhistory_remember }}
+      enforce_for_root
+      use_authtok
+
+
+# ============================================================
+# Install pam-auth-update profiles
+# ============================================================
+
+- name: Install Crucible faillock preauth profile
+  ansible.builtin.copy:
+
+    src: crucible-faillock-preauth
+
+    dest: /usr/share/pam-configs/crucible-faillock-preauth
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Install Crucible faillock authfail profile
+  ansible.builtin.copy:
+
+    src: crucible-faillock-authfail
+
+    dest: /usr/share/pam-configs/crucible-faillock-authfail
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Install Crucible pwhistory profile
+  ansible.builtin.copy:
+
+    src: crucible-pwhistory
+
+    dest: /usr/share/pam-configs/crucible-pwhistory
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Remove obsolete Crucible faillock profile
+  ansible.builtin.file:
+
+    path:
+      /usr/share/pam-configs/crucible-faillock-notify
+
+    state: absent
+
+
+# ============================================================
+# Reconcile pam_unix
+# ============================================================
+
+- name: Reconcile Debian-family pam_unix profile
+  ansible.builtin.script:
+
+    cmd: reconcile_pam_unix.py
+
+    executable: /usr/bin/python3
+
+
+# ============================================================
+# Rebuild common-* through pam-auth-update
+# ============================================================
+
+- name: Rebuild PAM stack with Crucible profiles
+  ansible.builtin.command:
+
+    argv:
+
+      - /usr/sbin/pam-auth-update
+
+      - --force
+
+      - --enable
+      - unix
+
+      - --enable
+      - crucible-faillock-preauth
+
+      - --enable
+      - crucible-faillock-authfail
+
+      - --enable
+      - crucible-pwhistory
+
+  environment:
+
+    DEBIAN_FRONTEND: noninteractive
+
+  register:
+    crucible_cis_pam_auth_update
+
+  changed_when: true
+
+
+# ============================================================
+# Protect history database if created
+# ============================================================
+
+- name: Check password history database
+  ansible.builtin.stat:
+
+    path: /etc/security/opasswd
+
+  register:
+    crucible_cis_opasswd
+
+
+- name: Protect password history database
+  ansible.builtin.file:
+
+    path: /etc/security/opasswd
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  when:
+
+    - crucible_cis_opasswd.stat.exists
+
+
+# ============================================================
+# Validate generated PAM stack
+# ============================================================
+
+- name: Verify pam_faillock is in common-auth
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/grep
+      - -P
+      - 'pam_faillock\.so'
+      - /etc/pam.d/common-auth
+
+  changed_when: false
+
+
+- name: Verify pam_faillock is in common-account
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/grep
+      - -P
+      - 'pam_faillock\.so'
+      - /etc/pam.d/common-account
+
+  changed_when: false
+
+
+- name: Verify pam_pwquality is in common-password
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/grep
+      - -P
+      - 'pam_pwquality\.so'
+      - /etc/pam.d/common-password
+
+  changed_when: false
+
+
+- name: Verify pam_pwhistory is in common-password
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/grep
+      - -P
+      - 'pam_pwhistory\.so'
+      - /etc/pam.d/common-password
+
+  changed_when: false
+
+
+- name: Read pam_unix password policy
+  ansible.builtin.shell: |
+    grep -P \
+      '^\s*password\s+.*pam_unix\.so' \
+      /etc/pam.d/common-password
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_pam_unix_password
+
+  changed_when: false
+
+
+- name: Validate pam_unix password policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        'nullok'
+        not in
+        crucible_cis_pam_unix_password.stdout
+
+      - >-
+        'remember='
+        not in
+        crucible_cis_pam_unix_password.stdout
+
+      - >-
+        'yescrypt'
+        in
+        crucible_cis_pam_unix_password.stdout
+
+      - >-
+        'use_authtok'
+        in
+        crucible_cis_pam_unix_password.stdout
+
+    fail_msg: >
+      Generated pam_unix password policy failed
+      Wave 3 validation.
+
+
+- name: Verify Crucible automation sudo survived PAM changes
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/sudo
+      - -n
+      - /usr/bin/true
+
+  become: false
+
+  changed_when: false

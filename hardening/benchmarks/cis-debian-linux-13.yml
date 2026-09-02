@@ -1,0 +1,5371 @@
+# Operation Crucible hardening control inventory
+#
+# Source benchmark:
+#   CIS Debian Linux 13 Benchmark v1.1.0 (2026-08-26)
+#
+# Engineering notes:
+# - `assessment` is the CIS assessment status from the benchmark.
+# - `crucible_implementation` is an Operation Crucible engineering classification.
+# - CIS Level 2 extends Level 1. Accordingly, `profiles` contains effective profile
+#   membership: a Level 1 Server recommendation is also included in level2-server,
+#   and a Level 1 Workstation recommendation is also included in level2-workstation.
+# - Exact profile applicability printed by CIS is retained in `source-profile:*` tags.
+# - `wave:*` tags are implementation sequencing hints, not CIS metadata.
+# - `risk:*` tags describe remediation risk in Crucible's disposable cyber-lab topology,
+#   not the security severity or importance of the CIS recommendation.
+# - `satisfied_elsewhere` means Crucible intends to satisfy the security objective
+#   through an existing Crucible subsystem rather than literal benchmark remediation.
+# - `conditional` means remediation must first evaluate machine role, topology,
+#   installed services, or lab-use requirements.
+# - `audit_only` means Crucible should collect/report evidence but should not make an
+#   unconditional remediation change.
+#
+# Kali compatibility note:
+# - The source benchmark targets Debian Linux 13, not Kali Linux Rolling.
+# - Crucible uses this benchmark as the closest Debian-family security baseline for
+#   Kali. Any Debian-specific assumption must be verified on Kali before a control is
+#   considered validated by Crucible.
+
+schema_version: 1
+
+benchmark_id: cis-debian-linux-13
+benchmark_version: 1.1.0
+
+controls:
+  1.1.1.1:
+    title: Ensure cramfs kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.1.2:
+    title: Ensure freevxfs kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.1.3:
+    title: Ensure hfs kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.1.4:
+    title: Ensure hfsplus kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.1.5:
+    title: Ensure jffs2 kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.1.6:
+    title: Ensure overlay kernel module is not available
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:kernel-filesystems
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - role-aware
+  1.1.1.7:
+    title: Ensure squashfs kernel module is not available
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:kernel-filesystems
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - role-aware
+  1.1.1.8:
+    title: Ensure udf kernel module is not available
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:kernel-filesystems
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - role-aware
+  1.1.1.9:
+    title: Ensure firewire-core kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:kernel-filesystems
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+  1.1.1.10:
+    title: Ensure usb-storage kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:kernel-filesystems
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - hardware-aware
+    - lab-use-sensitive
+    - preserve-if-capability:hardware:usb-storage
+  1.1.1.11:
+    title: Ensure unused filesystems kernel modules are not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:kernel-filesystems
+    - risk:high
+    - wave:deferred
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.1.1:
+    title: Ensure /tmp is tmpfs or a separate partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.1.2:
+    title: Ensure nodev option set on /tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.1.3:
+    title: Ensure nosuid option set on /tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.1.4:
+    title: Ensure noexec option set on /tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - lab-use-sensitive
+    - preserve-if-capability:filesystem:tmp-exec
+  1.1.2.2.1:
+    title: Ensure /dev/shm is tmpfs or a separate partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.2.2:
+    title: Ensure nodev option set on /dev/shm partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.2.3:
+    title: Ensure nosuid option set on /dev/shm partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:filesystem-mounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.1.2.2.4:
+    title: Ensure noexec option set on /dev/shm partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - application-aware
+    - preserve-if-capability:filesystem:dev-shm-exec
+  1.1.2.3.1:
+    title: Ensure separate partition exists for /home
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: not_implemented
+    tags:
+    - area:filesystem-mounts
+    - risk:high
+    - wave:installer
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - installation-time
+  1.1.2.3.2:
+    title: Ensure nodev option set on /home partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.3.3:
+    title: Ensure nosuid option set on /home partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.4.1:
+    title: Ensure separate partition exists for /var
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: not_implemented
+    tags:
+    - area:filesystem-mounts
+    - risk:high
+    - wave:installer
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - installation-time
+  1.1.2.4.2:
+    title: Ensure nodev option set on /var partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.4.3:
+    title: Ensure nosuid option set on /var partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.5.1:
+    title: Ensure separate partition exists for /var/tmp
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: not_implemented
+    tags:
+    - area:filesystem-mounts
+    - risk:high
+    - wave:installer
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - installation-time
+  1.1.2.5.2:
+    title: Ensure nodev option set on /var/tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.5.3:
+    title: Ensure nosuid option set on /var/tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.5.4:
+    title: Ensure noexec option set on /var/tmp partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.6.1:
+    title: Ensure separate partition exists for /var/log
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: not_implemented
+    tags:
+    - area:filesystem-mounts
+    - risk:high
+    - wave:installer
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - installation-time
+  1.1.2.6.2:
+    title: Ensure nodev option set on /var/log partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.6.3:
+    title: Ensure nosuid option set on /var/log partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.6.4:
+    title: Ensure noexec option set on /var/log partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.7.1:
+    title: Ensure separate partition exists for /var/log/audit
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: not_implemented
+    tags:
+    - area:filesystem-mounts
+    - risk:high
+    - wave:installer
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - installation-time
+  1.1.2.7.2:
+    title: Ensure nodev option set on /var/log/audit partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.7.3:
+    title: Ensure nosuid option set on /var/log/audit partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.1.2.7.4:
+    title: Ensure noexec option set on /var/log/audit partition
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:filesystem-mounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - existing-mount-only
+  1.2.1.1:
+    title: Ensure the source.list and .source files use the Signed-By option
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:apt-repositories
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.2:
+    title: Ensure weak dependencies are configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:apt-repositories
+    - risk:medium
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - package-behavior
+  1.2.1.3:
+    title: Ensure access to gpg key files are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.4:
+    title: Ensure access to /etc/apt/trusted.gpg.d directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.5:
+    title: Ensure access to /etc/apt/auth.conf.d directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.6:
+    title: Ensure access to files in the /etc/apt/auth.conf.d/ directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.7:
+    title: Ensure access to /usr/share/keyrings directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.8:
+    title: Ensure access to /etc/apt/sources.list.d directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.9:
+    title: Ensure access to files in /etc/apt/sources.list.d are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.10:
+    title: Ensure repositories are set to https in /etc/apt/sources.list
+
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+
+    assessment: automated
+
+    crucible_implementation: audit_only
+
+    tags:
+    - area:apt-repositories
+    - risk:medium
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - repository-aware
+    - kali-compatibility
+    - vendor-policy-conflict
+  1.2.1.11:
+    title: Ensure repositories are set to https in /etc/apt/sources.list.d directory
+
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+
+    assessment: automated
+
+    crucible_implementation: audit_only
+
+    tags:
+    - area:apt-repositories
+    - risk:medium
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - repository-aware
+    - kali-compatibility
+    - vendor-policy-conflict
+  1.2.1.12:
+    title: Ensure AllowInsecureRepositories is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.13:
+    title: Ensure AllowWeakRepositories is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.14:
+    title: Ensure AllowDowngradeToInsecureRepositories is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.1.15:
+    title: Ensure Acquire::Check-Date is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apt-repositories
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.2.2.1:
+    title: Ensure updates, patches, and additional security software are installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:package-updates
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider:linux-bootstrap
+  1.3.1.1:
+    title: Ensure apparmor packages are installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apparmor
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.3.1.2:
+    title: Ensure AppArmor is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apparmor
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.3.1.3:
+    title: Ensure all AppArmor Profiles are enforcing
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:apparmor
+    - risk:medium
+    - wave:2
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - service-aware
+  1.3.1.4:
+    title: Ensure kernel.apparmor_restrict_unprivileged_unconfined is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:apparmor
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.4.1:
+    title: Ensure bootloader password is set
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:bootloader
+    - risk:medium
+    - wave:deferred
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - lab-use-sensitive
+  1.4.2:
+    title: Ensure access to bootloader config is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:bootloader
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.1:
+    title: Ensure fs.protected_hardlinks is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.2:
+    title: Ensure fs.protected_symlinks is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  1.5.3:
+    title: Ensure kernel.yama.ptrace_scope is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:process-hardening
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - debugging-sensitive
+    - preserve-if-capability:debugging:ptrace
+  1.5.4:
+    title: Ensure fs.suid_dumpable is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:process-hardening
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
+  1.5.5:
+    title: Ensure kernel.dmesg_restrict is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.6:
+    title: Ensure prelink is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.7:
+    title: Ensure Automatic Error Reporting is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.8:
+    title: Ensure kernel.kptr_restrict is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.9:
+    title: Ensure kernel.randomize_va_space is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:process-hardening
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.5.10:
+    title: Ensure core file size is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:process-hardening
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
+  1.5.11:
+    title: Ensure systemd-coredump ProcessSizeMax is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:process-hardening
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
+  1.5.12:
+    title: Ensure systemd-coredump Storage is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:process-hardening
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - debugging-sensitive
+    - preserve-if-capability:debugging:core-dumps
+  1.6.1:
+    title: Ensure /etc/motd is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.2:
+    title: Ensure /etc/issue is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.3:
+    title: Ensure /etc/issue.net is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.4:
+    title: Ensure pam_motd is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.5:
+    title: Ensure sshd warning Banner is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.6:
+    title: Ensure access to /etc/motd is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.7:
+    title: Ensure access to /etc/issue is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.8:
+    title: Ensure access to /etc/issue.net is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.9:
+    title: Ensure access to pam_motd file is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.10:
+    title: Ensure access to sshd warning banner is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.11:
+    title: Ensure update-notifier-motd.service is not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  1.6.12:
+    title: Ensure update-notifier-motd.timer is not in use
+    profiles:
+    - level1-server
+    - level2-server
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:banners
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+  1.7.1:
+    title: Ensure GDM login banner is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - gdm-present
+  1.7.2:
+    title: Ensure GDM disable-user-list is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - gdm-present
+  1.7.3:
+    title: Ensure GDM screen lock is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - gdm-present
+  1.7.4:
+    title: Ensure GDM automount is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - gdm-present
+  1.7.5:
+    title: Ensure GDM autorun-never is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - gdm-present
+  1.7.6:
+    title: Ensure XDMCP is not enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - gdm-present
+  1.7.7:
+    title: Ensure Xwayland is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:gdm
+    - risk:medium
+    - wave:2
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - gdm-present
+    - x11-compatibility
+    - preserve-if-capability:desktop:x11-compatibility
+  2.1.1:
+    title: Ensure autofs services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - configuration-aware
+    - preserve-if-capability:service:automount
+  2.1.2:
+    title: Ensure avahi daemon services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - configuration-aware
+    - preserve-if-capability:service:mdns
+  2.1.3:
+    title: Ensure dhcp server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:dhcp-server
+  2.1.4:
+    title: Ensure dns server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:dns-server
+  2.1.5:
+    title: Ensure dnsmasq services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:dnsmasq
+  2.1.6:
+    title: Ensure ftp server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:ftp-server
+  2.1.7:
+    title: Ensure ldap server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:ldap-server
+  2.1.8:
+    title: Ensure message access server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:message-access-server
+  2.1.9:
+    title: Ensure network file system services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:nfs-server
+  2.1.10:
+    title: Ensure nis server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:nis-server
+  2.1.11:
+    title: Ensure print server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - configuration-aware
+    - preserve-if-capability:service:print-server
+  2.1.12:
+    title: Ensure rpcbind services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:rpcbind
+  2.1.13:
+    title: Ensure rsync services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:rsync-server
+  2.1.14:
+    title: Ensure samba file server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:samba-server
+  2.1.15:
+    title: Ensure snmp services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:snmp-server
+  2.1.16:
+    title: Ensure telnet server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:telnet-server
+  2.1.17:
+    title: Ensure tftp server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:tftp-server
+  2.1.18:
+    title: Ensure web proxy server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:web-proxy
+  2.1.19:
+    title: Ensure web server services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:web-server
+  2.1.20:
+    title: Ensure xinetd services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:xinetd
+  2.1.21:
+    title: Ensure X window server services are not in use
+    profiles:
+    - level2-server
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level2-server
+    - configuration-aware
+    - preserve-if-capability:service:x-window-server
+  2.1.22:
+    title: Ensure mail transfer agents are configured for local-only mode
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:server-services
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:service:mail-server
+  2.1.23:
+    title: Ensure only approved services are listening on a network interface
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:server-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - contract-aware
+  2.2.1:
+    title: Ensure nis client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:nis
+    - preserve-if-capability:service:nis-server
+  2.2.2:
+    title: Ensure rsh client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:rsh
+  2.2.3:
+    title: Ensure talk client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:talk
+  2.2.4:
+    title: Ensure telnet client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:telnet
+  2.2.5:
+    title: Ensure ldap client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:ldap
+    - preserve-if-capability:service:ldap-server
+  2.2.6:
+    title: Ensure ftp client is not installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:client-services
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - preserve-if-capability:client:ftp
+  2.3.1.1:
+    title: Ensure a single time synchronization daemon is in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.3.2.1:
+    title: Ensure systemd-timesyncd configured with authorized timeserver
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.3.2.2:
+    title: Ensure systemd-timesyncd is enabled and running
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.3.3.1:
+    title: Ensure chrony is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.3.3.2:
+    title: Ensure chrony is running as user _chrony
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.3.3.3:
+    title: Ensure chrony is enabled and running
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:time-sync
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider-aware
+  2.4.1.1:
+    title: Ensure cron daemon is enabled and active
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.2:
+    title: Ensure access to /etc/crontab is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.3:
+    title: Ensure access to /etc/cron.hourly is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.4:
+    title: Ensure access to /etc/cron.daily is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.5:
+    title: Ensure access to /etc/cron.weekly is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.6:
+    title: Ensure access to /etc/cron.monthly is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.7:
+    title: Ensure access to /etc/cron.yearly is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.8:
+    title: Ensure access to /etc/cron.d is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.1.9:
+    title: Ensure access to crontab is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  2.4.2.1:
+    title: Ensure access to at is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:job-schedulers
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.1.1:
+    title: Ensure IPv6 status is identified
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:network-devices
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - topology-aware
+  3.1.2:
+    title: Ensure wireless interfaces are not available
+    profiles:
+    - level1-server
+    - level2-server
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-devices
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+  3.1.3:
+    title: Ensure bluetooth services are not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-devices
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level2-workstation
+    - hardware-aware
+    - preserve-if-capability:hardware:bluetooth
+  3.2.1:
+    title: Ensure atm kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:atm
+  3.2.2:
+    title: Ensure can kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:can
+  3.2.3:
+    title: Ensure dccp kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:dccp
+  3.2.4:
+    title: Ensure rds kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:rds
+  3.2.5:
+    title: Ensure sctp kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:sctp
+  3.2.6:
+    title: Ensure tipc kernel module is not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-modules
+    - risk:medium
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - configuration-aware
+    - lab-use-sensitive
+    - preserve-if-capability:protocol:tipc
+  3.2.7:
+    title: Ensure unneeded network protocol kernel modules are not available
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:network-modules
+    - risk:high
+    - wave:deferred
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.3.1.1:
+    title: Ensure net.ipv4.ip_forward is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:high
+    - wave:1
+    - source-profile:level1-workstation
+    - source-profile:level1-server
+    - routing-aware
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.2:
+    title: Ensure net.ipv4.conf.all.forwarding is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:high
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - routing-aware
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.3:
+    title: Ensure net.ipv4.conf.default.forwarding is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:high
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - routing-aware
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.4:
+    title: Ensure net.ipv4.conf.all.send_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.5:
+    title: Ensure net.ipv4.conf.default.send_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.6:
+    title: Ensure net.ipv4.icmp_ignore_bogus_error_responses is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.7:
+    title: Ensure net.ipv4.icmp_echo_ignore_broadcasts is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.8:
+    title: Ensure net.ipv4.conf.all.accept_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.9:
+    title: Ensure net.ipv4.conf.default.accept_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.10:
+    title: Ensure net.ipv4.conf.all.secure_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.11:
+    title: Ensure net.ipv4.conf.default.secure_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.12:
+    title: Ensure net.ipv4.conf.all.rp_filter is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - multihoming-aware
+    - preserve-if-capability:network:ipv4-router
+    - preserve-if-capability:network:asymmetric-routing
+  3.3.1.13:
+    title: Ensure net.ipv4.conf.default.rp_filter is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - multihoming-aware
+    - preserve-if-capability:network:ipv4-router
+    - preserve-if-capability:network:asymmetric-routing
+  3.3.1.14:
+    title: Ensure net.ipv4.conf.all.accept_source_route is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.15:
+    title: Ensure net.ipv4.conf.default.accept_source_route is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.16:
+    title: Ensure net.ipv4.conf.all.log_martians is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.17:
+    title: Ensure net.ipv4.conf.default.log_martians is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.18:
+    title: Ensure net.ipv4.tcp_syncookies is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.1.19:
+    title: Ensure net.ipv4.conf.all.route_localnet is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - preserve-if-capability:network:ipv4-router
+  3.3.2.1:
+    title: Ensure net.ipv6.conf.all.forwarding is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:high
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - routing-aware
+    - preserve-if-capability:network:ipv6-router
+  3.3.2.2:
+    title: Ensure net.ipv6.conf.default.forwarding is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:high
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - routing-aware
+    - preserve-if-capability:network:ipv6-router
+  3.3.2.3:
+    title: Ensure net.ipv6.conf.all.accept_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.3.2.4:
+    title: Ensure net.ipv6.conf.default.accept_redirects is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.3.2.5:
+    title: Ensure net.ipv6.conf.all.accept_source_route is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.3.2.6:
+    title: Ensure net.ipv6.conf.default.accept_source_route is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:network-sysctl
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  3.3.2.7:
+    title: Ensure net.ipv6.conf.all.accept_ra is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - ipv6-topology-aware
+    - preserve-if-capability:network:ipv6-ra-client
+  3.3.2.8:
+    title: Ensure net.ipv6.conf.default.accept_ra is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:network-sysctl
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - ipv6-topology-aware
+    - preserve-if-capability:network:ipv6-ra-client
+  4.1.1:
+    title: Ensure ufw is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:firewall
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider:nftables
+  4.1.2:
+    title: Ensure ufw service is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:firewall
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider:nftables
+  4.1.3:
+    title: Ensure ufw incoming default is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:firewall
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider:nftables
+  4.1.4:
+    title: Ensure ufw outgoing default is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:firewall
+    - risk:low
+    - wave:1
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - provider:nftables
+  4.1.5:
+    title: Ensure ufw routed default is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: satisfied_elsewhere
+    tags:
+    - area:firewall
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - provider:nftables
+  5.1.1:
+    title: Ensure access to /etc/ssh/sshd_config is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.2:
+    title: Ensure access to /etc/ssh/sshd_config.d/ directory is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.3:
+    title: Ensure access to SSH private host key files is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.4:
+    title: Ensure access to SSH public host key files is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.5:
+    title: Ensure sshd access is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:ssh
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - management-access-sensitive
+  5.1.6:
+    title: Ensure sshd Banner is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.7:
+    title: Ensure sshd Ciphers are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.8:
+    title: Ensure sshd ClientAliveInterval and ClientAliveCountMax are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.9:
+    title: Ensure sshd DisableForwarding is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:ssh
+    - risk:medium
+    - wave:2
+    - source-profile:level1-workstation
+    - source-profile:level1-server
+    - lab-use-sensitive
+    - preserve-if-capability:ssh:forwarding
+  5.1.10:
+    title: Ensure sshd GSSAPIAuthentication is disabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-workstation
+    - source-profile:level1-server
+  5.1.11:
+    title: Ensure sshd HostbasedAuthentication is disabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.12:
+    title: Ensure sshd IgnoreRhosts is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.13:
+    title: Ensure sshd KexAlgorithms is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.14:
+    title: Ensure sshd post-quantum cryptography key exchange algorithms are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.15:
+    title: Ensure sshd LoginGraceTime is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.16:
+    title: Ensure sshd LogLevel is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.17:
+    title: Ensure sshd MACs are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.18:
+    title: Ensure sshd MaxAuthTries is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.19:
+    title: Ensure sshd MaxSessions is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.20:
+    title: Ensure sshd MaxStartups is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.21:
+    title: Ensure sshd PermitEmptyPasswords is disabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.22:
+    title: Ensure sshd PermitRootLogin is disabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.23:
+    title: Ensure sshd PermitUserEnvironment is disabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.1.24:
+    title: Ensure sshd UsePAM is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:ssh
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.1:
+    title: Ensure sudo is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:sudo
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.2:
+    title: Ensure sudo commands use pty
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:sudo
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.3:
+    title: Ensure sudo log file exists
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:sudo
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.4:
+    title: Ensure users must provide password for escalation
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:sudo
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - conflict:crucible-nopasswd
+  5.2.5:
+    title: Ensure re-authentication for privilege escalation is not disabled globally
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:sudo
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.6:
+    title: Ensure sudo timestamp_timeout is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:sudo
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.2.7:
+    title: Ensure access to the su command is restricted
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:sudo
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - lab-use-sensitive
+    - preserve-if-capability:access:su
+  5.3.1.1:
+    title: Ensure latest version of pam is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:pam
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.3.1.2:
+    title: Ensure latest version of libpam-modules is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:pam
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.3.1.3:
+    title: Ensure latest version of libpam-pwquality is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:pam
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.3.1.4:
+    title: Ensure latest version of cracklib-runtime is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:pam
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.3.2.1:
+    title: Ensure pam_unix module is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.2.2:
+    title: Ensure pam_faillock module is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.2.3:
+    title: Ensure pam_pwquality module is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.2.4:
+    title: Ensure pam_pwhistory module is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.1.1:
+    title: Ensure password failed attempts lockout is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.1.2:
+    title: Ensure password unlock time is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.1.3:
+    title: Ensure password failed attempts lockout includes root account
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - authentication-sensitive
+  5.3.3.2.1:
+    title: Ensure password number of changed characters is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.2:
+    title: Ensure password length is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.3:
+    title: Ensure password complexity is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.4:
+    title: Ensure password same consecutive characters is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.5:
+    title: Ensure password maximum sequential characters is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.6:
+    title: Ensure password dictionary check is enabled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.7:
+    title: Ensure password quality checking is enforced
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.2.8:
+    title: Ensure password quality is enforced for the root user
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.3.1:
+    title: Ensure password history remember is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.3.2:
+    title: Ensure password history is enforced for the root user
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.3.3:
+    title: Ensure pam_pwhistory includes use_authtok
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.4.1:
+    title: Ensure pam_unix does not include nullok
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.4.2:
+    title: Ensure pam_unix does not include remember
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.4.3:
+    title: Ensure pam_unix includes a strong password hashing algorithm
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.3.3.4.4:
+    title: Ensure pam_unix includes use_authtok
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:pam
+    - risk:high
+    - wave:auth
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - authentication-sensitive
+  5.4.1.1:
+    title: Ensure password expiration is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:password-aging
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.1.2:
+    title: Ensure minimum password days is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:password-aging
+    - risk:low
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  5.4.1.3:
+    title: Ensure password expiration warning days is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:password-aging
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.1.4:
+    title: Ensure strong password hashing algorithm is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:password-aging
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.1.5:
+    title: Ensure inactive password lock is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:password-aging
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.1.6:
+    title: Ensure all users last password change date is in the past
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:password-aging
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-integrity
+  5.4.2.1:
+    title: Ensure root is the only UID 0 account
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:root-system-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-integrity
+  5.4.2.2:
+    title: Ensure root is the only GID 0 account
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:root-system-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-integrity
+  5.4.2.3:
+    title: Ensure group root is the only GID 0 group
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:root-system-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-integrity
+  5.4.2.4:
+    title: Ensure root account access is controlled
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:root-system-accounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.2.5:
+    title: Ensure root path integrity
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:root-system-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-integrity
+  5.4.2.6:
+    title: Ensure root user umask is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:root-system-accounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  5.4.2.7:
+    title: Ensure system accounts do not have a valid login shell
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:root-system-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - service-account-aware
+  5.4.2.8:
+    title: Ensure accounts without a valid login shell are locked
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:root-system-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - service-account-aware
+  5.4.3.1:
+    title: Ensure nologin is not listed in /etc/shells
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:user-environment
+    - risk:low
+    - wave:1
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  5.4.3.2:
+    title: Ensure default user shell timeout is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:user-environment
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - lab-use-sensitive
+    - preserve-if-capability:shell:long-running
+  5.4.3.3:
+    title: Ensure default user umask is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:user-environment
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.1:
+    title: Ensure journald service is active
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:journald
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.2:
+    title: Ensure systemd-journal-remote service is not in use
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:journald
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - service-aware
+    - preserve-if-capability:logging:journal-remote-receiver
+  6.1.1.1.3:
+    title: Ensure journald is configured to send logs to rsyslog
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:journald
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.4:
+    title: Ensure journald log file access is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:journald
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.5:
+    title: Ensure journald log file rotation is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:journald
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.6:
+    title: Ensure journald Storage is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:journald
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.1.1.7:
+    title: Ensure journald Compress is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:journald
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.1:
+    title: Ensure rsyslog is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.2:
+    title: Ensure rsyslog service is enabled and active
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.3:
+    title: Ensure rsyslog log file creation mode is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.4:
+    title: Ensure rsyslog logging is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.5:
+    title: Ensure rsyslog is configured to send logs to a remote log host
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: conditional
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - remote-log-host-required
+  6.1.2.6:
+    title: Ensure rsyslog is not configured to receive logs from a remote client
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - service-aware
+    - preserve-if-capability:logging:rsyslog-receiver
+  6.1.2.7:
+    title: Ensure logrotate is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:rsyslog
+    - risk:low
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.1.2.8:
+    title: Ensure rsyslog-gnutls is installed
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:rsyslog
+    - risk:medium
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - remote-log-host-required
+  6.1.2.9:
+    title: Ensure rsyslog forwarding uses gtls
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:rsyslog
+    - risk:medium
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - remote-log-host-required
+  6.1.2.10:
+    title: Ensure rsyslog CA certificates are configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:rsyslog
+    - risk:medium
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - remote-log-host-required
+  6.1.3.1:
+    title: Ensure access to all logfiles has been configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:logfiles
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - application-log-aware
+  6.2.1.1:
+    title: Ensure auditd packages are installed
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-service
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.1.2:
+    title: Ensure auditd service is enabled and active
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-service
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.1.3:
+    title: Ensure auditing for processes that start prior to auditd is enabled
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-service
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.1.4:
+    title: Ensure audit_backlog_limit is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-service
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.2.1:
+    title: Ensure audit log storage size is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:auditd-retention
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - storage-aware
+  6.2.2.2:
+    title: Ensure audit logs are not automatically deleted
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-retention
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.2.3:
+    title: Ensure system is disabled when audit logs are full
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:auditd-retention
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - availability-impact
+  6.2.2.4:
+    title: Ensure system warns when audit logs are low on space
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:auditd-retention
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - storage-aware
+  6.2.3.1:
+    title: Ensure modification of the /etc/sudoers file is collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.2:
+    title: Ensure actions as another user are always logged
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.3:
+    title: Ensure events that modify the sudo log file are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.4:
+    title: Ensure events that modify date and time information are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.5:
+    title: Ensure events that modify sethostname and setdomainname are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.6:
+    title: Ensure events that modify /etc/issue and /etc/issue.net are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.7:
+    title: Ensure events that modify /etc/hosts and /etc/hostname are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.8:
+    title: Ensure events that modify the system's network environment are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.9:
+    title: Ensure events that modify /etc/NetworkManager directory are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.10:
+    title: Ensure use of privileged commands are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.11:
+    title: Ensure unsuccessful file access attempts are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.12:
+    title: Ensure events that modify /etc/group information are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.13:
+    title: Ensure events that modify /etc/passwd information are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.14:
+    title: Ensure events that modify /etc/shadow and /etc/gshadow are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.15:
+    title: Ensure events that modify /etc/security/opasswd are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.16:
+    title: Ensure events that modify /etc/nsswitch.conf file are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.17:
+    title: Ensure events that modify /etc/pam.conf and /etc/pam.d/ information are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.18:
+    title: Ensure discretionary access control permission modification events chmod,fchmod,fchmodat,fchmodat2
+      are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.19:
+    title: Ensure discretionary access control permission modification events chown,fchown,lchown,fchownat
+      are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.20:
+    title: Ensure discretionary access control permission modification events setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr
+      collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.21:
+    title: Ensure successful file system mounts are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.22:
+    title: Ensure session initiation information is collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.23:
+    title: Ensure login and logout events are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.24:
+    title: Ensure unlink file deletion events by users are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.25:
+    title: Ensure rename file deletion events by users are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.26:
+    title: Ensure events that modify the system's Mandatory Access Controls are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.27:
+    title: Ensure successful and unsuccessful attempts to use the chcon command are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.28:
+    title: Ensure successful and unsuccessful attempts to use the setfacl command are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.29:
+    title: Ensure successful and unsuccessful attempts to use the chacl command are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.30:
+    title: Ensure successful and unsuccessful attempts to use the usermod command are collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.31:
+    title: Ensure kernel module loading unloading and modification is collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.32:
+    title: Ensure kernel "init_module" and "finit_module" loading unloading and modification is collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.33:
+    title: Ensure kernel "delete_module" loading unloading and modification is collected
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.34:
+    title: Ensure the audit configuration is loaded regardless of errors
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.3.35:
+    title: Ensure the audit configuration is immutable
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:auditd-rules
+    - risk:high
+    - wave:deferred
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - must-run-last
+  6.2.3.36:
+    title: Ensure the running and on disk configuration is the same
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:auditd-rules
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.1:
+    title: Ensure audit log files mode is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.2:
+    title: Ensure audit log files owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.3:
+    title: Ensure audit log files group owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.4:
+    title: Ensure the audit log file directory mode is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.5:
+    title: Ensure audit configuration files mode is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.6:
+    title: Ensure audit configuration files owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.7:
+    title: Ensure audit configuration files group owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.8:
+    title: Ensure audit tools mode is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.9:
+    title: Ensure audit tools owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.2.4.10:
+    title: Ensure audit tools group owner is configured
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:auditd-permissions
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+  6.3.1:
+    title: Ensure AIDE is installed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:aide
+    - risk:low
+    - wave:3
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  6.3.2:
+    title: Ensure filesystem integrity is regularly checked
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:aide
+    - risk:medium
+    - wave:3
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - must-run-late
+  6.3.3:
+    title: Ensure cryptographic mechanisms are used to protect the integrity of audit tools
+    profiles:
+    - level2-server
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:aide
+    - risk:medium
+    - wave:audit
+    - source-profile:level2-server
+    - source-profile:level2-workstation
+    - auditd-dependent
+  7.1.1:
+    title: Ensure access to /etc/passwd is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.2:
+    title: Ensure access to /etc/passwd- is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.3:
+    title: Ensure access to /etc/group is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.4:
+    title: Ensure access to /etc/group- is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.5:
+    title: Ensure access to /etc/shadow is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.6:
+    title: Ensure access to /etc/shadow- is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.7:
+    title: Ensure access to /etc/gshadow is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.8:
+    title: Ensure access to /etc/gshadow- is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.9:
+    title: Ensure access to /etc/shells is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.10:
+    title: Ensure access to /etc/security/opasswd is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.1.11:
+    title: Ensure world writable files and directories are secured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:system-file-permissions
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - application-aware
+  7.1.12:
+    title: Ensure no files or directories without an owner and a group exist
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:system-file-permissions
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - ownership-judgment
+  7.1.13:
+    title: Ensure SUID and SGID files are reviewed
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: manual
+    crucible_implementation: audit_only
+    tags:
+    - area:system-file-permissions
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.2.1:
+    title: Ensure accounts in /etc/passwd use shadowed passwords
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:local-accounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.2.2:
+    title: Ensure /etc/shadow password fields are not empty
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - account-lockout-risk
+  7.2.3:
+    title: Ensure all groups in /etc/passwd exist in /etc/group
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - identity-judgment
+  7.2.4:
+    title: Ensure shadow group is empty
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: automated
+    tags:
+    - area:local-accounts
+    - risk:low
+    - wave:1
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+  7.2.5:
+    title: Ensure no duplicate UIDs exist
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - identity-judgment
+  7.2.6:
+    title: Ensure no duplicate GIDs exist
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - identity-judgment
+  7.2.7:
+    title: Ensure no duplicate user names exist
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - identity-judgment
+  7.2.8:
+    title: Ensure no duplicate group names exist
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: audit_only
+    tags:
+    - area:local-accounts
+    - risk:high
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - identity-judgment
+  7.2.9:
+    title: Ensure local interactive user home directories are configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:local-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - user-data-aware
+  7.2.10:
+    title: Ensure local interactive user dot files access is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:local-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - user-data-aware
+  7.2.11:
+    title: Ensure local interactive user dot directories access is configured
+    profiles:
+    - level1-server
+    - level2-server
+    - level1-workstation
+    - level2-workstation
+    assessment: automated
+    crucible_implementation: conditional
+    tags:
+    - area:local-accounts
+    - risk:medium
+    - wave:2
+    - source-profile:level1-server
+    - source-profile:level1-workstation
+    - user-data-aware

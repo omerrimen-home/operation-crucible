@@ -1,0 +1,242 @@
+---
+
+# ============================================================
+# PAM
+# ============================================================
+
+- name: Verify faillock configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/grep
+      - -E
+      - '^(deny|unlock_time)\s*='
+      - /etc/security/faillock.conf
+
+  register:
+    crucible_cis_faillock_verify
+
+  changed_when: false
+
+
+- name: Verify password quality configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/cat
+      - /etc/security/pwquality.conf.d/99-crucible-cis.conf
+
+  register:
+    crucible_cis_pwquality_verify
+
+  changed_when: false
+
+
+- name: Assert password quality configuration
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          'minlen = '
+          ~
+          crucible_cis_pam_pwquality_min_length
+        )
+        in
+        crucible_cis_pwquality_verify.stdout
+
+      - >-
+        'dictcheck = 1'
+        in
+        crucible_cis_pwquality_verify.stdout
+
+      - >-
+        'enforcing = 1'
+        in
+        crucible_cis_pwquality_verify.stdout
+
+      - >-
+        'enforce_for_root'
+        in
+        crucible_cis_pwquality_verify.stdout
+
+
+- name: Verify noninteractive sudo after PAM hardening
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/sudo
+      - -n
+      - /usr/bin/true
+
+  become: false
+
+  changed_when: false
+
+
+# ============================================================
+# auditd
+# ============================================================
+
+- name: Verify auditd is enabled
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - is-enabled
+      - auditd.service
+
+  changed_when: false
+
+  when:
+
+    - crucible_cis_auditd_required
+      | default(false)
+      | bool
+
+
+- name: Verify auditd is active
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - is-active
+      - auditd.service
+
+  changed_when: false
+
+  when:
+
+    - crucible_cis_auditd_required
+      | default(false)
+      | bool
+
+
+- name: Verify audit rules are present
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/auditctl
+      - -l
+
+  register:
+    crucible_cis_running_audit_rules
+
+  changed_when: false
+
+  when:
+
+    - crucible_cis_auditd_required
+      | default(false)
+      | bool
+
+
+- name: Assert audit rules loaded
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_running_audit_rules.stdout
+        | trim
+        | length
+        > 0
+
+  when:
+
+    - crucible_cis_auditd_required
+      | default(false)
+      | bool
+
+
+# ============================================================
+# AIDE
+# ============================================================
+
+- name: Verify AIDE configuration
+  ansible.builtin.command:
+
+    argv:
+
+      - /usr/bin/aide
+
+      - --config=/etc/aide/aide.conf
+
+      - --config-check
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '6.3.1'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Verify AIDE timer is enabled
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - is-enabled
+      - dailyaidecheck.timer
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Verify AIDE timer is active
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/systemctl
+      - is-active
+      - dailyaidecheck.timer
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '6.3.2'
+      in
+      crucible_cis_execution_controls
+
+
+# ============================================================
+# Management-survival boundary
+# ============================================================
+
+- name: Reset SSH connection after authentication hardening
+  ansible.builtin.meta:
+
+    reset_connection
+
+
+- name: Verify new SSH connection after Wave 3
+  ansible.builtin.wait_for_connection:
+
+    timeout: 90
+
+
+- name: Report reboot requirement
+  ansible.builtin.debug:
+
+    msg: >
+      Wave 3 modified the kernel boot command line.
+      A reboot is required before audit=1 and
+      audit_backlog_limit take effect.
+
+  when:
+
+    - crucible_cis_reboot_required
+      | default(false)
+      | bool

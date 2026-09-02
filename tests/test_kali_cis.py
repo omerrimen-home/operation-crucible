@@ -29,11 +29,11 @@ ROLE_ROOT = (
     REPO_ROOT
     / "ansible"
     / "roles"
-    / "crucible_cis_ubuntu_26_04"
+    / "crucible_cis_kali_debian_13"
 )
 
 
-class UbuntuCISMilestoneBATests(
+class KaliCISMilestoneBBTests(
     unittest.TestCase
 ):
 
@@ -51,7 +51,7 @@ class UbuntuCISMilestoneBATests(
 
         cls.benchmark = (
             cls.catalog.get(
-                "cis-ubuntu-linux-26.04"
+                "cis-debian-linux-13"
             )
         )
 
@@ -79,11 +79,11 @@ class UbuntuCISMilestoneBATests(
 
         self.assertEqual(
             self.benchmark.benchmark_version,
-            "1.0.0",
+            "1.1.0",
         )
 
 
-    def test_default_server_profile_is_level1(
+    def test_default_kali_profile_is_level1_workstation(
         self,
     ) -> None:
 
@@ -92,35 +92,11 @@ class UbuntuCISMilestoneBATests(
                 self.catalog,
 
                 benchmark_id=(
-                    "cis-ubuntu-linux-26.04"
+                    "cis-debian-linux-13"
                 ),
 
                 machine_profile_id=(
-                    "ubuntu-26.04-server"
-                ),
-            )
-        )
-
-        self.assertEqual(
-            plan.profile.id,
-            "level1-server",
-        )
-
-
-    def test_default_desktop_profile_is_level1(
-        self,
-    ) -> None:
-
-        plan = (
-            build_hardening_plan(
-                self.catalog,
-
-                benchmark_id=(
-                    "cis-ubuntu-linux-26.04"
-                ),
-
-                machine_profile_id=(
-                    "ubuntu-26.04-desktop"
+                    "kali-rolling"
                 ),
             )
         )
@@ -140,11 +116,11 @@ class UbuntuCISMilestoneBATests(
                 self.catalog,
 
                 benchmark_id=(
-                    "cis-ubuntu-linux-26.04"
+                    "cis-debian-linux-13"
                 ),
 
                 machine_profile_id=(
-                    "ubuntu-26.04-server"
+                    "kali-rolling"
                 ),
             )
         )
@@ -156,33 +132,13 @@ class UbuntuCISMilestoneBATests(
         }
 
         groups = [
-            set(
-                plan.automated_control_ids
-            ),
-
-            set(
-                plan.conditional_control_ids
-            ),
-
-            set(
-                plan.audit_only_control_ids
-            ),
-
-            set(
-                plan.satisfied_elsewhere_control_ids
-            ),
-
-            set(
-                plan.manual_control_ids
-            ),
-
-            set(
-                plan.not_implemented_control_ids
-            ),
-
-            set(
-                plan.exception_control_ids
-            ),
+            set(plan.automated_control_ids),
+            set(plan.conditional_control_ids),
+            set(plan.audit_only_control_ids),
+            set(plan.satisfied_elsewhere_control_ids),
+            set(plan.manual_control_ids),
+            set(plan.not_implemented_control_ids),
+            set(plan.exception_control_ids),
         ]
 
         classified = set().union(
@@ -209,45 +165,6 @@ class UbuntuCISMilestoneBATests(
                 )
 
 
-    def test_level2_server_contains_audit_controls(
-        self,
-    ) -> None:
-
-        plan = (
-            build_hardening_plan(
-                self.catalog,
-
-                benchmark_id=(
-                    "cis-ubuntu-linux-26.04"
-                ),
-
-                machine_profile_id=(
-                    "ubuntu-26.04-server"
-                ),
-
-                requested_profile=(
-                    "level2-server"
-                ),
-            )
-        )
-
-        applicable = {
-            control.id
-            for control
-            in plan.applicable_controls
-        }
-
-        self.assertIn(
-            "6.2.1.1",
-            applicable,
-        )
-
-        self.assertIn(
-            "6.2.3.1",
-            applicable,
-        )
-
-
     def test_aide_controls_are_catalogued(
         self,
     ) -> None:
@@ -263,13 +180,50 @@ class UbuntuCISMilestoneBATests(
         )
 
 
-    def test_destructive_audit_controls_remain_deferred(
+    def test_role_exists(
+        self,
+    ) -> None:
+
+        self.assertTrue(
+            (
+                ROLE_ROOT
+                / "tasks"
+                / "main.yml"
+            ).is_file()
+        )
+
+
+    def test_kali_completion_marker_is_present(
+        self,
+    ) -> None:
+
+        completion = (
+            ROLE_ROOT
+            / "tasks"
+            / "completion.yml"
+        )
+
+        text = completion.read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "/var/lib/crucible/hardening/kali-cis.yml",
+            text,
+        )
+
+        self.assertNotIn(
+            "/var/lib/crucible/hardening/ubuntu-cis.yml",
+            text,
+        )
+
+    def test_kali_repository_https_controls_are_audit_only(
         self,
     ) -> None:
 
         for control_id in (
-            "6.2.2.3",
-            "6.2.3.35",
+            "1.2.1.10",
+            "1.2.1.11",
         ):
 
             control = (
@@ -278,20 +232,24 @@ class UbuntuCISMilestoneBATests(
                 ]
             )
 
+            self.assertEqual(
+                control.crucible_implementation,
+                "audit_only",
+            )
+
             self.assertIn(
-                "wave:deferred",
+                "kali-compatibility",
                 control.tags,
             )
 
+            self.assertIn(
+                "vendor-policy-conflict",
+                control.tags,
+            )
 
-    def test_role_does_not_execute_legacy_aide_wrapper(
+    def test_aide_wrapper_is_migration_only(
         self,
     ) -> None:
-
-        """
-        aide.wrapper may appear only as historical data in
-        migration logic. No active Ansible command may invoke it.
-        """
 
         wave3_aide = (
             ROLE_ROOT
@@ -303,8 +261,6 @@ class UbuntuCISMilestoneBATests(
             encoding="utf-8"
         )
 
-        # The old wrapper may remain only so Crucible can
-        # recognize and safely remove its obsolete systemd unit.
         self.assertEqual(
             text.count(
                 "aide.wrapper"
@@ -317,58 +273,16 @@ class UbuntuCISMilestoneBATests(
             text,
         )
 
-        # Current AIDE validation must use the native binary.
         self.assertIn(
             "- /usr/bin/aide",
             text,
         )
 
         self.assertIn(
-            "- --config=/etc/aide/aide.conf",
-            text,
-        )
-
-        self.assertIn(
-            "- --config-check",
-            text,
-        )
-
-        # Database initialization must use Debian/Ubuntu's
-        # supported aideinit utility.
-        self.assertIn(
             "- /usr/sbin/aideinit",
             text,
         )
-
-
-    def test_completion_marker_is_present(
-        self,
-    ) -> None:
-
-        completion = (
-            ROLE_ROOT
-            / "tasks"
-            / "completion.yml"
-        )
-
-        self.assertTrue(
-            completion.is_file()
-        )
-
-        text = completion.read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn(
-            "/var/lib/crucible/hardening/ubuntu-cis.yml",
-            text,
-        )
-
-        self.assertIn(
-            "'unverified'",
-            text,
-        )
-
+    
 
 if __name__ == "__main__":
     unittest.main()

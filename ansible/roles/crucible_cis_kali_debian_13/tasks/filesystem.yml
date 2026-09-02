@@ -1,0 +1,66 @@
+---
+
+- name: Configure hardened tmpfs for /tmp
+  ansible.posix.mount:
+
+    path: /tmp
+
+    src: tmpfs
+
+    fstype: tmpfs
+
+    opts: >-
+      defaults,rw,nosuid,nodev,relatime,size={{
+        crucible_cis_tmp_size
+      }}
+
+    state: mounted
+
+  when:
+    - "'1.1.2.1.1' in crucible_cis_execution_controls"
+
+
+- name: Ensure /tmp remains world writable with sticky bit
+  ansible.builtin.file:
+
+    path: /tmp
+
+    owner: root
+    group: root
+
+    mode: "1777"
+
+    state: directory
+
+
+- name: Configure hardened tmpfs for /dev/shm
+  ansible.posix.mount:
+
+    path: /dev/shm
+
+    src: tmpfs
+
+    fstype: tmpfs
+
+    opts: >-
+      defaults,rw,nosuid,nodev,relatime,size={{
+        crucible_cis_dev_shm_size
+      }}
+
+    state: mounted
+
+  when:
+    - "'1.1.2.2.1' in crucible_cis_execution_controls"
+
+
+- name: Ensure /dev/shm remains world writable
+  ansible.builtin.file:
+
+    path: /dev/shm
+
+    owner: root
+    group: root
+
+    mode: "1777"
+
+    state: directory

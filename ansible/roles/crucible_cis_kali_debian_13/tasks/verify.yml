@@ -1,0 +1,451 @@
+---
+
+- name: Flush all hardening handlers
+  ansible.builtin.meta:
+    flush_handlers
+
+
+- name: Validate SSH syntax
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -t
+
+  changed_when: false
+
+
+- name: Read effective SSH configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -T
+
+  register: crucible_cis_sshd_effective
+
+  changed_when: false
+
+
+- name: Validate critical SSH settings
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        'permitrootlogin no'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        'permitemptypasswords no'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        'usepam yes'
+        in
+        crucible_cis_sshd_effective.stdout
+
+      - >-
+        (
+          'maxauthtries '
+          ~
+          (
+            crucible_cis_ssh_max_auth_tries
+            | string
+          )
+        )
+        in
+        crucible_cis_sshd_effective.stdout
+
+
+- name: Validate AppArmor service
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - apparmor
+
+  changed_when: false
+
+
+- name: Validate rsyslog service
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - rsyslog
+
+  changed_when: false
+
+
+- name: Validate nftables alternate firewall provider
+  ansible.builtin.command:
+
+    argv:
+      - nft
+      - list
+      - table
+      - inet
+      - crucible_filter
+
+  register: crucible_cis_nftables
+
+  changed_when: false
+
+
+# ============================================================
+# Time synchronization
+# ============================================================
+
+- name: Verify systemd-timesyncd is active
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - systemd-timesyncd.service
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'systemd-timesyncd'
+
+
+- name: Verify chrony is active
+  ansible.builtin.command:
+
+    argv:
+      - systemctl
+      - is-active
+      - chrony.service
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+- name: Verify chronyd runs as _chrony
+  ansible.builtin.command:
+
+    argv:
+      - /usr/bin/pgrep
+      - -u
+      - _chrony
+      - chronyd
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_time_sync_provider
+      ==
+      'chrony'
+
+
+# ============================================================
+# Network protocol modules
+# ============================================================
+
+- name: Verify disabled network protocol modules cannot load
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/modprobe
+      - -n
+      - -v
+      - "{{ item.module }}"
+
+  register:
+    crucible_cis_module_probe_test
+
+  changed_when: false
+
+  loop: >-
+    {{
+      crucible_cis_network_protocol_modules
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+
+- name: Verify network module deny policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        '/bin/false'
+        in
+        item.stdout
+
+    fail_msg: >
+      A CIS-disabled network protocol module remains
+      loadable.
+
+  loop: >-
+    {{
+      crucible_cis_module_probe_test.results
+      | default([])
+    }}
+
+  when:
+
+    - not item.skipped | default(false)
+
+
+# ============================================================
+# Forwarding
+# ============================================================
+
+- name: Verify non-router IPv4 forwarding is disabled
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - net.ipv4.ip_forward
+
+  register:
+    crucible_cis_ipv4_forward
+
+  changed_when: false
+
+  when:
+
+    - >-
+      '3.3.1.1'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Assert non-router IPv4 forwarding is disabled
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_ipv4_forward.stdout
+        | trim
+        ==
+        '0'
+
+  when:
+
+    - >-
+      '3.3.1.1'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Verify controller connection after hardening
+  ansible.builtin.wait_for_connection:
+
+    timeout: 90
+
+
+# ============================================================
+# Wave 2 validation
+# ============================================================
+
+- name: Verify strict reverse-path filtering
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - "{{ item }}"
+
+  register:
+    crucible_cis_rp_filter_verify
+
+  changed_when: false
+
+  loop:
+
+    - net.ipv4.conf.all.rp_filter
+    - net.ipv4.conf.default.rp_filter
+
+  when:
+
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - not crucible_cis_topology_has_gateway | default(false)
+
+
+- name: Assert strict reverse-path filtering
+  ansible.builtin.assert:
+
+    that:
+
+      - item.stdout | trim == "1"
+
+  loop: >-
+    {{
+      crucible_cis_rp_filter_verify.results
+      | default([])
+    }}
+
+  when:
+
+    - not item.skipped | default(false)
+
+
+- name: Verify SUID core dumps are disabled
+  ansible.builtin.command:
+
+    argv:
+      - /sbin/sysctl
+      - -n
+      - fs.suid_dumpable
+
+  register:
+    crucible_cis_suid_dumpable_verify
+
+  changed_when: false
+
+  when:
+
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - not crucible_cis_allow_debugging | bool
+
+
+- name: Assert SUID core dumps are disabled
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_suid_dumpable_verify.stdout
+        | trim
+        ==
+        '0'
+
+  when:
+
+    - crucible_cis_suid_dumpable_verify is not skipped
+
+
+- name: Validate rsyslog syntax
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/rsyslogd
+      - -N1
+
+  changed_when: false
+
+
+- name: Revalidate SSH syntax after Wave 2
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -t
+
+  changed_when: false
+
+
+- name: Confirm management connectivity after Wave 2
+  ansible.builtin.wait_for_connection:
+
+    timeout: 90
+
+
+# ============================================================
+# Final BA implementation-validation summary
+# ============================================================
+
+- name: Display final Kali CIS validation summary
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Crucible hardening risk:
+        {{ crucible_cis_risk_tier }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_implementation_wave }}
+
+      - >-
+        Executed controls:
+        {{ crucible_cis_execution_controls | length }}
+
+      - >-
+        User exceptions:
+        {{
+          crucible_hardening.counts.user_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Derived exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Reboot required:
+        {{
+          crucible_cis_reboot_required
+          | default(false)
+          | bool
+        }}
+
+      - >-
+        Crucible implementation validation:
+        PASSED
+
+      - >-
+        CIS benchmark compliance:
+        UNVERIFIED
+
+      - >-
+        Successful implementation validation means
+        Crucible's applicable remediation and safety
+        checks completed. It does not claim complete
+        per-control benchmark compliance.

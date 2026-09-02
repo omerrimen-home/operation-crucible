@@ -1,0 +1,121 @@
+---
+
+- name: Protect sshd_config
+  ansible.builtin.file:
+
+    path: /etc/ssh/sshd_config
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+
+- name: Protect sshd drop-in directory
+  ansible.builtin.file:
+
+    path: /etc/ssh/sshd_config.d
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Find SSH private host keys
+  ansible.builtin.find:
+
+    paths:
+      - /etc/ssh
+
+    file_type: file
+
+    patterns:
+      - "ssh_host_*_key"
+
+  register: crucible_cis_ssh_private_keys
+
+
+- name: Protect SSH private host keys
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  loop: >-
+    {{
+      crucible_cis_ssh_private_keys.files
+    }}
+
+
+- name: Find SSH public host keys
+  ansible.builtin.find:
+
+    paths:
+      - /etc/ssh
+
+    file_type: file
+
+    patterns:
+      - "ssh_host_*_key.pub"
+
+  register: crucible_cis_ssh_public_keys
+
+
+- name: Protect SSH public host keys
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  loop: >-
+    {{
+      crucible_cis_ssh_public_keys.files
+    }}
+
+
+- name: Install Crucible CIS SSH policy
+  ansible.builtin.template:
+
+    src: sshd-cis.conf.j2
+
+    dest: /etc/ssh/sshd_config.d/10-crucible-cis.conf
+
+    owner: root
+    group: root
+
+    mode: "0600"
+
+  notify:
+    - Reload ssh
+
+
+- name: Validate effective SSH configuration
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -t
+
+  changed_when: false
+
+
+- name: Apply SSH handler now
+  ansible.builtin.meta:
+    flush_handlers
+
+
+- name: Verify Ansible connection survived SSH hardening
+  ansible.builtin.wait_for_connection:
+
+    timeout: 60

@@ -1,0 +1,503 @@
+---
+
+- name: Verify Kali Debian-family guest
+  ansible.builtin.assert:
+
+    that:
+
+      - ansible_facts.os_family == "Debian"
+
+      - >-
+        ansible_facts.distribution
+        | lower
+        ==
+        "kali"
+
+    fail_msg: >
+      crucible_cis_kali_debian_13 may only run
+      against Kali Linux guests.
+
+
+- name: Verify hardening runtime exists
+  ansible.builtin.assert:
+
+    that:
+
+      - crucible_hardening is defined
+
+      - >-
+        crucible_hardening.benchmark.id
+        ==
+        "cis-debian-linux-13"
+
+      - >-
+        crucible_hardening.benchmark.version
+        ==
+        "1.1.0"
+
+    fail_msg: >
+      Kali Debian-derived CIS hardening runtime metadata
+      is missing or targets the wrong benchmark.
+
+
+- name: Verify supported benchmark profile
+  ansible.builtin.assert:
+    that:
+      - >-
+        crucible_hardening.profile.id
+        in
+        [
+          'level1-server',
+          'level2-server',
+          'level1-workstation',
+          'level2-workstation'
+        ]
+
+
+- name: Validate supported CIS implementation wave
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_implementation_wave
+        in
+        [
+          '1',
+          '2',
+          '3'
+        ]
+
+    fail_msg: >
+      Kali CIS implementation_Swave must currently
+      be either "1", "2", or "3".
+
+
+- name: Initialize Wave 1 execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_execution_controls: []
+
+
+- name: Initialize Wave 1 control groups
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_automated_controls: []
+
+    crucible_cis_wave1_conditional_controls: []
+
+    crucible_cis_execution_controls: []
+
+
+- name: Validate time synchronization provider
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_time_sync_provider
+        in
+        [
+          'systemd-timesyncd',
+          'chrony'
+        ]
+
+      - crucible_cis_time_servers is iterable
+
+      - crucible_cis_time_servers is not string
+
+      - crucible_cis_time_servers | length > 0
+
+    fail_msg: >
+      time_sync_provider must be either
+      systemd-timesyncd or chrony and at least one
+      authorized time server must be configured.
+
+
+# ============================================================
+# Resolve implementation waves
+# ============================================================
+
+- name: Initialize CIS execution control groups
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_automated_controls: []
+
+    crucible_cis_wave1_conditional_controls: []
+
+    crucible_cis_wave2_conditional_controls: []
+
+    crucible_cis_wave3_auth_controls: []
+
+    crucible_cis_wave3_audit_controls: []
+
+    crucible_cis_wave3_integrity_controls: []
+
+    crucible_cis_execution_controls: []
+
+    crucible_cis_auditd_required: false
+
+    crucible_cis_reboot_required: false
+
+- name: Resolve automated Wave 1 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_automated_controls: >-
+      {{
+        crucible_cis_wave1_automated_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve conditional Wave 1 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave1_conditional_controls: >-
+      {{
+        crucible_cis_wave1_conditional_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve reviewed conditional Wave 2 controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave2_conditional_controls: >-
+      {{
+        crucible_cis_wave2_conditional_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+    - >-
+      (
+        'risk:low'
+        in
+        crucible_hardening.controls.metadata[item].tags
+      )
+      or
+      (
+        'risk:medium'
+        in
+        crucible_hardening.controls.metadata[item].tags
+      )
+
+
+- name: Validate Wave 3 authentication parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - crucible_cis_pam_faillock_deny | int >= 1
+
+      - crucible_cis_pam_faillock_unlock_time | int >= 0
+
+      - crucible_cis_pam_faillock_root_unlock_time | int >= 60
+
+      - crucible_cis_pam_pwquality_difok | int >= 2
+
+      - crucible_cis_pam_pwquality_min_length | int >= 14
+
+      - crucible_cis_pam_pwquality_max_repeat | int >= 1
+
+      - crucible_cis_pam_pwquality_max_repeat | int <= 3
+
+      - crucible_cis_pam_pwquality_max_sequence | int >= 1
+
+      - crucible_cis_pam_pwquality_max_sequence | int <= 3
+
+      - crucible_cis_pam_pwhistory_remember | int >= 24
+
+      - crucible_cis_audit_backlog_limit | int >= 8192
+
+      - crucible_cis_audit_max_log_file_mb | int > 0
+
+      - >-
+        crucible_cis_audit_space_left_action
+        in
+        [
+          'syslog',
+          'email',
+          'exec',
+          'suspend',
+          'single',
+          'halt'
+        ]
+
+      - >-
+        crucible_cis_audit_admin_space_left_action
+        in
+        [
+          'syslog',
+          'email',
+          'exec',
+          'suspend',
+          'single',
+          'halt'
+        ]
+
+  when:
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: Resolve Wave 3 authentication controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_auth_controls: >-
+      {{
+        crucible_cis_wave3_auth_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:auth'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 3 audit controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_audit_controls: >-
+      {{
+        crucible_cis_wave3_audit_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:audit'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 3 integrity controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_wave3_integrity_controls: >-
+      {{
+        crucible_cis_wave3_integrity_controls
+        +
+        [
+          item
+        ]
+      }}
+
+  loop: >-
+    {{
+      (
+        crucible_hardening.controls.automated
+        | default([])
+      )
+      +
+      (
+        crucible_hardening.controls.conditional
+        | default([])
+      )
+    }}
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Crucible hardening risk tier
+  ansible.builtin.set_fact:
+
+    crucible_cis_risk_tier: >-
+      {{
+        {
+          '1': 'low',
+          '2': 'moderate',
+          '3': 'high'
+        }[
+          crucible_cis_implementation_wave
+        ]
+      }}
+
+
+- name: Build final CIS execution set
+  ansible.builtin.set_fact:
+
+    crucible_cis_execution_controls: >-
+      {{
+        (
+          crucible_cis_wave1_automated_controls
+          +
+          crucible_cis_wave1_conditional_controls
+          +
+          crucible_cis_wave2_conditional_controls
+          +
+          crucible_cis_wave3_auth_controls
+          +
+          crucible_cis_wave3_audit_controls
+          +
+          crucible_cis_wave3_integrity_controls
+        )
+        | unique
+        | list
+      }}
+
+
+- name: Display hardening execution summary
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_implementation_wave }}
+
+      - >-
+        Wave 1 automated:
+        {{ crucible_cis_wave1_automated_controls | length }}
+
+      - >-
+        Wave 1 conditional:
+        {{ crucible_cis_wave1_conditional_controls | length }}
+
+      - >-
+        Wave 2 conditional:
+        {{ crucible_cis_wave2_conditional_controls | length }}
+      
+      - >-
+        Wave 3 authentication:
+        {{ crucible_cis_wave3_auth_controls | length }}
+
+      - >-
+        Wave 3 audit:
+        {{ crucible_cis_wave3_audit_controls | length }}
+
+      - >-
+        Wave 3 integrity:
+        {{ crucible_cis_wave3_integrity_controls | length }}
+
+      - >-
+        Total execution controls:
+        {{ crucible_cis_execution_controls | length }}
+
+      - >-
+        Derived exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
+
+
+- name: Display derived hardening exceptions
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_hardening.controls.derived_exception_reasons
+
+  when:
+    - >-
+      crucible_hardening.controls.derived_exceptions
+      | default([])
+      | length
+      > 0

@@ -1,0 +1,280 @@
+---
+
+- name: CIS Kali | Preflight
+  ansible.builtin.include_tasks:
+    file: preflight.yml
+
+
+- name: CIS Kali | Kernel module baseline
+  ansible.builtin.include_tasks:
+    file: kernel_modules.yml
+
+
+- name: CIS Kali | Filesystem baseline
+  ansible.builtin.include_tasks:
+    file: filesystem.yml
+
+
+- name: CIS Kali | APT baseline
+  ansible.builtin.include_tasks:
+    file: apt.yml
+
+
+- name: CIS Kali | AppArmor baseline
+  ansible.builtin.include_tasks:
+    file: apparmor.yml
+
+
+- name: CIS Kali | Process hardening
+  ansible.builtin.include_tasks:
+    file: process_hardening.yml
+
+
+- name: CIS Kali | Warning banners
+  ansible.builtin.include_tasks:
+    file: banners.yml
+
+
+- name: CIS Kali | Conditional services
+  ansible.builtin.include_tasks:
+
+    file: conditional_services.yml
+
+
+- name: CIS Kali | Time synchronization
+  ansible.builtin.include_tasks:
+
+    file: time_sync.yml
+
+
+- name: CIS Kali | Job schedulers
+  ansible.builtin.include_tasks:
+    file: schedulers.yml
+
+
+- name: CIS Kali | Network protocol modules
+  ansible.builtin.include_tasks:
+
+    file: network_modules.yml
+
+
+- name: CIS Kali | Network hardening
+  ansible.builtin.include_tasks:
+    file: network.yml
+
+
+- name: CIS Kali | SSH hardening
+  ansible.builtin.include_tasks:
+    file: ssh.yml
+
+
+- name: CIS Kali | Sudo hardening
+  ansible.builtin.include_tasks:
+    file: sudo.yml
+
+
+- name: CIS Kali | Account baseline
+  ansible.builtin.include_tasks:
+    file: accounts.yml
+
+
+- name: CIS Kali | Logging baseline
+  ansible.builtin.include_tasks:
+    file: logging.yml
+
+
+- name: CIS Kali | System file permissions
+  ansible.builtin.include_tasks:
+    file: permissions.yml
+
+
+- name: CIS Kali | Wave 2 filesystem hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_filesystem.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 APT hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_apt.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 process hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_process.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 GDM hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_gdm.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 network hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_network.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 access hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_access.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 logging hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_logging.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 permission hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_permissions.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 2 user hardening
+  ansible.builtin.include_tasks:
+
+    file: wave2_users.yml
+
+  when:
+    - >-
+      crucible_cis_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+
+- name: CIS Kali | Wave 3 PAM hardening
+  ansible.builtin.include_tasks:
+
+    file: wave3_pam.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Kali | Wave 3 auditd hardening
+  ansible.builtin.include_tasks:
+
+    file: wave3_auditd.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+    - >-
+      crucible_cis_wave3_audit_controls
+      | default([])
+      | length
+      > 0
+
+
+- name: CIS Kali | Wave 3 integrity monitoring
+  ansible.builtin.include_tasks:
+
+    file: wave3_aide.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Kali | Wave 3 validation
+  ansible.builtin.include_tasks:
+
+    file: wave3_verify.yml
+
+  when:
+
+    - crucible_cis_implementation_wave == "3"
+
+
+- name: CIS Kali | Validate hardened guest
+  ansible.builtin.include_tasks:
+    file: verify.yml
+
+
+- name: CIS Kali | Record validated hardening state
+  ansible.builtin.include_tasks:
+
+    file: completion.yml

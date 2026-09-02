@@ -1,0 +1,66 @@
+---
+
+- name: Configure local warning banner
+  ansible.builtin.copy:
+
+    dest: /etc/issue
+
+    content: |
+      {{ crucible_cis_banner_text }}
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Configure remote warning banner
+  ansible.builtin.copy:
+
+    dest: /etc/issue.net
+
+    content: |
+      {{ crucible_cis_banner_text }}
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Configure MOTD warning banner
+  ansible.builtin.copy:
+
+    dest: /etc/motd
+
+    content: |
+      {{ crucible_cis_banner_text }}
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+
+- name: Mask dynamic MOTD service
+  ansible.builtin.systemd_service:
+
+    name: update-notifier-motd.service
+
+    state: stopped
+
+    masked: true
+
+  failed_when: false
+
+
+- name: Mask dynamic MOTD timer
+  ansible.builtin.systemd_service:
+
+    name: update-notifier-motd.timer
+
+    state: stopped
+
+    masked: true
+
+  failed_when: false

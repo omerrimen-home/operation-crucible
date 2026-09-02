@@ -1,0 +1,162 @@
+---
+
+- name: Protect APT trusted key directory
+  ansible.builtin.file:
+
+    path: /etc/apt/trusted.gpg.d
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Protect APT authentication directory
+  ansible.builtin.file:
+
+    path: /etc/apt/auth.conf.d
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Protect system keyring directory
+  ansible.builtin.file:
+
+    path: /usr/share/keyrings
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Protect APT source directory
+  ansible.builtin.file:
+
+    path: /etc/apt/sources.list.d
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+    state: directory
+
+
+- name: Find APT key files
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apt/trusted.gpg.d
+      - /usr/share/keyrings
+
+    file_type: file
+
+    recurse: false
+
+    patterns:
+      - "*.gpg"
+      - "*.asc"
+
+  register: crucible_cis_apt_key_files
+
+
+- name: Protect APT key files
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  loop: >-
+    {{
+      crucible_cis_apt_key_files.files
+    }}
+
+
+- name: Find APT authentication files
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apt/auth.conf.d
+
+    file_type: file
+
+    recurse: false
+
+  register: crucible_cis_apt_auth_files
+
+
+- name: Protect APT authentication files
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0640"
+
+  loop: >-
+    {{
+      crucible_cis_apt_auth_files.files
+    }}
+
+
+- name: Find APT source files
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apt/sources.list.d
+
+    file_type: file
+
+    recurse: false
+
+  register: crucible_cis_apt_source_files
+
+
+- name: Protect APT source files
+  ansible.builtin.file:
+
+    path: "{{ item.path }}"
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+  loop: >-
+    {{
+      crucible_cis_apt_source_files.files
+    }}
+
+
+- name: Enforce secure APT repository behavior
+  ansible.builtin.copy:
+
+    dest: /etc/apt/apt.conf.d/99-crucible-cis-repository-security
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      // Managed by Operation Crucible
+      Acquire::AllowInsecureRepositories "0";
+      Acquire::AllowWeakRepositories "0";
+      Acquire::AllowDowngradeToInsecureRepositories "0";
+      Acquire::Check-Date "true";

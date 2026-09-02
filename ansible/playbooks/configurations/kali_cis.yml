@@ -1,0 +1,12 @@
+---
+
+- name: Apply Kali Debian-derived CIS hardening
+  hosts: all
+
+  gather_facts: true
+
+  become: true
+
+  roles:
+
+    - role: crucible_cis_kali_debian_13

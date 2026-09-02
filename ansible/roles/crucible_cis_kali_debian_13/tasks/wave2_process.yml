@@ -1,0 +1,218 @@
+---
+
+# ============================================================
+# ptrace + privileged core dumps
+# ============================================================
+
+- name: Restrict ptrace
+  ansible.posix.sysctl:
+
+    name: kernel.yama.ptrace_scope
+
+    value: "1"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      61-crucible-cis-wave2.conf
+
+  when:
+
+    - >-
+      '1.5.3'
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_allow_debugging | bool
+
+
+- name: Disable SUID core dumps
+  ansible.posix.sysctl:
+
+    name: fs.suid_dumpable
+
+    value: "0"
+
+    state: present
+
+    reload: true
+
+    sysctl_file: >-
+      /etc/sysctl.d/
+      61-crucible-cis-wave2.conf
+
+  when:
+
+    - >-
+      '1.5.4'
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_allow_debugging | bool
+
+
+# ============================================================
+# Core dump size
+# ============================================================
+
+- name: Disable user core dumps
+  ansible.builtin.copy:
+
+    dest: /etc/security/limits.d/60-crucible-cis-core.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+      * hard core 0
+
+  when:
+
+    - >-
+      '1.5.10'
+      in
+      crucible_cis_execution_controls
+
+    - not crucible_cis_allow_debugging | bool
+
+
+# ============================================================
+# systemd-coredump
+# ============================================================
+
+- name: Create systemd coredump drop-in directory
+  ansible.builtin.file:
+
+    path: /etc/systemd/coredump.conf.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+  when:
+
+    - not crucible_cis_allow_debugging | bool
+
+    - >-
+      (
+        '1.5.11'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '1.5.12'
+        in
+        crucible_cis_execution_controls
+      )
+
+
+- name: Disable persistent systemd core dumps
+  ansible.builtin.copy:
+
+    dest: /etc/systemd/coredump.conf.d/60-crucible-cis.conf
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+
+  when:
+
+    - not crucible_cis_allow_debugging | bool
+
+    - >-
+      (
+        '1.5.11'
+        in
+        crucible_cis_execution_controls
+      )
+      or
+      (
+        '1.5.12'
+        in
+        crucible_cis_execution_controls
+      )
+
+
+- name: Explain debugging exception
+  ansible.builtin.debug:
+
+    msg: >
+      Debugging preservation is enabled. Wave 2 ptrace
+      and core-dump restrictions were not remediated.
+
+  when:
+
+    - crucible_cis_allow_debugging | bool
+
+
+# ============================================================
+# AppArmor Level 2 enforcement
+# ============================================================
+
+- name: Find top-level AppArmor profiles
+  ansible.builtin.find:
+
+    paths:
+      - /etc/apparmor.d
+
+    recurse: false
+
+    file_type: file
+
+  register:
+    crucible_cis_apparmor_profiles
+
+  when:
+
+    - >-
+      '1.3.1.3'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_enforce_all_apparmor_profiles | bool
+
+
+- name: Enforce AppArmor profiles
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/aa-enforce
+      - "{{ item.path }}"
+
+  loop: >-
+    {{
+      crucible_cis_apparmor_profiles.files
+      | default([])
+    }}
+
+  register:
+    crucible_cis_apparmor_enforce
+
+  changed_when:
+    - >-
+      'enforcing'
+      in
+      crucible_cis_apparmor_enforce.stdout
+      | lower
+
+  when:
+
+    - crucible_cis_enforce_all_apparmor_profiles | bool

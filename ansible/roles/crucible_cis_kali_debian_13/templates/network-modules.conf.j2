@@ -1,0 +1,22 @@
+# Managed by Operation Crucible
+#
+# CIS Kali Linux Rolling
+# Conditional network protocol module deny-list.
+
+{% set modules = [
+  {'control': '3.2.1', 'module': 'atm'},
+  {'control': '3.2.2', 'module': 'can'},
+  {'control': '3.2.3', 'module': 'dccp'},
+  {'control': '3.2.4', 'module': 'rds'},
+  {'control': '3.2.5', 'module': 'sctp'},
+  {'control': '3.2.6', 'module': 'tipc'}
+] %}
+
+{% for item in modules %}
+{% if item.control in crucible_cis_execution_controls %}
+# CIS {{ item.control }}
+install {{ item.module }} /bin/false
+blacklist {{ item.module }}
+
+{% endif %}
+{% endfor %}

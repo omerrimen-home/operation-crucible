@@ -79,3 +79,81 @@ benchmarks:
 
     controls_file: >
       hardening/benchmarks/cis-ubuntu-linux-26.04.yml
+
+  
+  cis-debian-linux-13:
+
+    display_name: CIS Debian Linux 13
+
+    description: >
+      Operation Crucible implementation derived from the
+      CIS Debian Linux 13 Benchmark. This benchmark is used
+      as the Debian-family hardening baseline for Kali Linux
+      Rolling and is validated separately for Kali compatibility.
+
+    authority: CIS
+
+    benchmark_version: "1.1.0"
+
+    status: implemented
+
+    target:
+      type: os
+
+      supported_profiles:
+        - kali-rolling
+
+    profiles:
+
+      level1-server:
+        display_name: Level 1 - Server
+
+        description: >
+          Practical Debian-family server security baseline.
+
+        applies_to_profiles:
+          - kali-rolling
+
+        default_for_profiles: []
+
+
+      level2-server:
+        display_name: Level 2 - Server
+
+        description: >
+          Additional defense-in-depth controls for
+          security-sensitive Debian-family server systems.
+
+        applies_to_profiles:
+          - kali-rolling
+
+        default_for_profiles: []
+
+
+      level1-workstation:
+        display_name: Level 1 - Workstation
+
+        description: >
+          Practical Debian-family workstation security baseline.
+
+        applies_to_profiles:
+          - kali-rolling
+
+        default_for_profiles:
+          - kali-rolling
+
+
+      level2-workstation:
+        display_name: Level 2 - Workstation
+
+        description: >
+          Additional defense-in-depth controls for
+          security-sensitive Debian-family workstation systems.
+
+        applies_to_profiles:
+          - kali-rolling
+
+        default_for_profiles: []
+
+    controls_file: >
+      hardening/benchmarks/cis-debian-linux-13.yml

@@ -1,0 +1,247 @@
+---
+
+# ============================================================
+# Restrict su
+# ============================================================
+
+- name: Create empty su authorization group
+  ansible.builtin.group:
+
+    name: sugroup
+
+    state: present
+
+    system: true
+
+  when:
+
+    - >-
+      '5.2.7'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_restrict_su | bool
+
+
+- name: Read su authorization group
+  ansible.builtin.getent:
+
+    database: group
+
+    key: sugroup
+
+  when:
+
+    - >-
+      '5.2.7'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_restrict_su | bool
+
+
+- name: Refuse to erase existing su authorization members
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          ansible_facts.getent_group[
+            'sugroup'
+          ][
+            2
+          ]
+          | default('')
+          | trim
+          | length
+        )
+        == 0
+
+    fail_msg: >
+      sugroup already contains members. Crucible
+      will not silently remove an administrator's
+      existing su authorization policy.
+
+  when:
+
+    - >-
+      '5.2.7'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_restrict_su | bool
+
+
+- name: Restrict su through pam_wheel
+  ansible.builtin.lineinfile:
+
+    path: /etc/pam.d/su
+
+    regexp: >-
+      ^\s*auth\s+required\s+pam_wheel\.so\b
+
+    line: >-
+      auth required pam_wheel.so use_uid group=sugroup
+
+    insertafter: EOF
+
+    backup: true
+
+  when:
+
+    - >-
+      '5.2.7'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_restrict_su | bool
+
+
+# ============================================================
+# Interactive shell timeout
+# ============================================================
+
+- name: Configure interactive shell timeout
+  ansible.builtin.copy:
+
+    dest: /etc/profile.d/61-crucible-cis-timeout.sh
+
+    owner: root
+    group: root
+
+    mode: "0644"
+
+    content: |
+      # Managed by Operation Crucible
+
+      TMOUT={{ crucible_cis_shell_timeout }}
+      readonly TMOUT
+      export TMOUT
+
+  when:
+
+    - >-
+      '5.4.3.2'
+      in
+      crucible_cis_execution_controls
+
+    - crucible_cis_shell_timeout | int > 0
+
+
+# ============================================================
+# System accounts
+# ============================================================
+
+- name: Find system accounts with interactive shells
+  ansible.builtin.shell: |
+    UID_MIN="$(
+      awk \
+        '$1 == "UID_MIN" {print $2}' \
+        /etc/login.defs
+    )"
+
+    awk \
+      -F: \
+      -v uid_min="$UID_MIN" \
+      '
+        $3 < uid_min &&
+        $1 !~ /^(root|sync|shutdown|halt)$/ &&
+        $7 !~ /(nologin|false)$/ {
+          print $1
+        }
+      ' \
+      /etc/passwd
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_system_interactive_accounts
+
+  changed_when: false
+
+  when:
+    - >-
+      '5.4.2.7'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Remove interactive shells from system accounts
+  ansible.builtin.user:
+
+    name: "{{ item }}"
+
+    shell: /usr/sbin/nologin
+
+  loop: >-
+    {{
+      crucible_cis_system_interactive_accounts
+      .stdout_lines
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      item
+      not in
+      crucible_cis_system_account_shell_exceptions
+
+
+- name: Find non-login system accounts
+  ansible.builtin.shell: |
+    UID_MIN="$(
+      awk \
+        '$1 == "UID_MIN" {print $2}' \
+        /etc/login.defs
+    )"
+
+    awk \
+      -F: \
+      -v uid_min="$UID_MIN" \
+      '
+        $3 < uid_min &&
+        $1 != "root" &&
+        $7 ~ /(nologin|false)$/ {
+          print $1
+        }
+      ' \
+      /etc/passwd
+
+  args:
+    executable: /bin/bash
+
+  register:
+    crucible_cis_nonlogin_system_accounts
+
+  changed_when: false
+
+  when:
+    - >-
+      '5.4.2.8'
+      in
+      crucible_cis_execution_controls
+
+
+- name: Lock non-login system accounts
+  ansible.builtin.user:
+
+    name: "{{ item }}"
+
+    password_lock: true
+
+  loop: >-
+    {{
+      crucible_cis_nonlogin_system_accounts
+      .stdout_lines
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      item
+      not in
+      crucible_cis_system_account_lock_exceptions
