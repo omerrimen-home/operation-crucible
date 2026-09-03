@@ -1,9 +1,10 @@
 ---
 
 # ============================================================
-# Operation Crucible Windows user-registry policy engine
+# Operation Crucible
+# Windows all-user registry policy engine
 #
-# Expected:
+# Expected variable:
 #
 #   crucible_windows_user_registry_policy_batch
 #
@@ -17,9 +18,14 @@
 #
 # Policies are applied to:
 #
-#   - all existing normal local user profiles;
-#   - currently loaded profile hives;
-#   - the Default User profile.
+#   - every existing normal user profile;
+#   - currently loaded user hives;
+#   - unloaded user NTUSER.DAT hives;
+#   - C:\Users\Default\NTUSER.DAT for future users.
+#
+# IMPORTANT:
+#
+# HKU\.DEFAULT is NOT the Default User profile.
 # ============================================================
 
 
@@ -66,38 +72,52 @@
 
 
       $Ansible.Changed = $false
+      $script:Changed = $false
 
+
+      # ======================================================
+      # Registry type conversion
+      # ======================================================
 
       function Convert-CrucibleRegistryType {
 
           param (
+              [Parameter(Mandatory = $true)]
               [string] $Type
           )
 
 
-          switch (
-              $Type.ToLowerInvariant()
-          ) {
+          switch ($Type.ToLowerInvariant()) {
 
               "dword" {
+
                   return "DWord"
               }
 
+
               "qword" {
+
                   return "QWord"
               }
 
+
               "string" {
+
                   return "String"
               }
 
+
               "expandstring" {
+
                   return "ExpandString"
               }
 
+
               "multistring" {
+
                   return "MultiString"
               }
+
 
               default {
 
@@ -110,32 +130,40 @@
       }
 
 
+      # ======================================================
+      # Registry data conversion
+      # ======================================================
+
       function Convert-CrucibleRegistryData {
 
           param (
+              [Parameter(Mandatory = $true)]
               [string] $Type,
+
+              [AllowNull()]
               [object] $Data
           )
 
 
-          switch (
-              $Type.ToLowerInvariant()
-          ) {
+          switch ($Type.ToLowerInvariant()) {
 
               "dword" {
+
                   return [int]$Data
               }
 
+
               "qword" {
+
                   return [long]$Data
               }
 
+
               "multistring" {
 
-                  return @(
-                      $Data
-                  )
+                  return @($Data)
               }
+
 
               default {
 
@@ -145,35 +173,32 @@
       }
 
 
+      # ======================================================
+      # Compare current and desired values
+      # ======================================================
+
       function Test-CrucibleRegistryValue {
 
           param (
+              [AllowNull()]
               [object] $Current,
+
+              [AllowNull()]
               [object] $Desired,
+
+              [Parameter(Mandatory = $true)]
               [string] $Type
           )
 
 
-          if (
-              $Type.ToLowerInvariant()
-              -eq
-              "multistring"
-          ) {
+          if ($Type.ToLowerInvariant() -eq "multistring") {
 
-              $CurrentArray = @(
-                  $Current
-              )
+              $CurrentArray = @($Current)
 
-              $DesiredArray = @(
-                  $Desired
-              )
+              $DesiredArray = @($Desired)
 
 
-              if (
-                  $CurrentArray.Count
-                  -ne
-                  $DesiredArray.Count
-              ) {
+              if ($CurrentArray.Count -ne $DesiredArray.Count) {
 
                   return $false
               }
@@ -186,8 +211,7 @@
               ) {
 
                   if (
-                      [string]$CurrentArray[$Index]
-                      -cne
+                      [string]$CurrentArray[$Index] -cne
                       [string]$DesiredArray[$Index]
                   ) {
 
@@ -201,44 +225,48 @@
 
 
           return (
-              [string]$Current
-              -ceq
+              [string]$Current -ceq
               [string]$Desired
           )
       }
 
 
+      # ======================================================
+      # Ensure one registry value exists and is correct
+      # ======================================================
+
       function Set-CrucibleRegistryValue {
 
           param (
+              [Parameter(Mandatory = $true)]
               [string] $KeyPath,
+
+              [Parameter(Mandatory = $true)]
               [string] $Name,
+
+              [Parameter(Mandatory = $true)]
               [string] $Type,
+
+              [AllowNull()]
               [object] $Data
           )
 
 
-          if (
-              -not (
-                  Test-Path `
-                      -LiteralPath $KeyPath
-              )
-          ) {
+          if (-not (Test-Path -LiteralPath $KeyPath)) {
 
               New-Item `
                   -Path $KeyPath `
-                  -Force `
-                  | Out-Null
+                  -Force |
+                  Out-Null
+
 
               $script:Changed = $true
           }
 
 
-          $Desired = (
-              Convert-CrucibleRegistryData `
-                  -Type $Type `
-                  -Data $Data
-          )
+          $Desired = Convert-CrucibleRegistryData `
+              -Type $Type `
+              -Data $Data
 
 
           $Existing = $null
@@ -248,12 +276,11 @@
 
           try {
 
-              $Existing = (
-                  Get-ItemPropertyValue `
-                      -LiteralPath $KeyPath `
-                      -Name $Name `
-                      -ErrorAction Stop
-              )
+              $Existing = Get-ItemPropertyValue `
+                  -LiteralPath $KeyPath `
+                  -Name $Name `
+                  -ErrorAction Stop
+
 
               $Exists = $true
           }
@@ -264,25 +291,28 @@
           }
 
 
-          if (
-              $Exists
-              -and
-              (
+          $AlreadyCorrect = $false
+
+
+          if ($Exists) {
+
+              $AlreadyCorrect = (
                   Test-CrucibleRegistryValue `
                       -Current $Existing `
                       -Desired $Desired `
                       -Type $Type
               )
-          ) {
+          }
+
+
+          if ($AlreadyCorrect) {
 
               return
           }
 
 
-          $PowerShellType = (
-              Convert-CrucibleRegistryType `
-                  -Type $Type
-          )
+          $PowerShellType = Convert-CrucibleRegistryType `
+              -Type $Type
 
 
           New-ItemProperty `
@@ -290,18 +320,25 @@
               -Name $Name `
               -PropertyType $PowerShellType `
               -Value $Desired `
-              -Force `
-              | Out-Null
+              -Force |
+              Out-Null
 
 
           $script:Changed = $true
       }
 
 
+      # ======================================================
+      # Apply one policy beneath one loaded hive
+      # ======================================================
+
       function Apply-ToHive {
 
           param (
+              [Parameter(Mandatory = $true)]
               [string] $HiveRoot,
+
+              [Parameter(Mandatory = $true)]
               [string] $Description
           )
 
@@ -321,20 +358,24 @@
 
 
           return @{
-              description = $Description
-              key = $KeyPath
+
+              description = (
+                  $Description
+              )
+
+              key = (
+                  $KeyPath
+              )
           }
       }
 
 
-      $script:Changed = $false
+      # ======================================================
+      # Apply to every existing normal user profile
+      # ======================================================
 
       $Applied = @()
 
-
-      # ------------------------------------------------------
-      # Existing local user profiles
-      # ------------------------------------------------------
 
       $ProfileListPath = (
           "HKLM:\SOFTWARE\Microsoft\Windows NT\" +
@@ -349,33 +390,29 @@
       )
 
 
-      foreach (
-          $ProfileEntry
-          in
-          $ProfileEntries
-      ) {
+      foreach ($ProfileEntry in $ProfileEntries) {
 
           $Sid = (
               [string]$ProfileEntry.PSChildName
           )
 
 
+          # --------------------------------------------------
           # Normal local/domain user profile SID shape.
-          if (
-              $Sid
-              -notmatch
-              '^S-1-5-21-'
-          ) {
+          #
+          # Skip LocalSystem, NetworkService, LocalService,
+          # service profiles, etc.
+          # --------------------------------------------------
+
+          if ($Sid -notmatch '^S-1-5-21-') {
 
               continue
           }
 
 
-          $ProfileProperties = (
-              Get-ItemProperty `
-                  -LiteralPath $ProfileEntry.PSPath `
-                  -ErrorAction Stop
-          )
+          $ProfileProperties = Get-ItemProperty `
+              -LiteralPath $ProfileEntry.PSPath `
+              -ErrorAction Stop
 
 
           $ProfilePath = (
@@ -385,19 +422,12 @@
           )
 
 
-          $HiveFile = (
-              Join-Path `
-                  $ProfilePath `
-                  "NTUSER.DAT"
-          )
+          $HiveFile = Join-Path `
+              $ProfilePath `
+              "NTUSER.DAT"
 
 
-          if (
-              -not (
-                  Test-Path `
-                      -LiteralPath $HiveFile
-              )
-          ) {
+          if (-not (Test-Path -LiteralPath $HiveFile)) {
 
               continue
           }
@@ -409,48 +439,75 @@
           )
 
 
-          if (
-              Test-Path `
-                  -LiteralPath $LoadedHive
-          ) {
+          # --------------------------------------------------
+          # User hive already loaded.
+          # --------------------------------------------------
 
-              $Applied += (
-                  Apply-ToHive `
-                      -HiveRoot $LoadedHive `
-                      -Description $ProfilePath
-              )
+          if (Test-Path -LiteralPath $LoadedHive) {
+
+              $Applied += Apply-ToHive `
+                  -HiveRoot $LoadedHive `
+                  -Description $ProfilePath
+
 
               continue
           }
 
 
           # --------------------------------------------------
-          # Profile exists but hive is not currently loaded.
+          # Existing profile whose hive is not loaded.
           # --------------------------------------------------
 
           $MountName = (
               "Crucible_{0}" -f
               (
-                  $Sid
-                  -replace
-                  '-',
-                  '_'
+                  $Sid -replace '-', '_'
               )
           )
+
+
+          $MountRegistryPath = (
+              "Registry::HKEY_USERS\{0}" -f
+              $MountName
+          )
+
+
+          # --------------------------------------------------
+          # Clean up a stale Crucible mount if a prior aborted
+          # operation left one behind.
+          # --------------------------------------------------
+
+          if (Test-Path -LiteralPath $MountRegistryPath) {
+
+              [GC]::Collect()
+
+              [GC]::WaitForPendingFinalizers()
+
+
+              & reg.exe `
+                  unload `
+                  "HKU\$MountName" |
+                  Out-Null
+
+
+              if ($LASTEXITCODE -ne 0) {
+
+                  throw (
+                      "Could not unload stale Crucible " +
+                      "registry hive HKU\$MountName."
+                  )
+              }
+          }
 
 
           & reg.exe `
               load `
               "HKU\$MountName" `
-              $HiveFile `
-              | Out-Null
+              $HiveFile |
+              Out-Null
 
 
-          if (
-              $LASTEXITCODE
-              -ne
-              0
-          ) {
+          if ($LASTEXITCODE -ne 0) {
 
               throw (
                   "Could not load user registry hive " +
@@ -467,14 +524,17 @@
               )
 
 
-              $Applied += (
-                  Apply-ToHive `
-                      -HiveRoot $MountedRoot `
-                      -Description $ProfilePath
-              )
+              $Applied += Apply-ToHive `
+                  -HiveRoot $MountedRoot `
+                  -Description $ProfilePath
           }
 
           finally {
+
+              # ------------------------------------------------
+              # Release Registry-provider references before
+              # reg.exe unload.
+              # ------------------------------------------------
 
               [GC]::Collect()
 
@@ -483,15 +543,11 @@
 
               & reg.exe `
                   unload `
-                  "HKU\$MountName" `
-                  | Out-Null
+                  "HKU\$MountName" |
+                  Out-Null
 
 
-              if (
-                  $LASTEXITCODE
-                  -ne
-                  0
-              ) {
+              if ($LASTEXITCODE -ne 0) {
 
                   throw (
                       "Could not unload temporary " +
@@ -502,44 +558,67 @@
       }
 
 
-      # ------------------------------------------------------
+      # ======================================================
       # Default User
       #
-      # This is NOT HKU\.DEFAULT.
+      # This template is copied whenever Windows creates a new
+      # user profile.
       #
-      # C:\Users\Default\NTUSER.DAT is the template copied
-      # when new user profiles are created.
-      # ------------------------------------------------------
+      # It is deliberately NOT HKU\.DEFAULT.
+      # ======================================================
 
-      $DefaultHiveFile = (
-          Join-Path `
-              $env:SystemDrive `
-              "Users\Default\NTUSER.DAT"
-      )
+      $DefaultHiveFile = Join-Path `
+          $env:SystemDrive `
+          "Users\Default\NTUSER.DAT"
 
 
-      if (
-          Test-Path `
-              -LiteralPath $DefaultHiveFile
-      ) {
+      if (Test-Path -LiteralPath $DefaultHiveFile) {
 
           $DefaultMount = (
               "Crucible_Default_User"
           )
 
 
-          & reg.exe `
-              load `
-              "HKU\$DefaultMount" `
-              $DefaultHiveFile `
-              | Out-Null
+          $DefaultMountRegistryPath = (
+              "Registry::HKEY_USERS\{0}" -f
+              $DefaultMount
+          )
 
 
           if (
-              $LASTEXITCODE
-              -ne
-              0
+              Test-Path `
+                  -LiteralPath $DefaultMountRegistryPath
           ) {
+
+              [GC]::Collect()
+
+              [GC]::WaitForPendingFinalizers()
+
+
+              & reg.exe `
+                  unload `
+                  "HKU\$DefaultMount" |
+                  Out-Null
+
+
+              if ($LASTEXITCODE -ne 0) {
+
+                  throw (
+                      "Could not unload stale " +
+                      "Default User Crucible hive."
+                  )
+              }
+          }
+
+
+          & reg.exe `
+              load `
+              "HKU\$DefaultMount" `
+              $DefaultHiveFile |
+              Out-Null
+
+
+          if ($LASTEXITCODE -ne 0) {
 
               throw (
                   "Could not load Default User hive."
@@ -555,11 +634,9 @@
               )
 
 
-              $Applied += (
-                  Apply-ToHive `
-                      -HiveRoot $DefaultRoot `
-                      -Description "Default User"
-              )
+              $Applied += Apply-ToHive `
+                  -HiveRoot $DefaultRoot `
+                  -Description "Default User"
           }
 
           finally {
@@ -571,15 +648,11 @@
 
               & reg.exe `
                   unload `
-                  "HKU\$DefaultMount" `
-                  | Out-Null
+                  "HKU\$DefaultMount" |
+                  Out-Null
 
 
-              if (
-                  $LASTEXITCODE
-                  -ne
-                  0
-              ) {
+              if ($LASTEXITCODE -ne 0) {
 
                   throw (
                       "Could not unload Default User hive."
@@ -589,16 +662,36 @@
       }
 
 
+      # ======================================================
+      # Ansible result
+      # ======================================================
+
       $Ansible.Changed = (
           [bool]$script:Changed
       )
 
 
       $Ansible.Result = @{
-          subkey = $Subkey
-          value_name = $ValueName
-          type = $ValueType
-          applied_hives = $Applied
+
+          subkey = (
+              $Subkey
+          )
+
+          value_name = (
+              $ValueName
+          )
+
+          type = (
+              $ValueType
+          )
+
+          applied_hives = (
+              $Applied
+          )
+
+          applied_hive_count = (
+              $Applied.Count
+          )
       }
 
   loop: >-
@@ -623,6 +716,10 @@
     crucible_windows_user_registry_policy_results
 
 
+# ============================================================
+# BC-I reboot accounting
+# ============================================================
+
 - name: Mark Windows reboot required after user registry policy changes
   ansible.builtin.set_fact:
 
@@ -634,6 +731,10 @@
       (
         crucible_windows_user_registry_policy_results.results
         | default([])
+        | rejectattr(
+            'skipped',
+            'defined'
+          )
         | selectattr(
             'changed',
             'equalto',

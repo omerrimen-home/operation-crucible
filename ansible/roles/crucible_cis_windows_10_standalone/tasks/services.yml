@@ -2,7 +2,7 @@
 
 # ============================================================
 # CIS Windows 10
-# Section 5 - Level 1 System Services
+# Section 5 - System Services
 # ============================================================
 
 
@@ -32,7 +32,7 @@
       }}
 
 
-- name: Disable Windows CIS Level 1 services
+- name: Disable Windows CIS services
   ansible.windows.win_powershell:
 
     parameters:
@@ -102,9 +102,7 @@
       # ------------------------------------------------------
 
       if (
-          [string]$Service.StartMode
-          -ine
-          "Disabled"
+          [string]$Service.StartMode -ine "Disabled"
       ) {
 
           Set-Service `
@@ -125,8 +123,7 @@
           -ErrorAction Stop
 
       if (
-          $RuntimeService.Status
-          -ne
+          $RuntimeService.Status -ne
           [System.ServiceProcess.ServiceControllerStatus]::Stopped
       ) {
 
@@ -157,9 +154,7 @@
 
 
       if (
-          [string]$VerifiedService.StartMode
-          -ine
-          "Disabled"
+          [string]$VerifiedService.StartMode -ine "Disabled"
       ) {
 
           throw (
@@ -170,8 +165,7 @@
 
 
       if (
-          $VerifiedRuntime.Status
-          -ne
+          $VerifiedRuntime.Status -ne
           [System.ServiceProcess.ServiceControllerStatus]::Stopped
       ) {
 

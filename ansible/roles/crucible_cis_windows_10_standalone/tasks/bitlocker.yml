@@ -58,9 +58,7 @@
 
 
       if (
-          $null
-          -ne
-          $GetTpm
+          $null -ne $GetTpm
       ) {
 
           try {
@@ -103,9 +101,7 @@
 
 
       if (
-          $null
-          -ne
-          $GetBitLockerVolume
+          $null -ne $GetBitLockerVolume
       ) {
 
           try {
@@ -150,9 +146,7 @@
       $Ansible.Result = @{
 
           bitlocker_cmdlets_present = (
-              $null
-              -ne
-              $GetBitLockerVolume
+              $null -ne $GetBitLockerVolume
           )
 
           tpm = $TpmResult

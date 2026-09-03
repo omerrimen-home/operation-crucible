@@ -128,15 +128,12 @@
           fingerprint = $null
 
           validation_status = $null
+
+          error = $null
       }
 
 
-      if (
-          -not (
-              Test-Path `
-                  -LiteralPath $EvidencePath
-          )
-      ) {
+      if (-not (Test-Path -LiteralPath $EvidencePath)) {
 
           $Ansible.Result = $Result
 
@@ -149,12 +146,14 @@
 
       try {
 
+          $RawDocument = Get-Content `
+              -LiteralPath $EvidencePath `
+              -Raw `
+              -ErrorAction Stop
+
+
           $Document = (
-              Get-Content `
-                  -LiteralPath $EvidencePath `
-                  -Raw `
-                  -ErrorAction Stop
-              |
+              $RawDocument |
               ConvertFrom-Json `
                   -ErrorAction Stop
           )
@@ -170,18 +169,21 @@
           )
 
 
+          $FingerprintMatches = (
+              [string]$Document.fingerprint -eq
+              $ExpectedFingerprint
+          )
+
+
+          $ValidationPassed = (
+              [string]$Document.validation.status -eq
+              "implementation-validation-passed"
+          )
+
+
           $Result.valid = (
-              (
-                  [string]$Document.fingerprint
-                  -eq
-                  $ExpectedFingerprint
-              )
-              -and
-              (
-                  [string]$Document.validation.status
-                  -eq
-                  "implementation-validation-passed"
-              )
+              $FingerprintMatches -and
+              $ValidationPassed
           )
       }
 
@@ -190,6 +192,9 @@
           $Result.error = (
               $_.Exception.Message
           )
+
+
+          $Result.valid = $false
       }
 
 
@@ -246,9 +251,7 @@
       $Ansible.Result = @{
 
           last_boot_utc = (
-              $Os.LastBootUpTime
-              .ToUniversalTime()
-              .ToString("o")
+              $Os.LastBootUpTime.ToUniversalTime().ToString("o")
           )
 
           caption = (
@@ -348,9 +351,7 @@
       $Ansible.Result = @{
 
           last_boot_utc = (
-              $Os.LastBootUpTime
-              .ToUniversalTime()
-              .ToString("o")
+              $Os.LastBootUpTime.ToUniversalTime().ToString("o")
           )
 
           caption = (
@@ -445,8 +446,7 @@
           Get-NetTCPConnection `
               -LocalPort 5986 `
               -State Listen `
-              -ErrorAction SilentlyContinue
-          |
+              -ErrorAction SilentlyContinue |
           Select-Object -First 1
       )
 
@@ -458,8 +458,7 @@
       $FirewallRule = (
           Get-NetFirewallRule `
               -Name "Crucible-WinRM-HTTPS" `
-              -ErrorAction SilentlyContinue
-          |
+              -ErrorAction SilentlyContinue |
           Select-Object -First 1
       )
 
@@ -472,9 +471,7 @@
 
 
       if (
-          $null
-          -ne
-          $FirewallRule
+          $null -ne $FirewallRule
       ) {
 
           $FirewallResult.enabled = (
@@ -525,9 +522,7 @@
 
 
       if (
-          $null
-          -ne
-          $DefenderService
+          $null -ne $DefenderService
       ) {
 
           $Defender.service_status = (
@@ -544,9 +539,7 @@
 
 
       if (
-          $null
-          -ne
-          $MpCommand
+          $null -ne $MpCommand
       ) {
 
           try {
@@ -743,8 +736,7 @@
       $Ansible.Result = @{
 
           timestamp_utc = (
-              [DateTime]::UtcNow
-              .ToString("o")
+              [DateTime]::UtcNow.ToString("o")
           )
 
           operating_system = @{
@@ -762,9 +754,7 @@
               )
 
               last_boot_utc = (
-                  $Os.LastBootUpTime
-                  .ToUniversalTime()
-                  .ToString("o")
+                  $Os.LastBootUpTime.ToUniversalTime().ToString("o")
               )
           }
 
@@ -1199,7 +1189,7 @@
 # Allow completion marker to be written
 # ============================================================
 
-- name: Record successful BC-I final validation
+- name: Record successful final validation
   ansible.builtin.set_fact:
 
     crucible_cis_windows_10_final_validation_passed: true

@@ -49,9 +49,7 @@
 
 
       $Is64Bit = (
-          [string]$Os.OSArchitecture
-          -match
-          "64"
+          [string]$Os.OSArchitecture -match "64"
       )
 
 

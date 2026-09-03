@@ -32,6 +32,7 @@
       [CmdletBinding()]
       param ()
 
+
       $Ansible.Changed = $false
 
 
@@ -45,6 +46,32 @@
           -ErrorAction SilentlyContinue
 
 
+      # ------------------------------------------------------
+      # Resolve service state outside the result hashtable.
+      #
+      # Windows PowerShell 5.1 does not permit a normal
+      # statement-form if/else directly inside a grouping
+      # expression such as:
+      #
+      #     value = (
+      #         if (...) { ... }
+      #     )
+      #
+      # Resolve the value first, then place the scalar into
+      # the result object.
+      # ------------------------------------------------------
+
+      $ServiceState = $null
+
+
+      if ($null -ne $Service) {
+
+          $ServiceState = (
+              [string]$Service.Status
+          )
+      }
+
+
       $Ansible.Result = @{
 
           service_present = (
@@ -52,12 +79,7 @@
           )
 
           service_state = (
-              if ($null -ne $Service) {
-                  [string]$Service.Status
-              }
-              else {
-                  $null
-              }
+              $ServiceState
           )
 
           mp_cmdlet_present = (

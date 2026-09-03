@@ -41,9 +41,7 @@
 
 
       if (
-          [string]$Rule.Enabled
-          -ine
-          "True"
+          [string]$Rule.Enabled -ine "True"
       ) {
 
           throw (
@@ -54,9 +52,7 @@
 
 
       if (
-          [string]$Rule.Direction
-          -ine
-          "Inbound"
+          [string]$Rule.Direction -ine "Inbound"
       ) {
 
           throw (
@@ -67,9 +63,7 @@
 
 
       if (
-          [string]$Rule.Action
-          -ine
-          "Allow"
+          [string]$Rule.Action -ine "Allow"
       ) {
 
           throw (
@@ -104,9 +98,7 @@
 
 
       if (
-          [string]$PortFilter.LocalPort
-          -ne
-          "5986"
+          [string]$PortFilter.LocalPort -ne "5986"
       ) {
 
           throw (
@@ -312,12 +304,51 @@
 
           switch ($Type) {
 
+              # ------------------------------------------------
+              # Set-NetFirewallProfile does NOT use normal
+              # System.Boolean values for these settings.
+              #
+              # Enabled, NotifyOnListen, LogAllowed,
+              # LogBlocked, etc. use the NetSecurity
+              # GpoBoolean type, whose accepted textual values
+              # are:
+              #
+              #   True
+              #   False
+              #   NotConfigured
+              #
+              # Passing $true / $false through a splatted
+              # parameter table causes PowerShell to attempt:
+              #
+              #   System.Boolean -> GpoBoolean
+              #
+              # which fails on Windows 10.
+              #
+              # Preserve the canonical string instead and let
+              # Set-NetFirewallProfile's parameter binder
+              # convert it to GpoBoolean.
+              # ------------------------------------------------
+
               "boolean" {
 
-                  return (
-                      [System.Convert]::ToBoolean(
-                          $RawValue
+                  if (
+                      $RawValue -notin @(
+                          "True",
+                          "False",
+                          "NotConfigured"
                       )
+                  ) {
+
+                      throw (
+                          "Invalid firewall GpoBoolean value " +
+                          "'$RawValue'. Expected True, False, " +
+                          "or NotConfigured."
+                      )
+                  }
+
+
+                  return (
+                      [string]$RawValue
                   )
               }
 
@@ -325,7 +356,7 @@
               "integer" {
 
                   return (
-                      [int]$RawValue
+                      [uint64]$RawValue
                   )
               }
 
@@ -359,9 +390,7 @@
 
 
           if (
-              $Name
-              -eq
-              "LogFileName"
+              $Name -eq "LogFileName"
           ) {
 
               $CurrentExpanded = (
@@ -377,17 +406,13 @@
               )
 
               return (
-                  $CurrentExpanded
-                  -ieq
-                  $DesiredExpanded
+                  $CurrentExpanded -ieq $DesiredExpanded
               )
           }
 
 
           return (
-              [string]$Current
-              -ieq
-              [string]$Desired
+              [string]$Current -ieq [string]$Desired
           )
       }
 

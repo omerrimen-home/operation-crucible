@@ -506,26 +506,11 @@ configurations:
 
       disable_xbox_services: true
 
-      builtin_administrator_name:
-        type: str
-        default: CrucibleAdmin
-        description: >-
-          Replacement name for the built-in Windows
-          Administrator account used by CIS 2.3.1.4.
+      builtin_administrator_name: CrucibleAdmin
 
-      builtin_guest_name:
-        type: str
-        default: CrucibleGuest
-        description: >-
-          Replacement name for the built-in Windows Guest
-          account used by CIS 2.3.1.5.
+      builtin_guest_name: CrucibleGuest
 
-      password_expiry_warning_days:
-        type: int
-        default: 14
-        description: >-
-          Number of days before password expiration at
-          which Windows warns the user.
+      password_expiry_warning_days: 14
       
       firewall_log_max_size_kb: 16384
 

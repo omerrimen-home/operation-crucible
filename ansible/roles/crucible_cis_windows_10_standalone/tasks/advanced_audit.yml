@@ -51,16 +51,24 @@
 
       $Ansible.Changed = $false
 
-      $AuditPol = (
-          Join-Path `
-              $env:SystemRoot `
-              "System32\auditpol.exe"
-      )
 
+      $AuditPol = Join-Path `
+          $env:SystemRoot `
+          "System32\auditpol.exe"
+
+
+      # ======================================================
+      # Read one Advanced Audit Policy subcategory.
+      #
+      # /r returns CSV output. Using the subcategory GUID keeps
+      # this independent of the human-readable audit category
+      # name.
+      # ======================================================
 
       function Get-CrucibleAuditSetting {
 
           param (
+              [Parameter(Mandatory = $true)]
               [string] $Guid
           )
 
@@ -73,11 +81,7 @@
           )
 
 
-          if (
-              $LASTEXITCODE
-              -ne
-              0
-          ) {
+          if ($LASTEXITCODE -ne 0) {
 
               throw (
                   "auditpol /get failed for " +
@@ -88,17 +92,11 @@
 
 
           $Rows = @(
-              $RawOutput
-              |
-              ConvertFrom-Csv
+              $RawOutput | ConvertFrom-Csv
           )
 
 
-          if (
-              $Rows.Count
-              -lt
-              1
-          ) {
+          if ($Rows.Count -lt 1) {
 
               throw (
                   "auditpol returned no policy row " +
@@ -108,30 +106,21 @@
 
 
           $Row = (
-              $Rows
-              |
+              $Rows |
               Select-Object -First 1
           )
 
 
           $Property = (
-              $Row.PSObject.Properties
-              |
+              $Row.PSObject.Properties |
               Where-Object {
-                  $_.Name
-                  -eq
-                  "Inclusion Setting"
-              }
-              |
+                  $_.Name -eq "Inclusion Setting"
+              } |
               Select-Object -First 1
           )
 
 
-          if (
-              $null
-              -eq
-              $Property
-          ) {
+          if ($null -eq $Property) {
 
               throw (
                   "auditpol CSV output did not contain " +
@@ -141,61 +130,51 @@
           }
 
 
-          return (
-              [string]$Property.Value
-          )
+          return [string]$Property.Value
       }
 
 
-      # ------------------------------------------------------
+      # ======================================================
       # Current state
-      # ------------------------------------------------------
+      # ======================================================
 
-      $CurrentSetting = (
-          Get-CrucibleAuditSetting `
-              -Guid $AuditGuid
-      )
+      $CurrentSetting = Get-CrucibleAuditSetting `
+          -Guid $AuditGuid
 
 
       $HasSuccess = (
-          $CurrentSetting
-          -match
-          "Success"
+          $CurrentSetting -match "Success"
       )
 
+
       $HasFailure = (
-          $CurrentSetting
-          -match
-          "Failure"
+          $CurrentSetting -match "Failure"
       )
 
 
       $NeedSuccess = (
-          $RequireSuccess
-          -and
+          $RequireSuccess -and
           -not $HasSuccess
       )
 
+
       $NeedFailure = (
-          $RequireFailure
-          -and
+          $RequireFailure -and
           -not $HasFailure
       )
 
 
-      # ------------------------------------------------------
-      # Only enable missing requirements.
+      # ======================================================
+      # Enable only missing audit requirements.
       #
-      # CIS wording such as "include Success" permits Failure
-      # to remain enabled if another policy/site requirement
-      # already requested it.
-      # ------------------------------------------------------
+      # This deliberately preserves additional auditing.
+      #
+      # For example, a CIS recommendation requiring Success
+      # remains compliant if the host already audits both
+      # Success and Failure.
+      # ======================================================
 
-      if (
-          $NeedSuccess
-          -or
-          $NeedFailure
-      ) {
+      if ($NeedSuccess -or $NeedFailure) {
 
           $Arguments = @(
               "/set",
@@ -205,29 +184,20 @@
 
           if ($NeedSuccess) {
 
-              $Arguments += (
-                  "/success:enable"
-              )
+              $Arguments += "/success:enable"
           }
 
 
           if ($NeedFailure) {
 
-              $Arguments += (
-                  "/failure:enable"
-              )
+              $Arguments += "/failure:enable"
           }
 
 
-          & $AuditPol @Arguments |
-              Out-Null
+          & $AuditPol @Arguments | Out-Null
 
 
-          if (
-              $LASTEXITCODE
-              -ne
-              0
-          ) {
+          if ($LASTEXITCODE -ne 0) {
 
               throw (
                   "auditpol /set failed for " +
@@ -241,32 +211,26 @@
       }
 
 
-      # ------------------------------------------------------
-      # Verify final state
-      # ------------------------------------------------------
+      # ======================================================
+      # Verify effective state
+      # ======================================================
 
-      $VerifiedSetting = (
-          Get-CrucibleAuditSetting `
-              -Guid $AuditGuid
-      )
+      $VerifiedSetting = Get-CrucibleAuditSetting `
+          -Guid $AuditGuid
 
 
       $VerifiedSuccess = (
-          $VerifiedSetting
-          -match
-          "Success"
+          $VerifiedSetting -match "Success"
       )
 
+
       $VerifiedFailure = (
-          $VerifiedSetting
-          -match
-          "Failure"
+          $VerifiedSetting -match "Failure"
       )
 
 
       if (
-          $RequireSuccess
-          -and
+          $RequireSuccess -and
           -not $VerifiedSuccess
       ) {
 
@@ -278,8 +242,7 @@
 
 
       if (
-          $RequireFailure
-          -and
+          $RequireFailure -and
           -not $VerifiedFailure
       ) {
 
@@ -291,16 +254,24 @@
 
 
       $Ansible.Result = @{
-          guid = $AuditGuid
+
+          guid = (
+              $AuditGuid
+          )
+
           inclusion_setting = (
               $VerifiedSetting
           )
+
           requires_success = (
               $RequireSuccess
           )
+
           requires_failure = (
               $RequireFailure
           )
+
+          compliant = $true
       }
 
   loop: >-
