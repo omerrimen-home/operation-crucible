@@ -1,0 +1,371 @@
+# Operation Crucible
+#
+# Generated BC-H Windows 10 CIS advanced-profile policy
+# inventory.
+#
+# SOURCE:
+#   CIS Microsoft Windows 10 Stand-alone Benchmark v4.0.0
+#
+# This file contains the registry backing stated by the
+# benchmark's Audit procedures for:
+#
+#   - BitLocker profile controls
+#   - Next Generation profile controls
+#
+# IMPORTANT:
+#
+#   Setting BitLocker policy does not itself encrypt a drive.
+#
+#   Setting Next Generation policy does not guarantee that
+#   the current virtual/physical hardware can activate VBS,
+#   Credential Guard, Application Guard, or other hardware-
+#   dependent runtime features.
+#
+# Do not hand-edit this generated file.
+#
+crucible_cis_windows_10_bitlocker_machine_registry_policies:
+- control_id: 18.10.10.1.1
+  name: FDVDiscoveryVolumeType
+  type: string
+  data: ''
+  source_value_text: <blank> i.e
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.10
+  name: FDVEnforceUserCert
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.2
+  name: FDVRecovery
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.3
+  name: FDVManageDRA
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.4
+  name: FDVRecoveryPassword
+  type: dword
+  data: 2
+  source_value_text: 2 or 1.
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.5
+  name: FDVRecoveryKey
+  type: dword
+  data: 2
+  source_value_text: 2 or 1.
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.6
+  name: FDVHideRecoveryPage
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.7
+  name: FDVHardwareEncryption
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.8
+  name: FDVPassphrase
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.1.9
+  name: FDVAllowUserCert
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.1
+  name: UseEnhancedPin
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.10
+  name: UseAdvancedStartup
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.11
+  name: EnableBDEWithNoTPM
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.2
+  name: OSAllowSecureBootForIntegrity
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.3
+  name: OSRecovery
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.4
+  name: OSManageDRA
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.5
+  name: OSRecoveryPassword
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.6
+  name: OSRecoveryKey
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.7
+  name: OSHideRecoveryPage
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.8
+  name: OSHardwareEncryption
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.2.9
+  name: OSPassphrase
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.1
+  name: RDVDiscoveryVolumeType
+  type: string
+  data: ''
+  source_value_text: <blank> i.e
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.10
+  name: RDVEnforceUserCert
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.11
+  name: RDVDenyWriteAccess
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SYSTEM\CurrentControlSet\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.12
+  name: RDVDenyCrossOrg
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.2
+  name: RDVRecovery
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.3
+  name: RDVManageDRA
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.4
+  name: RDVRecoveryPassword
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.5
+  name: RDVRecoveryKey
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.6
+  name: RDVHideRecoveryPage
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.7
+  name: RDVHardwareEncryption
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.8
+  name: RDVPassphrase
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.3.9
+  name: RDVAllowUserCert
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.10.10.4
+  name: DisableExternalDMAUnderLock
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\FVE
+- control_id: 18.9.24.1
+  name: DeviceEnumerationPolicy
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\Kernel DMAProtection
+- control_id: 18.9.33.6.3
+  name: DCSettingIndex
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\abfc2519-3608-4c2a-94ea-171b0ed546ab
+- control_id: 18.9.33.6.4
+  name: ACSettingIndex
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Power\PowerSettings\abfc2519-3608-4c2a-94ea-171b0ed546ab
+- control_id: 18.9.7.1.1
+  name: DenyDeviceIDs
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions
+- control_id: 18.9.7.1.2
+  name: '1'
+  type: string
+  data: PCI\CC_0C0A
+  source_value_text: PCI\CC_0C0A.
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions\DenyDeviceIDs
+- control_id: 18.9.7.1.3
+  name: DenyDeviceIDsRetroactive
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions
+- control_id: 18.9.7.1.4
+  name: DenyDeviceClasses
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions
+- control_id: 18.9.7.1.5
+  name: <numeric value>
+  type: string
+  data: '{d48179be-ec20-11d1-b6b8-00c04fa372a7}, {7ebefbc0-3200- 11d2-b4c2-00a0C9697d07}, {c06ff265-ae09-48f0-812c-16753d7cba83}, and {6bdd1fc1-810f-11d0-bec7-08002be2092f}'
+  source_value_text: '{d48179be-ec20-11d1-b6b8-00c04fa372a7}, {7ebefbc0-3200- 11d2-b4c2-00a0C9697d07}, {c06ff265-ae09-48f0-812c-16753d7cba83}, and {6bdd1fc1-810f-11d0-bec7-08002be2092f}.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions\DenyDeviceClasses
+- control_id: 18.9.7.1.6
+  name: DenyDeviceClassesRetroactive
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions
+- control_id: 2.3.7.3
+  name: MaxDevicePasswordFailedAttempts
+  type: dword
+  data: 10
+  source_value_text: 10 or less, but not 0.
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+crucible_cis_windows_10_bitlocker_user_registry_policies: []
+crucible_cis_windows_10_next_generation_machine_registry_policies:
+- control_id: 18.10.44.1
+  name: AuditApplicationGuard
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.10.44.2
+  name: AllowCameraMicrophoneRedirection
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.10.44.3
+  name: AllowPersistence
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.10.44.4
+  name: SaveFilesToHost
+  type: dword
+  data: 0
+  source_value_text: '0.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.10.44.5
+  name: AppHVSIClipboardSettings
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.10.44.6
+  name: AllowAppHVSI_ProviderSet
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\AppHVSI
+- control_id: 18.9.26.2
+  name: RunAsPPL
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\System
+- control_id: 18.9.5.1
+  name: EnableVirtualizationBasedSecurity
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+- control_id: 18.9.5.2
+  name: RequirePlatformSecurityFeatures
+  type: dword
+  data: 1
+  source_value_text: 1 or 3.
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+- control_id: 18.9.5.3
+  name: HypervisorEnforcedCodeIntegrity
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+- control_id: 18.9.5.4
+  name: HVCIMATRequired
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+- control_id: 18.9.5.5
+  name: LsaCfgFlags
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+- control_id: 18.9.5.6
+  name: ConfigureSystemGuardLaunch
+  type: dword
+  data: 1
+  source_value_text: '1.'
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+crucible_cis_windows_10_next_generation_user_registry_policies: []

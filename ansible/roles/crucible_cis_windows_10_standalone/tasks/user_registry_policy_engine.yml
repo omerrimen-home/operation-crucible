@@ -1,0 +1,646 @@
+---
+
+# ============================================================
+# Operation Crucible Windows user-registry policy engine
+#
+# Expected:
+#
+#   crucible_windows_user_registry_policy_batch
+#
+# Each policy contains:
+#
+#   control_id
+#   subkey
+#   name
+#   type
+#   data
+#
+# Policies are applied to:
+#
+#   - all existing normal local user profiles;
+#   - currently loaded profile hives;
+#   - the Default User profile.
+# ============================================================
+
+
+- name: Apply declarative Windows user registry policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Subkey: >-
+        {{
+          item.subkey
+        }}
+
+      ValueName: >-
+        {{
+          item.name
+        }}
+
+      ValueType: >-
+        {{
+          item.type
+        }}
+
+      DesiredData: >-
+        {{
+          item.data
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $Subkey,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ValueName,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ValueType,
+
+          [Parameter(Mandatory = $true)]
+          [object] $DesiredData
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      function Convert-CrucibleRegistryType {
+
+          param (
+              [string] $Type
+          )
+
+
+          switch (
+              $Type.ToLowerInvariant()
+          ) {
+
+              "dword" {
+                  return "DWord"
+              }
+
+              "qword" {
+                  return "QWord"
+              }
+
+              "string" {
+                  return "String"
+              }
+
+              "expandstring" {
+                  return "ExpandString"
+              }
+
+              "multistring" {
+                  return "MultiString"
+              }
+
+              default {
+
+                  throw (
+                      "Unsupported Crucible registry " +
+                      "type '$Type'."
+                  )
+              }
+          }
+      }
+
+
+      function Convert-CrucibleRegistryData {
+
+          param (
+              [string] $Type,
+              [object] $Data
+          )
+
+
+          switch (
+              $Type.ToLowerInvariant()
+          ) {
+
+              "dword" {
+                  return [int]$Data
+              }
+
+              "qword" {
+                  return [long]$Data
+              }
+
+              "multistring" {
+
+                  return @(
+                      $Data
+                  )
+              }
+
+              default {
+
+                  return [string]$Data
+              }
+          }
+      }
+
+
+      function Test-CrucibleRegistryValue {
+
+          param (
+              [object] $Current,
+              [object] $Desired,
+              [string] $Type
+          )
+
+
+          if (
+              $Type.ToLowerInvariant()
+              -eq
+              "multistring"
+          ) {
+
+              $CurrentArray = @(
+                  $Current
+              )
+
+              $DesiredArray = @(
+                  $Desired
+              )
+
+
+              if (
+                  $CurrentArray.Count
+                  -ne
+                  $DesiredArray.Count
+              ) {
+
+                  return $false
+              }
+
+
+              for (
+                  $Index = 0;
+                  $Index -lt $DesiredArray.Count;
+                  $Index++
+              ) {
+
+                  if (
+                      [string]$CurrentArray[$Index]
+                      -cne
+                      [string]$DesiredArray[$Index]
+                  ) {
+
+                      return $false
+                  }
+              }
+
+
+              return $true
+          }
+
+
+          return (
+              [string]$Current
+              -ceq
+              [string]$Desired
+          )
+      }
+
+
+      function Set-CrucibleRegistryValue {
+
+          param (
+              [string] $KeyPath,
+              [string] $Name,
+              [string] $Type,
+              [object] $Data
+          )
+
+
+          if (
+              -not (
+                  Test-Path `
+                      -LiteralPath $KeyPath
+              )
+          ) {
+
+              New-Item `
+                  -Path $KeyPath `
+                  -Force `
+                  | Out-Null
+
+              $script:Changed = $true
+          }
+
+
+          $Desired = (
+              Convert-CrucibleRegistryData `
+                  -Type $Type `
+                  -Data $Data
+          )
+
+
+          $Existing = $null
+
+          $Exists = $false
+
+
+          try {
+
+              $Existing = (
+                  Get-ItemPropertyValue `
+                      -LiteralPath $KeyPath `
+                      -Name $Name `
+                      -ErrorAction Stop
+              )
+
+              $Exists = $true
+          }
+
+          catch {
+
+              $Exists = $false
+          }
+
+
+          if (
+              $Exists
+              -and
+              (
+                  Test-CrucibleRegistryValue `
+                      -Current $Existing `
+                      -Desired $Desired `
+                      -Type $Type
+              )
+          ) {
+
+              return
+          }
+
+
+          $PowerShellType = (
+              Convert-CrucibleRegistryType `
+                  -Type $Type
+          )
+
+
+          New-ItemProperty `
+              -LiteralPath $KeyPath `
+              -Name $Name `
+              -PropertyType $PowerShellType `
+              -Value $Desired `
+              -Force `
+              | Out-Null
+
+
+          $script:Changed = $true
+      }
+
+
+      function Apply-ToHive {
+
+          param (
+              [string] $HiveRoot,
+              [string] $Description
+          )
+
+
+          $KeyPath = (
+              "{0}\{1}" -f
+              $HiveRoot,
+              $Subkey
+          )
+
+
+          Set-CrucibleRegistryValue `
+              -KeyPath $KeyPath `
+              -Name $ValueName `
+              -Type $ValueType `
+              -Data $DesiredData
+
+
+          return @{
+              description = $Description
+              key = $KeyPath
+          }
+      }
+
+
+      $script:Changed = $false
+
+      $Applied = @()
+
+
+      # ------------------------------------------------------
+      # Existing local user profiles
+      # ------------------------------------------------------
+
+      $ProfileListPath = (
+          "HKLM:\SOFTWARE\Microsoft\Windows NT\" +
+          "CurrentVersion\ProfileList"
+      )
+
+
+      $ProfileEntries = @(
+          Get-ChildItem `
+              -LiteralPath $ProfileListPath `
+              -ErrorAction Stop
+      )
+
+
+      foreach (
+          $ProfileEntry
+          in
+          $ProfileEntries
+      ) {
+
+          $Sid = (
+              [string]$ProfileEntry.PSChildName
+          )
+
+
+          # Normal local/domain user profile SID shape.
+          if (
+              $Sid
+              -notmatch
+              '^S-1-5-21-'
+          ) {
+
+              continue
+          }
+
+
+          $ProfileProperties = (
+              Get-ItemProperty `
+                  -LiteralPath $ProfileEntry.PSPath `
+                  -ErrorAction Stop
+          )
+
+
+          $ProfilePath = (
+              [Environment]::ExpandEnvironmentVariables(
+                  [string]$ProfileProperties.ProfileImagePath
+              )
+          )
+
+
+          $HiveFile = (
+              Join-Path `
+                  $ProfilePath `
+                  "NTUSER.DAT"
+          )
+
+
+          if (
+              -not (
+                  Test-Path `
+                      -LiteralPath $HiveFile
+              )
+          ) {
+
+              continue
+          }
+
+
+          $LoadedHive = (
+              "Registry::HKEY_USERS\{0}" -f
+              $Sid
+          )
+
+
+          if (
+              Test-Path `
+                  -LiteralPath $LoadedHive
+          ) {
+
+              $Applied += (
+                  Apply-ToHive `
+                      -HiveRoot $LoadedHive `
+                      -Description $ProfilePath
+              )
+
+              continue
+          }
+
+
+          # --------------------------------------------------
+          # Profile exists but hive is not currently loaded.
+          # --------------------------------------------------
+
+          $MountName = (
+              "Crucible_{0}" -f
+              (
+                  $Sid
+                  -replace
+                  '-',
+                  '_'
+              )
+          )
+
+
+          & reg.exe `
+              load `
+              "HKU\$MountName" `
+              $HiveFile `
+              | Out-Null
+
+
+          if (
+              $LASTEXITCODE
+              -ne
+              0
+          ) {
+
+              throw (
+                  "Could not load user registry hive " +
+                  "'$HiveFile'."
+              )
+          }
+
+
+          try {
+
+              $MountedRoot = (
+                  "Registry::HKEY_USERS\{0}" -f
+                  $MountName
+              )
+
+
+              $Applied += (
+                  Apply-ToHive `
+                      -HiveRoot $MountedRoot `
+                      -Description $ProfilePath
+              )
+          }
+
+          finally {
+
+              [GC]::Collect()
+
+              [GC]::WaitForPendingFinalizers()
+
+
+              & reg.exe `
+                  unload `
+                  "HKU\$MountName" `
+                  | Out-Null
+
+
+              if (
+                  $LASTEXITCODE
+                  -ne
+                  0
+              ) {
+
+                  throw (
+                      "Could not unload temporary " +
+                      "registry hive HKU\$MountName."
+                  )
+              }
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Default User
+      #
+      # This is NOT HKU\.DEFAULT.
+      #
+      # C:\Users\Default\NTUSER.DAT is the template copied
+      # when new user profiles are created.
+      # ------------------------------------------------------
+
+      $DefaultHiveFile = (
+          Join-Path `
+              $env:SystemDrive `
+              "Users\Default\NTUSER.DAT"
+      )
+
+
+      if (
+          Test-Path `
+              -LiteralPath $DefaultHiveFile
+      ) {
+
+          $DefaultMount = (
+              "Crucible_Default_User"
+          )
+
+
+          & reg.exe `
+              load `
+              "HKU\$DefaultMount" `
+              $DefaultHiveFile `
+              | Out-Null
+
+
+          if (
+              $LASTEXITCODE
+              -ne
+              0
+          ) {
+
+              throw (
+                  "Could not load Default User hive."
+              )
+          }
+
+
+          try {
+
+              $DefaultRoot = (
+                  "Registry::HKEY_USERS\{0}" -f
+                  $DefaultMount
+              )
+
+
+              $Applied += (
+                  Apply-ToHive `
+                      -HiveRoot $DefaultRoot `
+                      -Description "Default User"
+              )
+          }
+
+          finally {
+
+              [GC]::Collect()
+
+              [GC]::WaitForPendingFinalizers()
+
+
+              & reg.exe `
+                  unload `
+                  "HKU\$DefaultMount" `
+                  | Out-Null
+
+
+              if (
+                  $LASTEXITCODE
+                  -ne
+                  0
+              ) {
+
+                  throw (
+                      "Could not unload Default User hive."
+                  )
+              }
+          }
+      }
+
+
+      $Ansible.Changed = (
+          [bool]$script:Changed
+      )
+
+
+      $Ansible.Result = @{
+          subkey = $Subkey
+          value_name = $ValueName
+          type = $ValueType
+          applied_hives = $Applied
+      }
+
+  loop: >-
+    {{
+      crucible_windows_user_registry_policy_batch
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_windows_user_registry_policy_results
+
+
+- name: Mark Windows reboot required after user registry policy changes
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_reboot_required: true
+
+  when:
+
+    - >-
+      (
+        crucible_windows_user_registry_policy_results.results
+        | default([])
+        | selectattr(
+            'changed',
+            'equalto',
+            true
+          )
+        | list
+        | length
+      )
+      >
+      0

@@ -1,0 +1,86 @@
+---
+
+crucible_cis_windows_10_event_log_registry_policies:
+
+  # ==========================================================
+  # Application
+  # ==========================================================
+
+  - control_id: "18.10.26.1.1"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Application'
+    name: Retention
+    type: string
+    data: "0"
+
+  - control_id: "18.10.26.1.2"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Application'
+    name: MaxSize
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_event_log_application_max_size_kb
+        | int
+      }}
+
+
+  # ==========================================================
+  # Security
+  # ==========================================================
+
+  - control_id: "18.10.26.2.1"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Security'
+    name: Retention
+    type: string
+    data: "0"
+
+  - control_id: "18.10.26.2.2"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Security'
+    name: MaxSize
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_event_log_security_max_size_kb
+        | int
+      }}
+
+
+  # ==========================================================
+  # Setup
+  # ==========================================================
+
+  - control_id: "18.10.26.3.1"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Setup'
+    name: Retention
+    type: string
+    data: "0"
+
+  - control_id: "18.10.26.3.2"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\Setup'
+    name: MaxSize
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_event_log_setup_max_size_kb
+        | int
+      }}
+
+
+  # ==========================================================
+  # System
+  # ==========================================================
+
+  - control_id: "18.10.26.4.1"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\System'
+    name: Retention
+    type: string
+    data: "0"
+
+  - control_id: "18.10.26.4.2"
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\System'
+    name: MaxSize
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_event_log_system_max_size_kb
+        | int
+      }}

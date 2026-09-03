@@ -1,0 +1,325 @@
+---
+
+# ============================================================
+# CIS Windows 10
+# Section 17 - Advanced Audit Policy
+# ============================================================
+
+
+- name: Load Windows CIS Advanced Audit Policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_audit.yml
+
+
+- name: Apply Windows CIS Advanced Audit Policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      AuditGuid: >-
+        {{
+          item.guid
+        }}
+
+      RequireSuccess: >-
+        {{
+          item.require_success
+        }}
+
+      RequireFailure: >-
+        {{
+          item.require_failure
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $AuditGuid,
+
+          [Parameter(Mandatory = $true)]
+          [bool] $RequireSuccess,
+
+          [Parameter(Mandatory = $true)]
+          [bool] $RequireFailure
+      )
+
+
+      $Ansible.Changed = $false
+
+      $AuditPol = (
+          Join-Path `
+              $env:SystemRoot `
+              "System32\auditpol.exe"
+      )
+
+
+      function Get-CrucibleAuditSetting {
+
+          param (
+              [string] $Guid
+          )
+
+
+          $RawOutput = @(
+              & $AuditPol `
+                  /get `
+                  "/subcategory:$Guid" `
+                  /r
+          )
+
+
+          if (
+              $LASTEXITCODE
+              -ne
+              0
+          ) {
+
+              throw (
+                  "auditpol /get failed for " +
+                  "$Guid with exit code " +
+                  "$LASTEXITCODE."
+              )
+          }
+
+
+          $Rows = @(
+              $RawOutput
+              |
+              ConvertFrom-Csv
+          )
+
+
+          if (
+              $Rows.Count
+              -lt
+              1
+          ) {
+
+              throw (
+                  "auditpol returned no policy row " +
+                  "for $Guid."
+              )
+          }
+
+
+          $Row = (
+              $Rows
+              |
+              Select-Object -First 1
+          )
+
+
+          $Property = (
+              $Row.PSObject.Properties
+              |
+              Where-Object {
+                  $_.Name
+                  -eq
+                  "Inclusion Setting"
+              }
+              |
+              Select-Object -First 1
+          )
+
+
+          if (
+              $null
+              -eq
+              $Property
+          ) {
+
+              throw (
+                  "auditpol CSV output did not contain " +
+                  "the expected 'Inclusion Setting' " +
+                  "column."
+              )
+          }
+
+
+          return (
+              [string]$Property.Value
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Current state
+      # ------------------------------------------------------
+
+      $CurrentSetting = (
+          Get-CrucibleAuditSetting `
+              -Guid $AuditGuid
+      )
+
+
+      $HasSuccess = (
+          $CurrentSetting
+          -match
+          "Success"
+      )
+
+      $HasFailure = (
+          $CurrentSetting
+          -match
+          "Failure"
+      )
+
+
+      $NeedSuccess = (
+          $RequireSuccess
+          -and
+          -not $HasSuccess
+      )
+
+      $NeedFailure = (
+          $RequireFailure
+          -and
+          -not $HasFailure
+      )
+
+
+      # ------------------------------------------------------
+      # Only enable missing requirements.
+      #
+      # CIS wording such as "include Success" permits Failure
+      # to remain enabled if another policy/site requirement
+      # already requested it.
+      # ------------------------------------------------------
+
+      if (
+          $NeedSuccess
+          -or
+          $NeedFailure
+      ) {
+
+          $Arguments = @(
+              "/set",
+              "/subcategory:$AuditGuid"
+          )
+
+
+          if ($NeedSuccess) {
+
+              $Arguments += (
+                  "/success:enable"
+              )
+          }
+
+
+          if ($NeedFailure) {
+
+              $Arguments += (
+                  "/failure:enable"
+              )
+          }
+
+
+          & $AuditPol @Arguments |
+              Out-Null
+
+
+          if (
+              $LASTEXITCODE
+              -ne
+              0
+          ) {
+
+              throw (
+                  "auditpol /set failed for " +
+                  "$AuditGuid with exit code " +
+                  "$LASTEXITCODE."
+              )
+          }
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ------------------------------------------------------
+      # Verify final state
+      # ------------------------------------------------------
+
+      $VerifiedSetting = (
+          Get-CrucibleAuditSetting `
+              -Guid $AuditGuid
+      )
+
+
+      $VerifiedSuccess = (
+          $VerifiedSetting
+          -match
+          "Success"
+      )
+
+      $VerifiedFailure = (
+          $VerifiedSetting
+          -match
+          "Failure"
+      )
+
+
+      if (
+          $RequireSuccess
+          -and
+          -not $VerifiedSuccess
+      ) {
+
+          throw (
+              "Audit policy $AuditGuid does not " +
+              "include Success after remediation."
+          )
+      }
+
+
+      if (
+          $RequireFailure
+          -and
+          -not $VerifiedFailure
+      ) {
+
+          throw (
+              "Audit policy $AuditGuid does not " +
+              "include Failure after remediation."
+          )
+      }
+
+
+      $Ansible.Result = @{
+          guid = $AuditGuid
+          inclusion_setting = (
+              $VerifiedSetting
+          )
+          requires_success = (
+              $RequireSuccess
+          )
+          requires_failure = (
+              $RequireFailure
+          )
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_advanced_audit_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.guid }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_advanced_audit_results

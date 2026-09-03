@@ -1,0 +1,251 @@
+---
+
+# ============================================================
+# CIS Windows 10
+# BitLocker profile extension
+#
+# IMPORTANT:
+#
+# These recommendations configure the BitLocker security
+# policy required by the benchmark.
+#
+# Crucible does NOT automatically begin encrypting the OS
+# volume here. Encryption lifecycle, recovery-key storage and
+# destructive/recovery operations should remain explicit
+# machine-management actions rather than side effects of a
+# security-baseline role.
+# ============================================================
+
+
+- name: Load Windows CIS advanced-profile policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Runtime information
+# ============================================================
+
+- name: Inspect Windows BitLocker runtime capability
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $GetBitLockerVolume = (
+          Get-Command `
+              -Name Get-BitLockerVolume `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      $GetTpm = (
+          Get-Command `
+              -Name Get-Tpm `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      $TpmResult = $null
+
+
+      if (
+          $null
+          -ne
+          $GetTpm
+      ) {
+
+          try {
+
+              $Tpm = Get-Tpm
+
+              $TpmResult = @{
+                  present = (
+                      [bool]$Tpm.TpmPresent
+                  )
+
+                  ready = (
+                      [bool]$Tpm.TpmReady
+                  )
+
+                  enabled = (
+                      [bool]$Tpm.TpmEnabled
+                  )
+
+                  activated = (
+                      [bool]$Tpm.TpmActivated
+                  )
+              }
+          }
+
+          catch {
+
+              $TpmResult = @{
+                  present = $false
+                  ready = $false
+                  error = (
+                      $_.Exception.Message
+                  )
+              }
+          }
+      }
+
+
+      $OsVolume = $null
+
+
+      if (
+          $null
+          -ne
+          $GetBitLockerVolume
+      ) {
+
+          try {
+
+              $Volume = (
+                  Get-BitLockerVolume `
+                      -MountPoint $env:SystemDrive `
+                      -ErrorAction Stop
+              )
+
+
+              $OsVolume = @{
+                  mount_point = (
+                      [string]$Volume.MountPoint
+                  )
+
+                  volume_status = (
+                      [string]$Volume.VolumeStatus
+                  )
+
+                  protection_status = (
+                      [string]$Volume.ProtectionStatus
+                  )
+
+                  encryption_percentage = (
+                      [int]$Volume.EncryptionPercentage
+                  )
+              }
+          }
+
+          catch {
+
+              $OsVolume = @{
+                  error = (
+                      $_.Exception.Message
+                  )
+              }
+          }
+      }
+
+
+      $Ansible.Result = @{
+
+          bitlocker_cmdlets_present = (
+              $null
+              -ne
+              $GetBitLockerVolume
+          )
+
+          tpm = $TpmResult
+
+          os_volume = $OsVolume
+      }
+
+  register: >-
+    crucible_cis_windows_10_bitlocker_runtime
+
+
+- name: Display BitLocker runtime information
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_10_bitlocker_runtime.result
+
+
+# ============================================================
+# Machine policies
+# ============================================================
+
+- name: Apply Windows CIS BitLocker machine policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_bitlocker_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bitlocker_machine_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# User policies, should CIS ever place a BL recommendation in
+# user scope.
+# ============================================================
+
+- name: Apply Windows CIS BitLocker user policies
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_bitlocker_user_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bitlocker_user_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# Management validation
+# ============================================================
+
+- name: Verify Crucible management after BitLocker policies
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_bitlocker_management_ping
+
+
+- name: Assert Crucible management survived BitLocker policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_bitlocker_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      BitLocker CIS policy enforcement completed,
+      but Crucible WinRM HTTPS management connectivity
+      did not survive.

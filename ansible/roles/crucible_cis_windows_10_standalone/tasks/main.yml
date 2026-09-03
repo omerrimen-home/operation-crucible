@@ -1,0 +1,123 @@
+---
+
+# ============================================================
+# Operation Crucible
+# CIS Microsoft Windows 10 Stand-alone Benchmark v4.0.0
+# ============================================================
+
+
+- name: CIS Windows 10 | Preflight
+  ansible.builtin.include_tasks:
+
+    file: preflight.yml
+
+
+- name: CIS Windows 10 | Account Policies
+  ansible.builtin.include_tasks:
+
+    file: account_policies.yml
+
+
+- name: CIS Windows 10 | User Rights Assignment
+  ansible.builtin.include_tasks:
+
+    file: user_rights.yml
+
+
+- name: CIS Windows 10 | Security Options
+  ansible.builtin.include_tasks:
+
+    file: security_options.yml
+
+
+- name: CIS Windows 10 | System Services
+  ansible.builtin.include_tasks:
+
+    file: services.yml
+
+
+- name: CIS Windows 10 | Windows Defender Firewall
+  ansible.builtin.include_tasks:
+
+    file: firewall.yml
+
+
+- name: CIS Windows 10 | Advanced Audit Policy
+  ansible.builtin.include_tasks:
+
+    file: advanced_audit.yml
+
+
+- name: CIS Windows 10 | Event Log Service
+  ansible.builtin.include_tasks:
+
+    file: event_logs.yml
+
+
+- name: CIS Windows 10 | Microsoft Defender Antivirus
+  ansible.builtin.include_tasks:
+
+    file: defender.yml
+
+
+- name: CIS Windows 10 | Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: administrative_templates.yml
+
+
+- name: CIS Windows 10 | BitLocker profile extension
+  ansible.builtin.include_tasks:
+
+    file: bitlocker.yml
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bitlocker_profile_selected
+      | bool
+
+
+- name: CIS Windows 10 | Next Generation profile extension
+  ansible.builtin.include_tasks:
+
+    file: next_generation.yml
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_next_generation_profile_selected
+      | bool
+
+
+# ============================================================
+# Pre-reboot convergence check
+# ============================================================
+
+- name: CIS Windows 10 | Pre-reboot validation
+  ansible.builtin.include_tasks:
+
+    file: verify.yml
+
+
+# ============================================================
+# BC-I
+#
+# Controlled reboot, reconnect, post-reboot convergence,
+# runtime evidence and final management validation.
+# ============================================================
+
+- name: CIS Windows 10 | BC-I final validation
+  ansible.builtin.include_tasks:
+
+    file: final_validation.yml
+
+
+# ============================================================
+# Completion marker is deliberately LAST.
+# ============================================================
+
+- name: CIS Windows 10 | Record final validated hardening state
+  ansible.builtin.include_tasks:
+
+    file: completion.yml

@@ -14,7 +14,9 @@ from crucible.hardening.planner import (
 from crucible.networking.management import (
     MANAGEMENT_HOST_IP,
 )
-
+from crucible.hardening.capabilities import (
+    derive_machine_hardening_capabilities,
+)
 
 class ConfigurationRuntimeError(
     ValueError
@@ -84,12 +86,21 @@ def _manifest_configuration_entries(
 
 def build_configuration_runtime_context(
     manifest: dict[str, Any],
+
     definitions: tuple[
         ConfigurationDefinition,
         ...
     ],
+
     *,
+
     current_configuration_id: str,
+
+    profile: (
+        dict[str, Any]
+        | None
+    ) = None,
+
     hardening_plans: (
         dict[str, HardeningPlan]
         | None
@@ -224,9 +235,39 @@ def build_configuration_runtime_context(
         {},
     )
 
-    capabilities = (
+    configuration_capabilities = (
         combine_configuration_capabilities(
             definitions
+        )
+    )
+
+
+    if profile is None:
+
+        machine_capabilities: tuple[
+            str,
+            ...
+        ] = ()
+
+
+    else:
+
+        machine_capabilities = (
+            derive_machine_hardening_capabilities(
+                profile
+            )
+        )
+
+
+    capabilities = tuple(
+        sorted(
+            set(
+                configuration_capabilities
+            )
+            |
+            set(
+                machine_capabilities
+            )
         )
     )
 

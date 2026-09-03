@@ -157,3 +157,168 @@ benchmarks:
 
     controls_file: >
       hardening/benchmarks/cis-debian-linux-13.yml
+
+
+  cis-microsoft-windows-10-standalone:
+
+    display_name: CIS Microsoft Windows 10 Stand-alone
+
+    description: >
+      Operation Crucible implementation of the CIS
+      Microsoft Windows 10 Stand-alone Benchmark.
+
+    authority: CIS
+
+    benchmark_version: "4.0.0"
+
+    #
+    # Keep this planned until the complete recommendation
+    # inventory has been imported and classified.
+    #
+    # We will switch this to implemented during BC-B.
+    #
+
+    status: implemented
+
+    target:
+      type: os
+
+      supported_profiles:
+        - windows-10
+
+    profiles:
+
+      level1:
+        display_name: Level 1
+
+        description: >
+          Practical general-use Windows 10 security
+          baseline.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles:
+          - windows-10
+
+
+      level1-bitlocker:
+        display_name: Level 1 + BitLocker
+
+        description: >
+          Level 1 Windows 10 baseline plus CIS
+          BitLocker recommendations.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level1-next-generation:
+        display_name: Level 1 + Next Generation
+
+        description: >
+          Level 1 Windows 10 baseline plus advanced
+          Next Generation Windows security controls.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level1-bitlocker-next-generation:
+        display_name: Level 1 + BitLocker + Next Generation
+
+        description: >
+          Level 1 Windows 10 baseline with both
+          BitLocker and Next Generation recommendations.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level2:
+        display_name: Level 2
+
+        description: >
+          High-security Windows 10 baseline extending
+          Level 1 and accepting additional reductions
+          in functionality and manageability.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level2-bitlocker:
+        display_name: Level 2 + BitLocker
+
+        description: >
+          Level 2 Windows 10 baseline plus CIS
+          BitLocker recommendations.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level2-next-generation:
+        display_name: Level 2 + Next Generation
+
+        description: >
+          Level 2 Windows 10 baseline plus advanced
+          Next Generation Windows security controls.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      level2-bitlocker-next-generation:
+        display_name: Level 2 + BitLocker + Next Generation
+
+        description: >
+          Level 2 Windows 10 baseline with both
+          BitLocker and Next Generation recommendations.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      bitlocker:
+        display_name: BitLocker
+
+        description: >
+          CIS BitLocker recommendation add-on without
+          the Level 1 or Level 2 baseline.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+
+      next-generation:
+        display_name: Next Generation
+
+        description: >
+          Advanced Windows security recommendation
+          add-on requiring additional hardware and
+          compatibility validation.
+
+        applies_to_profiles:
+          - windows-10
+
+        default_for_profiles: []
+
+    controls_file: >
+      hardening/benchmarks/cis-microsoft-windows-10-standalone.yml

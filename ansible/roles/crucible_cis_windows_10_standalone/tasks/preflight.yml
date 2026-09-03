@@ -1,0 +1,651 @@
+---
+
+# ============================================================
+# Guest validation
+# ============================================================
+
+- name: Verify Windows guest
+  ansible.builtin.assert:
+
+    that:
+      - ansible_facts.os_family == "Windows"
+
+    fail_msg: >-
+      crucible_cis_windows_10_standalone may only
+      run against Microsoft Windows guests.
+
+
+- name: Verify Windows 10 guest
+  ansible.builtin.assert:
+
+    that:
+      - >-
+        (
+          ansible_facts.distribution
+          | default('')
+        )
+        is search('Windows 10')
+
+    fail_msg: >-
+      crucible_cis_windows_10_standalone currently
+      targets Windows 10 only.
+
+
+# ============================================================
+# Hardening runtime validation
+# ============================================================
+
+- name: Verify hardening runtime exists
+  ansible.builtin.assert:
+
+    that:
+      - crucible_hardening is defined
+      - >-
+        crucible_hardening.benchmark.id
+        ==
+        "cis-microsoft-windows-10-standalone"
+      - >-
+        crucible_hardening.benchmark.version
+        ==
+        "4.0.0"
+
+    fail_msg: >-
+      Windows 10 CIS hardening runtime metadata is
+      missing or targets the wrong benchmark.
+
+
+- name: Verify supported benchmark profile
+  ansible.builtin.assert:
+
+    that:
+      - >-
+        crucible_hardening.profile.id
+        in
+        [
+          'level1',
+          'level1-bitlocker',
+          'level1-next-generation',
+          'level1-bitlocker-next-generation',
+          'level2',
+          'level2-bitlocker',
+          'level2-next-generation',
+          'level2-bitlocker-next-generation',
+          'bitlocker',
+          'next-generation'
+        ]
+
+
+- name: Verify supported implementation wave
+  ansible.builtin.assert:
+
+    that:
+      - >-
+        crucible_cis_windows_10_implementation_wave
+        in
+        [
+          '1',
+          '2',
+          '3'
+        ]
+
+    fail_msg: >-
+      Windows 10 CIS implementation_wave must be
+      "1", "2", or "3".
+
+
+# ============================================================
+# BC-C parameter validation
+# ============================================================
+
+- name: Validate Windows CIS password parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_password_history
+        | int
+        ==
+        24
+
+      - >-
+        crucible_cis_windows_10_password_max_age_days
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_10_password_max_age_days
+        | int
+        <=
+        365
+
+      - >-
+        crucible_cis_windows_10_password_min_age_days
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_10_password_min_age_days
+        | int
+        <=
+        crucible_cis_windows_10_password_max_age_days
+        | int
+
+      - >-
+        crucible_cis_windows_10_password_min_length
+        | int
+        >=
+        14
+
+    fail_msg: >-
+      Windows CIS password parameters violate the
+      implemented benchmark constraints.
+
+
+- name: Validate Windows CIS account lockout parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_lockout_duration_minutes
+        | int
+        >=
+        15
+
+      - >-
+        crucible_cis_windows_10_lockout_threshold
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_10_lockout_threshold
+        | int
+        <=
+        5
+
+      - >-
+        crucible_cis_windows_10_lockout_reset_minutes
+        | int
+        >=
+        15
+
+      - >-
+        crucible_cis_windows_10_lockout_reset_minutes
+        | int
+        <=
+        crucible_cis_windows_10_lockout_duration_minutes
+        | int
+
+    fail_msg: >-
+      Windows CIS account-lockout parameters violate
+      the implemented benchmark constraints.
+
+
+# ============================================================
+# Resolve implementation wave
+# ============================================================
+
+- name: Initialize Windows CIS execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: []
+
+    crucible_cis_windows_10_reboot_required: false
+
+
+- name: Resolve Wave 1 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 1 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Wave 2
+#
+# Level 2 extends Level 1, but the higher-impact settings are
+# only executed when the user selects implementation wave 2
+# or 3.
+# ============================================================
+
+- name: Resolve Wave 2 automated Windows CIS controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 2 conditional Windows CIS controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Wave 3
+#
+# Wave 3 contains the optional BitLocker and Next Generation
+# profile extensions.
+#
+# Profile applicability and remediation wave are independent:
+#
+#   profile controls WHAT applies
+#   wave controls HOW FAR Crucible is permitted to remediate
+# ============================================================
+
+- name: Resolve Wave 3 automated Windows CIS controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Wave 3 conditional Windows CIS controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_10_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows CIS risk tier
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_risk_tier: >-
+      {{
+        {
+          '1': 'low',
+          '2': 'moderate',
+          '3': 'high'
+        }[
+          crucible_cis_windows_10_implementation_wave
+        ]
+      }}
+
+
+- name: Display Windows CIS execution summary
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_windows_10_implementation_wave }}
+
+      - >-
+        Execution controls:
+        {{
+          crucible_cis_windows_10_execution_controls
+          | length
+        }}
+
+      - >-
+        Audit-only controls:
+        {{
+          crucible_hardening.counts.audit_only
+          | default(0)
+        }}
+
+      - >-
+        Manual controls:
+        {{
+          crucible_hardening.counts.manual
+          | default(0)
+        }}
+
+      - >-
+        Not implemented:
+        {{
+          crucible_hardening.counts.not_implemented
+          | default(0)
+        }}
+
+      - >-
+        Derived exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
+
+
+- name: Display derived Windows hardening exceptions
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_hardening.controls.derived_exception_reasons
+
+  when:
+    - >-
+      crucible_hardening.controls.derived_exceptions
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# parameter validation
+# ============================================================
+
+- name: Validate Windows CIS built-in account names
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_builtin_administrator_name
+        | length
+        >= 1
+
+      - >-
+        crucible_cis_windows_10_builtin_administrator_name
+        | length
+        <= 20
+
+      - >-
+        crucible_cis_windows_10_builtin_guest_name
+        | length
+        >= 1
+
+      - >-
+        crucible_cis_windows_10_builtin_guest_name
+        | length
+        <= 20
+
+      - >-
+        crucible_cis_windows_10_builtin_administrator_name
+        | lower
+        !=
+        'administrator'
+
+      - >-
+        crucible_cis_windows_10_builtin_guest_name
+        | lower
+        !=
+        'guest'
+
+      - >-
+        crucible_cis_windows_10_builtin_administrator_name
+        | lower
+        !=
+        crucible_cis_windows_10_builtin_guest_name
+        | lower
+
+    fail_msg: >-
+      Windows CIS built-in account replacement names
+      must be unique, non-default names between
+      1 and 20 characters.
+
+
+- name: Validate Windows CIS interactive-logon values
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_inactivity_timeout_seconds
+        | int
+        >= 1
+
+      - >-
+        crucible_cis_windows_10_inactivity_timeout_seconds
+        | int
+        <= 900
+
+      - >-
+        crucible_cis_windows_10_password_expiry_warning_days
+        | int
+        >= 5
+
+      - >-
+        crucible_cis_windows_10_password_expiry_warning_days
+        | int
+        <= 14
+
+    fail_msg: >-
+      Windows CIS interactive-logon parameters violate
+      the implemented benchmark bounds.
+
+
+# ============================================================
+# Firewall Parameter validation
+# ============================================================
+
+- name: Validate Windows CIS firewall log size
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_firewall_log_max_size_kb
+        | int
+        >=
+        16384
+
+    fail_msg: >-
+      Windows CIS firewall_log_max_size_kb
+      must be at least 16384 KB.
+
+
+# ============================================================
+# Event Log parameter validation
+# ============================================================
+
+- name: Validate Windows CIS Event Log sizes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_event_log_application_max_size_kb
+        | int
+        >=
+        32768
+
+      - >-
+        crucible_cis_windows_10_event_log_security_max_size_kb
+        | int
+        >=
+        196608
+
+      - >-
+        crucible_cis_windows_10_event_log_setup_max_size_kb
+        | int
+        >=
+        32768
+
+      - >-
+        crucible_cis_windows_10_event_log_system_max_size_kb
+        | int
+        >=
+        32768
+
+    fail_msg: >-
+      Windows CIS Event Log sizes must be at least:
+      Application=32768 KB,
+      Security=196608 KB,
+      Setup=32768 KB,
+      System=32768 KB.

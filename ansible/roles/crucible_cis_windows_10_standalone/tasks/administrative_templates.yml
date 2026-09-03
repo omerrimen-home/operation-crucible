@@ -1,0 +1,111 @@
+---
+
+# ============================================================
+# CIS Windows 10
+#
+# Remaining standard L1/L2 registry-backed controls.
+#
+# The policy inventory is generated directly from the
+# Benchmark's Audit registry backing by:
+#
+#   tools/implement_windows10_cis_bc_g.py
+# ============================================================
+
+
+- name: Load generated BC-G Windows policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/administrative_templates.yml
+
+
+# ============================================================
+# Machine policies - HKLM
+# ============================================================
+
+- name: Apply BC-G machine registry policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_bc_g_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bc_g_machine_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# User policies - HKCU
+#
+# HKCU cannot simply be written through the WinRM account,
+# because CIS user policies apply to users generally.
+#
+# Crucible applies them to:
+#
+#   - every existing normal local profile;
+#   - currently loaded user hives;
+#   - C:\Users\Default\NTUSER.DAT
+#
+# so newly-created users inherit them as well.
+# ============================================================
+
+- name: Apply BC-G user registry policies
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_bc_g_user_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bc_g_user_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# Management validation
+# ============================================================
+
+- name: Verify Crucible management after BC-G policies
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_bc_g_management_ping
+
+
+- name: Assert Crucible management survived BC-G policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_bc_g_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      BC-G Windows policy enforcement completed,
+      but Crucible WinRM HTTPS management connectivity
+      did not survive.

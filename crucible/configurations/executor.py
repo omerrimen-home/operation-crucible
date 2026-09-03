@@ -316,8 +316,12 @@ def execute_machine_configurations(
     hardening_plans = (
         validate_manifest_hardening(
             manifest,
+
             definitions,
+
             hardening_catalog,
+
+            profile=profile,
         )
     )
 
@@ -442,16 +446,20 @@ def execute_machine_configurations(
         runtime_context = (
             build_configuration_runtime_context(
                 manifest,
+
                 definitions,
+
                 current_configuration_id=(
                     definition.id
                 ),
+
+                profile=profile,
+
                 hardening_plans=(
                     hardening_plans
                 ),
             )
         )
-
         hardening_plan = (
             hardening_plans.get(
                 definition.id

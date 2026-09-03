@@ -1,0 +1,268 @@
+---
+
+# ============================================================
+# Operation Crucible
+# Windows 10 CIS final completion state
+#
+# This marker may only be written AFTER BC-I succeeds.
+# ============================================================
+
+
+- name: Verify BC-I final validation passed
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_final_validation_passed
+        | default(false)
+        | bool
+
+    fail_msg: >-
+      Refusing to write the final Windows 10 CIS
+      completion marker because BC-I final validation
+      has not passed.
+
+
+- name: Ensure Crucible hardening state directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      {{
+        crucible_cis_windows_10_state_directory
+      }}
+
+    state: directory
+
+
+- name: Write final Windows 10 CIS completion state
+  ansible.windows.win_copy:
+
+    dest: >-
+      {{
+        crucible_cis_windows_10_completion_path
+      }}
+
+    content: >-
+      {{
+        {
+          'schema_version': 1,
+
+          'configuration':
+            'windows-10-cis',
+
+          'milestone':
+            'BC-I',
+
+          'benchmark': {
+
+            'id':
+              crucible_hardening.benchmark.id,
+
+            'version':
+              crucible_hardening.benchmark.version
+          },
+
+          'profile': {
+
+            'id':
+              crucible_hardening.profile.id,
+
+            'display_name':
+              crucible_hardening.profile.display_name
+          },
+
+          'implementation': {
+
+            'wave':
+              crucible_cis_windows_10_implementation_wave,
+
+            'benchmark_control_inventory_complete':
+              true,
+
+            'not_implemented_controls':
+              0,
+
+            'implemented_areas': [
+
+              'account-policies',
+
+              'user-rights',
+
+              'security-options',
+
+              'system-services',
+
+              'windows-defender-firewall',
+
+              'advanced-audit-policy',
+
+              'event-log-service',
+
+              'microsoft-defender-antivirus',
+
+              'administrative-templates-computer',
+
+              'administrative-templates-user',
+
+              'bitlocker-profile',
+
+              'next-generation-profile'
+            ],
+
+            'execution_controls':
+              (
+                crucible_cis_windows_10_execution_controls
+                | default([])
+                | sort
+              ),
+
+            'execution_control_count':
+              (
+                crucible_cis_windows_10_execution_controls
+                | default([])
+                | length
+              ),
+
+            'fingerprint':
+              crucible_cis_windows_10_finalization_fingerprint
+          },
+
+          'classification': {
+
+            'applicable':
+              (
+                crucible_hardening.counts.applicable
+                | default(0)
+              ),
+
+            'automated':
+              (
+                crucible_hardening.counts.automated
+                | default(0)
+              ),
+
+            'conditional':
+              (
+                crucible_hardening.counts.conditional
+                | default(0)
+              ),
+
+            'audit_only':
+              (
+                crucible_hardening.counts.audit_only
+                | default(0)
+              ),
+
+            'manual':
+              (
+                crucible_hardening.counts.manual
+                | default(0)
+              ),
+
+            'not_implemented':
+              (
+                crucible_hardening.counts.not_implemented
+                | default(0)
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.counts.user_exceptions
+                | default(0)
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.counts.derived_exceptions
+                | default(0)
+              )
+          },
+
+          'validation': {
+
+            'status':
+              'implementation-validation-passed',
+
+            'post_reboot_validation':
+              'passed',
+
+            'management_connectivity':
+              'passed',
+
+            'evidence':
+              crucible_cis_windows_10_evidence_path
+          },
+
+          'compliance': {
+
+            'status':
+              'not-attested',
+
+            'manual_controls':
+              (
+                crucible_hardening.controls.manual
+                | default([])
+                | sort
+              ),
+
+            'audit_only_controls':
+              (
+                crucible_hardening.controls.audit_only
+                | default([])
+                | sort
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.controls.user_exceptions
+                | default([])
+                | sort
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.controls.derived_exceptions
+                | default([])
+                | sort
+              )
+          }
+        }
+        |
+        to_nice_yaml(
+          indent=2,
+          sort_keys=false
+        )
+      }}
+
+
+- name: Verify Windows 10 CIS completion marker exists
+  ansible.windows.win_stat:
+
+    path: >-
+      {{
+        crucible_cis_windows_10_completion_path
+      }}
+
+  register: >-
+    crucible_cis_windows_10_completion_stat
+
+
+- name: Assert Windows 10 CIS completion marker exists
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_completion_stat.stat.exists
+        | bool
+
+      - >-
+        crucible_cis_windows_10_completion_stat.stat.size
+        | int
+        >
+        0
+
+    fail_msg: >-
+      BC-I validation passed, but Crucible could not
+      persist the Windows 10 CIS completion marker.

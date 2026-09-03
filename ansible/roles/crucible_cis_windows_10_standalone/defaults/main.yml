@@ -1,0 +1,238 @@
+---
+
+crucible_cis_windows_10_parameters: >-
+  {{
+    crucible_current_configuration.parameters
+    | default({})
+  }}
+
+
+crucible_cis_windows_10_implementation_wave: >-
+  {{
+    crucible_cis_windows_10_parameters.implementation_wave
+    | default('1')
+    | string
+  }}
+
+
+# ============================================================
+# Section 1.1 - Password Policy
+# ============================================================
+
+crucible_cis_windows_10_password_history: >-
+  {{
+    crucible_cis_windows_10_parameters.password_history
+    | default(24)
+    | int
+  }}
+
+
+crucible_cis_windows_10_password_max_age_days: >-
+  {{
+    crucible_cis_windows_10_parameters.password_max_age_days
+    | default(365)
+    | int
+  }}
+
+
+crucible_cis_windows_10_password_min_age_days: >-
+  {{
+    crucible_cis_windows_10_parameters.password_min_age_days
+    | default(1)
+    | int
+  }}
+
+
+crucible_cis_windows_10_password_min_length: >-
+  {{
+    crucible_cis_windows_10_parameters.password_min_length
+    | default(14)
+    | int
+  }}
+
+
+# ============================================================
+# Section 1.2 - Account Lockout Policy
+# ============================================================
+
+crucible_cis_windows_10_lockout_duration_minutes: >-
+  {{
+    crucible_cis_windows_10_parameters.account_lockout_duration_minutes
+    | default(15)
+    | int
+  }}
+
+
+crucible_cis_windows_10_lockout_threshold: >-
+  {{
+    crucible_cis_windows_10_parameters.account_lockout_threshold
+    | default(5)
+    | int
+  }}
+
+
+crucible_cis_windows_10_lockout_reset_minutes: >-
+  {{
+    crucible_cis_windows_10_parameters.account_lockout_reset_minutes
+    | default(15)
+    | int
+  }}
+
+# ============================================================
+# Windows Security Options
+# ============================================================
+
+crucible_cis_windows_10_builtin_administrator_name: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .builtin_administrator_name
+    | default('CrucibleAdmin')
+    | string
+  }}
+
+
+crucible_cis_windows_10_builtin_guest_name: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .builtin_guest_name
+    | default('CrucibleGuest')
+    | string
+  }}
+
+
+crucible_cis_windows_10_inactivity_timeout_seconds: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .inactivity_timeout_seconds
+    | default(900)
+    | int
+  }}
+
+
+crucible_cis_windows_10_password_expiry_warning_days: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .password_expiry_warning_days
+    | default(14)
+    | int
+  }}
+
+
+crucible_cis_windows_10_legal_notice_title: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .legal_notice_title
+    | default('Operation Crucible')
+    | string
+  }}
+
+
+crucible_cis_windows_10_legal_notice_text: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .legal_notice_text
+    | default(
+        'This system is restricted to authorized users.'
+      )
+    | string
+  }}
+
+
+# ============================================================
+# Windows Defender Firewall
+# ============================================================
+
+crucible_cis_windows_10_firewall_log_max_size_kb: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .firewall_log_max_size_kb
+    | default(16384)
+    | int
+  }}
+
+# ============================================================
+# Event Log Service
+# ============================================================
+
+crucible_cis_windows_10_event_log_application_max_size_kb: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .event_log_application_max_size_kb
+    | default(32768)
+    | int
+  }}
+
+crucible_cis_windows_10_event_log_security_max_size_kb: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .event_log_security_max_size_kb
+    | default(196608)
+    | int
+  }}
+
+crucible_cis_windows_10_event_log_setup_max_size_kb: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .event_log_setup_max_size_kb
+    | default(32768)
+    | int
+  }}
+
+crucible_cis_windows_10_event_log_system_max_size_kb: >-
+  {{
+    crucible_cis_windows_10_parameters
+    .event_log_system_max_size_kb
+    | default(32768)
+    | int
+  }}
+
+
+# ============================================================
+# Advanced profile membership
+# ============================================================
+
+crucible_cis_windows_10_bitlocker_profile_selected: >-
+  {{
+    crucible_hardening.profile.id
+    in
+    [
+      'bitlocker',
+      'level1-bitlocker',
+      'level1-bitlocker-next-generation',
+      'level2-bitlocker',
+      'level2-bitlocker-next-generation'
+    ]
+  }}
+
+
+crucible_cis_windows_10_next_generation_profile_selected: >-
+  {{
+    crucible_hardening.profile.id
+    in
+    [
+      'next-generation',
+      'level1-next-generation',
+      'level1-bitlocker-next-generation',
+      'level2-next-generation',
+      'level2-bitlocker-next-generation'
+    ]
+  }}
+
+
+# ============================================================
+# Final validation / evidence state
+# ============================================================
+
+crucible_cis_windows_10_state_directory: >-
+  C:\ProgramData\Crucible\hardening
+
+
+crucible_cis_windows_10_evidence_path: >-
+  C:\ProgramData\Crucible\hardening\windows-10-cis-evidence.json
+
+
+crucible_cis_windows_10_completion_path: >-
+  C:\ProgramData\Crucible\hardening\windows-10-cis.yml
+
+
+crucible_cis_windows_10_final_reboot_timeout_seconds: 1200

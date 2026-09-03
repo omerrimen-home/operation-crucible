@@ -1,0 +1,1205 @@
+---
+
+# ============================================================
+# Operation Crucible
+# Windows 10 CIS
+#
+# Final validation sequence:
+#
+#   1. Calculate implementation fingerprint
+#   2. Inspect existing validated evidence
+#   3. Reboot when policy state changed or has never been
+#      finalized
+#   4. Reconnect over PSRP / WinRM HTTPS
+#   5. Re-run all inline validators post-reboot
+#   6. Validate persistent management infrastructure
+#   7. Capture runtime evidence
+#   8. Write final evidence artifact
+#
+# BC-I validates Crucible's implementation. It does not
+# magically turn manual/audit-only controls into automated
+# controls and therefore does not issue a blanket external
+# CIS compliance attestation.
+# ============================================================
+
+
+# ============================================================
+# State directory
+# ============================================================
+
+- name: Ensure Crucible Windows hardening state directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      {{
+        crucible_cis_windows_10_state_directory
+      }}
+
+    state: directory
+
+
+# ============================================================
+# Stable implementation fingerprint
+#
+# A final reboot can be skipped on an idempotent rerun only
+# when:
+#
+#   - benchmark version matches
+#   - profile matches
+#   - implementation wave matches
+#   - configuration parameters match
+#   - execution-control set matches
+#   - prior final validation passed
+#
+# Any registry change during the current run independently
+# sets reboot_required=true.
+# ============================================================
+
+- name: Calculate Windows CIS finalization fingerprint
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_finalization_fingerprint: >-
+      {{
+        (
+          crucible_hardening.benchmark.id
+          ~ '|'
+          ~ crucible_hardening.benchmark.version
+          ~ '|'
+          ~ crucible_hardening.profile.id
+          ~ '|'
+          ~ crucible_cis_windows_10_implementation_wave
+          ~ '|'
+          ~ (
+              crucible_current_configuration.parameters
+              | default({})
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_10_execution_controls
+              | default([])
+              | sort
+              | to_json
+            )
+        )
+        | hash('sha256')
+      }}
+
+
+# ============================================================
+# Check whether an equivalent final validation already exists
+# ============================================================
+
+- name: Inspect existing Windows CIS final evidence
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      EvidencePath: >-
+        {{
+          crucible_cis_windows_10_evidence_path
+        }}
+
+      ExpectedFingerprint: >-
+        {{
+          crucible_cis_windows_10_finalization_fingerprint
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $EvidencePath,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ExpectedFingerprint
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $Result = @{
+
+          exists = $false
+
+          valid = $false
+
+          fingerprint = $null
+
+          validation_status = $null
+      }
+
+
+      if (
+          -not (
+              Test-Path `
+                  -LiteralPath $EvidencePath
+          )
+      ) {
+
+          $Ansible.Result = $Result
+
+          return
+      }
+
+
+      $Result.exists = $true
+
+
+      try {
+
+          $Document = (
+              Get-Content `
+                  -LiteralPath $EvidencePath `
+                  -Raw `
+                  -ErrorAction Stop
+              |
+              ConvertFrom-Json `
+                  -ErrorAction Stop
+          )
+
+
+          $Result.fingerprint = (
+              [string]$Document.fingerprint
+          )
+
+
+          $Result.validation_status = (
+              [string]$Document.validation.status
+          )
+
+
+          $Result.valid = (
+              (
+                  [string]$Document.fingerprint
+                  -eq
+                  $ExpectedFingerprint
+              )
+              -and
+              (
+                  [string]$Document.validation.status
+                  -eq
+                  "implementation-validation-passed"
+              )
+          )
+      }
+
+      catch {
+
+          $Result.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      $Ansible.Result = $Result
+
+  register: >-
+    crucible_cis_windows_10_previous_final_state
+
+
+# ============================================================
+# Resolve final reboot requirement
+# ============================================================
+
+- name: Resolve Windows CIS final reboot requirement
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_final_reboot_required: >-
+      {{
+        (
+          crucible_cis_windows_10_reboot_required
+          | default(false)
+          | bool
+        )
+        or
+        not
+        (
+          crucible_cis_windows_10_previous_final_state
+          .result
+          .valid
+          | default(false)
+          | bool
+        )
+      }}
+
+
+# ============================================================
+# Capture pre-reboot boot identity
+# ============================================================
+
+- name: Capture Windows boot identity before finalization
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem
+
+
+      $Ansible.Result = @{
+
+          last_boot_utc = (
+              $Os.LastBootUpTime
+              .ToUniversalTime()
+              .ToString("o")
+          )
+
+          caption = (
+              [string]$Os.Caption
+          )
+
+          version = (
+              [string]$Os.Version
+          )
+
+          build_number = (
+              [string]$Os.BuildNumber
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_pre_reboot_state
+
+
+# ============================================================
+# One controlled final reboot
+# ============================================================
+
+- name: Perform final Windows CIS controlled reboot
+  ansible.windows.win_reboot:
+
+    reboot_timeout: >-
+      {{
+        crucible_cis_windows_10_final_reboot_timeout_seconds
+        | int
+      }}
+
+    connect_timeout: 30
+
+    pre_reboot_delay: 5
+
+    post_reboot_delay: 15
+
+    test_command: >-
+      powershell.exe -NoProfile -NonInteractive
+      -Command "Write-Output CrucibleReady"
+
+  register: >-
+    crucible_cis_windows_10_final_reboot
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_final_reboot_required
+      | bool
+
+
+# ============================================================
+# Explicit post-reboot connection test
+# ============================================================
+
+- name: Verify Crucible PSRP connectivity after final reboot
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_post_reboot_ping
+
+
+- name: Assert Crucible reconnected after final reboot
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_post_reboot_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows CIS finalization could not re-establish
+      Crucible PSRP connectivity after the controlled reboot.
+
+
+# ============================================================
+# Capture new boot identity
+# ============================================================
+
+- name: Capture Windows boot identity after finalization
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem
+
+
+      $Ansible.Result = @{
+
+          last_boot_utc = (
+              $Os.LastBootUpTime
+              .ToUniversalTime()
+              .ToString("o")
+          )
+
+          caption = (
+              [string]$Os.Caption
+          )
+
+          version = (
+              [string]$Os.Version
+          )
+
+          build_number = (
+              [string]$Os.BuildNumber
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_post_reboot_state
+
+
+- name: Assert final reboot actually changed boot identity
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_pre_reboot_state
+        .result
+        .last_boot_utc
+        !=
+        crucible_cis_windows_10_post_reboot_state
+        .result
+        .last_boot_utc
+
+    fail_msg: >-
+      BC-I requested a final reboot but Windows reports
+      the same boot identity afterward.
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_final_reboot_required
+      | bool
+
+
+# ============================================================
+# Post-reboot policy validation
+#
+# verify.yml contains our accumulated BC-C through BC-H
+# convergence and management assertions.
+#
+# Running it AFTER the reboot is the key BC-I requirement.
+# ============================================================
+
+- name: Re-run complete Windows CIS validation after reboot
+  ansible.builtin.include_tasks:
+
+    file: verify.yml
+
+
+# ============================================================
+# Persistent runtime / management evidence
+# ============================================================
+
+- name: Capture final Windows CIS runtime evidence
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      # ------------------------------------------------------
+      # OS
+      # ------------------------------------------------------
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem
+
+
+      # ------------------------------------------------------
+      # WinRM
+      # ------------------------------------------------------
+
+      $WinRm = Get-Service `
+          -Name WinRM `
+          -ErrorAction Stop
+
+
+      $WinRmListener = (
+          Get-NetTCPConnection `
+              -LocalPort 5986 `
+              -State Listen `
+              -ErrorAction SilentlyContinue
+          |
+          Select-Object -First 1
+      )
+
+
+      # ------------------------------------------------------
+      # Crucible firewall rule
+      # ------------------------------------------------------
+
+      $FirewallRule = (
+          Get-NetFirewallRule `
+              -Name "Crucible-WinRM-HTTPS" `
+              -ErrorAction SilentlyContinue
+          |
+          Select-Object -First 1
+      )
+
+
+      $FirewallResult = @{
+          present = (
+              $null -ne $FirewallRule
+          )
+      }
+
+
+      if (
+          $null
+          -ne
+          $FirewallRule
+      ) {
+
+          $FirewallResult.enabled = (
+              [string]$FirewallRule.Enabled
+          )
+
+          $FirewallResult.direction = (
+              [string]$FirewallRule.Direction
+          )
+
+          $FirewallResult.action = (
+              [string]$FirewallRule.Action
+          )
+
+
+          $PortFilter = (
+              Get-NetFirewallPortFilter `
+                  -AssociatedNetFirewallRule $FirewallRule
+          )
+
+
+          $FirewallResult.protocol = (
+              [string]$PortFilter.Protocol
+          )
+
+          $FirewallResult.local_port = (
+              [string]$PortFilter.LocalPort
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Defender
+      # ------------------------------------------------------
+
+      $DefenderService = (
+          Get-Service `
+              -Name WinDefend `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      $Defender = @{
+          service_present = (
+              $null -ne $DefenderService
+          )
+      }
+
+
+      if (
+          $null
+          -ne
+          $DefenderService
+      ) {
+
+          $Defender.service_status = (
+              [string]$DefenderService.Status
+          )
+      }
+
+
+      $MpCommand = (
+          Get-Command `
+              -Name Get-MpComputerStatus `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      if (
+          $null
+          -ne
+          $MpCommand
+      ) {
+
+          try {
+
+              $MpStatus = (
+                  Get-MpComputerStatus
+              )
+
+
+              $Defender.antivirus_enabled = (
+                  [bool]$MpStatus.AntivirusEnabled
+              )
+
+              $Defender.realtime_protection_enabled = (
+                  [bool]$MpStatus.RealTimeProtectionEnabled
+              )
+          }
+
+          catch {
+
+              $Defender.runtime_error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # TPM
+      # ------------------------------------------------------
+
+      $TpmResult = @{
+          cmdlet_present = $false
+      }
+
+
+      if (
+          Get-Command `
+              -Name Get-Tpm `
+              -ErrorAction SilentlyContinue
+      ) {
+
+          $TpmResult.cmdlet_present = $true
+
+
+          try {
+
+              $Tpm = Get-Tpm
+
+
+              $TpmResult.present = (
+                  [bool]$Tpm.TpmPresent
+              )
+
+              $TpmResult.ready = (
+                  [bool]$Tpm.TpmReady
+              )
+
+              $TpmResult.enabled = (
+                  [bool]$Tpm.TpmEnabled
+              )
+          }
+
+          catch {
+
+              $TpmResult.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Secure Boot
+      # ------------------------------------------------------
+
+      $SecureBoot = @{
+          supported = $false
+          enabled = $false
+      }
+
+
+      try {
+
+          $SecureBoot.enabled = (
+              [bool](
+                  Confirm-SecureBootUEFI `
+                      -ErrorAction Stop
+              )
+          )
+
+          $SecureBoot.supported = $true
+      }
+
+      catch {
+
+          $SecureBoot.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # BitLocker runtime
+      # ------------------------------------------------------
+
+      $BitLocker = @{
+          cmdlet_present = $false
+      }
+
+
+      if (
+          Get-Command `
+              -Name Get-BitLockerVolume `
+              -ErrorAction SilentlyContinue
+      ) {
+
+          $BitLocker.cmdlet_present = $true
+
+
+          try {
+
+              $Volume = (
+                  Get-BitLockerVolume `
+                      -MountPoint $env:SystemDrive `
+                      -ErrorAction Stop
+              )
+
+
+              $BitLocker.volume_status = (
+                  [string]$Volume.VolumeStatus
+              )
+
+              $BitLocker.protection_status = (
+                  [string]$Volume.ProtectionStatus
+              )
+
+              $BitLocker.encryption_percentage = (
+                  [int]$Volume.EncryptionPercentage
+              )
+          }
+
+          catch {
+
+              $BitLocker.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Device Guard / VBS runtime
+      # ------------------------------------------------------
+
+      $DeviceGuard = @{
+          available = $false
+      }
+
+
+      try {
+
+          $Dg = Get-CimInstance `
+              -Namespace `
+                root\Microsoft\Windows\DeviceGuard `
+              -ClassName `
+                Win32_DeviceGuard `
+              -ErrorAction Stop
+
+
+          $DeviceGuard.available = $true
+
+          $DeviceGuard.virtualization_based_security_status = (
+              [int]$Dg.VirtualizationBasedSecurityStatus
+          )
+
+          $DeviceGuard.security_services_configured = @(
+              $Dg.SecurityServicesConfigured
+          )
+
+          $DeviceGuard.security_services_running = @(
+              $Dg.SecurityServicesRunning
+          )
+      }
+
+      catch {
+
+          $DeviceGuard.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          timestamp_utc = (
+              [DateTime]::UtcNow
+              .ToString("o")
+          )
+
+          operating_system = @{
+
+              caption = (
+                  [string]$Os.Caption
+              )
+
+              version = (
+                  [string]$Os.Version
+              )
+
+              build_number = (
+                  [string]$Os.BuildNumber
+              )
+
+              last_boot_utc = (
+                  $Os.LastBootUpTime
+                  .ToUniversalTime()
+                  .ToString("o")
+              )
+          }
+
+          management = @{
+
+              winrm_service_status = (
+                  [string]$WinRm.Status
+              )
+
+              https_5986_listening = (
+                  $null -ne $WinRmListener
+              )
+
+              firewall = (
+                  $FirewallResult
+              )
+          }
+
+          defender = (
+              $Defender
+          )
+
+          tpm = (
+              $TpmResult
+          )
+
+          secure_boot = (
+              $SecureBoot
+          )
+
+          bitlocker = (
+              $BitLocker
+          )
+
+          device_guard = (
+              $DeviceGuard
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_runtime_evidence
+
+
+# ============================================================
+# Final persistent management assertions
+# ============================================================
+
+- name: Assert final Windows management infrastructure
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .operating_system
+        .caption
+        is search('Windows 10')
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .winrm_service_status
+        ==
+        'Running'
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .https_5986_listening
+        | bool
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .firewall
+        .present
+        | bool
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .firewall
+        .enabled
+        ==
+        'True'
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .firewall
+        .action
+        ==
+        'Allow'
+
+      - >-
+        crucible_cis_windows_10_runtime_evidence
+        .result
+        .management
+        .firewall
+        .local_port
+        ==
+        '5986'
+
+    fail_msg: >-
+      Windows CIS policies converged after reboot, but the
+      persistent Crucible management infrastructure did not
+      pass final BC-I validation.
+
+
+# ============================================================
+# Assemble evidence document
+# ============================================================
+
+- name: Assemble Windows CIS final evidence
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_final_evidence:
+
+      schema_version: 1
+
+      configuration: windows-10-cis
+
+      milestone: BC-I
+
+      fingerprint: >-
+        {{
+          crucible_cis_windows_10_finalization_fingerprint
+        }}
+
+      benchmark:
+
+        id: >-
+          {{
+            crucible_hardening.benchmark.id
+          }}
+
+        version: >-
+          {{
+            crucible_hardening.benchmark.version
+          }}
+
+        display_name: >-
+          {{
+            crucible_hardening.benchmark.display_name
+          }}
+
+
+      profile:
+
+        id: >-
+          {{
+            crucible_hardening.profile.id
+          }}
+
+        display_name: >-
+          {{
+            crucible_hardening.profile.display_name
+          }}
+
+
+      implementation:
+
+        wave: >-
+          {{
+            crucible_cis_windows_10_implementation_wave
+          }}
+
+        execution_controls: >-
+          {{
+            crucible_cis_windows_10_execution_controls
+            | default([])
+            | sort
+          }}
+
+        execution_control_count: >-
+          {{
+            crucible_cis_windows_10_execution_controls
+            | default([])
+            | length
+          }}
+
+        benchmark_control_inventory_complete: true
+
+        not_implemented_controls: 0
+
+
+      classifications:
+
+        applicable: >-
+          {{
+            crucible_hardening.counts.applicable
+            | default(0)
+          }}
+
+        automated: >-
+          {{
+            crucible_hardening.counts.automated
+            | default(0)
+          }}
+
+        conditional: >-
+          {{
+            crucible_hardening.counts.conditional
+            | default(0)
+          }}
+
+        audit_only: >-
+          {{
+            crucible_hardening.counts.audit_only
+            | default(0)
+          }}
+
+        manual: >-
+          {{
+            crucible_hardening.counts.manual
+            | default(0)
+          }}
+
+        satisfied_elsewhere: >-
+          {{
+            crucible_hardening.counts.satisfied_elsewhere
+            | default(0)
+          }}
+
+        not_implemented: >-
+          {{
+            crucible_hardening.counts.not_implemented
+            | default(0)
+          }}
+
+        user_exceptions: >-
+          {{
+            crucible_hardening.counts.user_exceptions
+            | default(0)
+          }}
+
+        derived_exceptions: >-
+          {{
+            crucible_hardening.counts.derived_exceptions
+            | default(0)
+          }}
+
+
+      control_sets:
+
+        automated: >-
+          {{
+            crucible_hardening.controls.automated
+            | default([])
+            | sort
+          }}
+
+        conditional: >-
+          {{
+            crucible_hardening.controls.conditional
+            | default([])
+            | sort
+          }}
+
+        audit_only: >-
+          {{
+            crucible_hardening.controls.audit_only
+            | default([])
+            | sort
+          }}
+
+        manual: >-
+          {{
+            crucible_hardening.controls.manual
+            | default([])
+            | sort
+          }}
+
+        satisfied_elsewhere: >-
+          {{
+            crucible_hardening.controls.satisfied_elsewhere
+            | default([])
+            | sort
+          }}
+
+        user_exceptions: >-
+          {{
+            crucible_hardening.controls.user_exceptions
+            | default([])
+            | sort
+          }}
+
+        derived_exceptions: >-
+          {{
+            crucible_hardening.controls.derived_exceptions
+            | default([])
+            | sort
+          }}
+
+        derived_exception_reasons: >-
+          {{
+            crucible_hardening.controls
+            .derived_exception_reasons
+            | default({})
+          }}
+
+
+      reboot:
+
+        requested: >-
+          {{
+            crucible_cis_windows_10_final_reboot_required
+            | bool
+          }}
+
+        performed: >-
+          {{
+            not
+            (
+              crucible_cis_windows_10_final_reboot
+              is skipped
+            )
+            if
+            (
+              crucible_cis_windows_10_final_reboot
+              is defined
+            )
+            else
+            false
+          }}
+
+        pre_boot_utc: >-
+          {{
+            crucible_cis_windows_10_pre_reboot_state
+            .result
+            .last_boot_utc
+          }}
+
+        post_boot_utc: >-
+          {{
+            crucible_cis_windows_10_post_reboot_state
+            .result
+            .last_boot_utc
+          }}
+
+
+      runtime: >-
+        {{
+          crucible_cis_windows_10_runtime_evidence.result
+        }}
+
+
+      validation:
+
+        status: implementation-validation-passed
+
+        inline_pre_reboot: passed
+
+        inline_post_reboot: passed
+
+        management_connectivity: passed
+
+        persistent_winrm_https: passed
+
+        benchmark_accounting: complete
+
+
+      compliance:
+
+        status: not-attested
+
+        reason: >-
+          Operation Crucible validates its automated and
+          conditional implementation and records explicit
+          audit-only, manual, and exception controls. This
+          artifact is not an independent third-party CIS
+          compliance attestation.
+
+
+# ============================================================
+# Persist evidence
+# ============================================================
+
+- name: Write Windows CIS final evidence
+  ansible.windows.win_copy:
+
+    dest: >-
+      {{
+        crucible_cis_windows_10_evidence_path
+      }}
+
+    content: >-
+      {{
+        crucible_cis_windows_10_final_evidence
+        |
+        to_nice_json(
+          indent=2
+        )
+      }}
+
+
+- name: Verify Windows CIS evidence file exists
+  ansible.windows.win_stat:
+
+    path: >-
+      {{
+        crucible_cis_windows_10_evidence_path
+      }}
+
+  register: >-
+    crucible_cis_windows_10_evidence_stat
+
+
+- name: Assert Windows CIS evidence was persisted
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_evidence_stat.stat.exists
+        | bool
+
+      - >-
+        crucible_cis_windows_10_evidence_stat.stat.size
+        | int
+        >
+        0
+
+
+# ============================================================
+# Allow completion marker to be written
+# ============================================================
+
+- name: Record successful BC-I final validation
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_final_validation_passed: true

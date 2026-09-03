@@ -1,0 +1,11 @@
+---
+
+- name: Apply Crucible Windows 10 CIS hardening
+
+  hosts: all
+
+  gather_facts: true
+
+  roles:
+
+    - role: crucible_cis_windows_10_standalone

@@ -1,0 +1,153 @@
+---
+
+# ============================================================
+# CIS Windows 10
+# Section 18.10.26 - Event Log Service
+# ============================================================
+
+
+- name: Load Windows CIS Event Log policies
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/event_logs.yml
+
+
+- name: Apply Windows CIS Event Log registry policies
+  ansible.windows.win_regedit:
+
+    path: >-
+      {{
+        item.path
+      }}
+
+    name: >-
+      {{
+        item.name
+      }}
+
+    data: >-
+      {{
+        item.data
+      }}
+
+    type: >-
+      {{
+        item.type
+      }}
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_event_log_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_event_log_changes
+
+
+# ============================================================
+# Read back every setting.
+# ============================================================
+
+- name: Read Windows CIS Event Log registry policies
+  ansible.windows.win_reg_stat:
+
+    path: >-
+      {{
+        item.path
+      }}
+
+    name: >-
+      {{
+        item.name
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_event_log_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_event_log_verification
+
+
+- name: Verify Windows CIS Event Log registry policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        item.exists
+        | default(false)
+
+      - >-
+        (
+          item.value
+          | default('')
+          | string
+        )
+        ==
+        (
+          item.item.data
+          | string
+        )
+
+    fail_msg: >-
+      Event Log CIS policy
+      {{ item.item.control_id }}
+      failed verification:
+      {{ item.item.path }}\{{ item.item.name }}
+      expected {{ item.item.data }},
+      found {{ item.value | default('missing') }}.
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_event_log_verification.results
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{
+        item.item.control_id
+        | default('unknown')
+      }}
+
+  when:
+
+    - >-
+      not (
+        item.skipped
+        | default(false)
+      )

@@ -1,0 +1,159 @@
+---
+
+# ============================================================
+# CIS Windows 10 v4.0.0
+# Level 1 System Services
+#
+# Missing services are compliant where CIS allows
+# "Disabled or Not Installed", and harmless for the remaining
+# disabled-service checks.
+# ============================================================
+
+crucible_cis_windows_10_level1_services:
+
+  - control_id: "5.3"
+    service_name: Browser
+
+  - control_id: "5.7"
+    service_name: IISADMIN
+
+  - control_id: "5.8"
+    service_name: irmon
+
+  - control_id: "5.9"
+    service_name: SharedAccess
+
+  - control_id: "5.11"
+    service_name: LxssManager
+
+  - control_id: "5.12"
+    service_name: FTPSVC
+
+  - control_id: "5.14"
+    service_name: sshd
+
+  - control_id: "5.25"
+    service_name: RpcLocator
+
+  - control_id: "5.27"
+    service_name: RemoteAccess
+
+  - control_id: "5.29"
+    service_name: simptcp
+
+  - control_id: "5.31"
+    service_name: sacsvr
+
+  - control_id: "5.32"
+    service_name: SSDPSRV
+
+  - control_id: "5.33"
+    service_name: upnphost
+
+  - control_id: "5.34"
+    service_name: WMSvc
+
+  - control_id: "5.37"
+    service_name: WMPNetworkSvc
+
+  - control_id: "5.38"
+    service_name: icssvc
+
+  - control_id: "5.43"
+    service_name: W3SVC
+
+  - control_id: "5.44"
+    service_name: XboxGipSvc
+
+  - control_id: "5.45"
+    service_name: XblAuthManager
+
+  - control_id: "5.46"
+    service_name: XblGameSave
+
+  - control_id: "5.47"
+    service_name: XboxNetApiSvc
+
+# ============================================================
+# Level 2 System Services
+# ============================================================
+
+crucible_cis_windows_10_level2_services:
+
+  - control_id: "5.1"
+    service_name: BTAGService
+
+  - control_id: "5.2"
+    service_name: bthserv
+
+  - control_id: "5.4"
+    service_name: MapsBroker
+
+  - control_id: "5.5"
+    service_name: GameInputSvc
+
+  - control_id: "5.6"
+    service_name: lfsvc
+
+  - control_id: "5.10"
+    service_name: lltdsvc
+
+  - control_id: "5.13"
+    service_name: MSiSCSI
+
+  - control_id: "5.15"
+    service_name: PNRPsvc
+
+  - control_id: "5.16"
+    service_name: p2psvc
+
+  - control_id: "5.17"
+    service_name: p2pimsvc
+
+  - control_id: "5.18"
+    service_name: PNRPAutoReg
+
+  - control_id: "5.19"
+    service_name: Spooler
+
+  - control_id: "5.20"
+    service_name: wercplsupport
+
+  - control_id: "5.21"
+    service_name: RasAuto
+
+  - control_id: "5.22"
+    service_name: SessionEnv
+
+  - control_id: "5.23"
+    service_name: TermService
+
+  - control_id: "5.24"
+    service_name: UmRdpService
+
+  - control_id: "5.26"
+    service_name: RemoteRegistry
+
+  - control_id: "5.28"
+    service_name: LanmanServer
+
+  - control_id: "5.30"
+    service_name: SNMP
+
+  - control_id: "5.35"
+    service_name: WerSvc
+
+  - control_id: "5.36"
+    service_name: Wecsvc
+
+  - control_id: "5.39"
+    service_name: WpnService
+
+  - control_id: "5.40"
+    service_name: PushToInstall
+
+  - control_id: "5.41"
+    service_name: WinRM
+
+  - control_id: "5.42"
+    service_name: WinHttpAutoProxySvc

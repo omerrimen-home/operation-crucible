@@ -1,0 +1,224 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 10 Stand-alone Benchmark
+# Section 2.3 - Security Options
+#
+# BC-D scope:
+#
+#   Level 1 Security Options
+#
+# Deferred:
+#
+#   2.3.4.1   Level 2
+#   2.3.7.3   BitLocker
+#   2.3.14.1  Level 2
+#
+# Manual:
+#
+#   2.3.11.6
+# ============================================================
+
+
+- name: Load Windows CIS Security Options registry map
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/security_options.yml
+
+
+# ============================================================
+# Security-template-backed controls
+# ============================================================
+
+- name: Define local-security-policy Security Options
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_security_policy_options:
+
+      - control_id: "2.3.1.2"
+        section: System Access
+        key: EnableGuestAccount
+        value: "0"
+
+      - control_id: "2.3.10.1"
+        section: System Access
+        key: LSAAnonymousNameLookup
+        value: "0"
+
+
+- name: Apply local-security-policy Security Options
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_security_policy_options
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+
+# ============================================================
+# 2.3.1.4 / 2.3.1.5
+#
+# Rename the built-in accounts by RID rather than by their
+# current English-language names.
+#
+# RID 500 = built-in Administrator
+# RID 501 = built-in Guest
+#
+# This remains correct even after a previous hardening run
+# has already renamed the accounts.
+# ============================================================
+
+- name: Define built-in account rename policies
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_builtin_account_renames:
+
+      - control_id: "2.3.1.4"
+        rid: 500
+        target_name: >-
+          {{
+            crucible_cis_windows_10_builtin_administrator_name
+          }}
+
+      - control_id: "2.3.1.5"
+        rid: 501
+        target_name: >-
+          {{
+            crucible_cis_windows_10_builtin_guest_name
+          }}
+
+
+- name: Apply Windows CIS built-in account renames
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Rid: "{{ item.rid }}"
+
+      TargetName: "{{ item.target_name }}"
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $Rid,
+
+          [Parameter(Mandatory = $true)]
+          [string] $TargetName
+      )
+
+      $Ansible.Changed = $false
+
+      $BuiltinAccount = Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match "-$Rid$"
+          } |
+          Select-Object -First 1
+
+      if ($null -eq $BuiltinAccount) {
+          throw (
+              "Could not locate built-in local account " +
+              "with RID $Rid."
+          )
+      }
+
+      $ExistingTarget = Get-LocalUser `
+          -Name $TargetName `
+          -ErrorAction SilentlyContinue
+
+      if (
+          $null -ne $ExistingTarget -and
+          $ExistingTarget.SID.Value -ne
+              $BuiltinAccount.SID.Value
+      ) {
+          throw (
+              "Cannot rename built-in account " +
+              $BuiltinAccount.Name +
+              " to '$TargetName': another local " +
+              "account already uses that name."
+          )
+      }
+
+      if (
+          $BuiltinAccount.Name -cne
+          $TargetName
+      ) {
+
+          Rename-LocalUser `
+              -SID $BuiltinAccount.SID `
+              -NewName $TargetName
+
+          $Ansible.Changed = $true
+      }
+
+      $UpdatedAccount = Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match "-$Rid$"
+          } |
+          Select-Object -First 1
+
+      $Ansible.Result = @{
+          rid = $Rid
+          name = $UpdatedAccount.Name
+          sid = $UpdatedAccount.SID.Value
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_builtin_account_renames
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      RID {{ item.rid }}
+      ->
+      {{ item.target_name }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_account_rename_results
+
+
+# ============================================================
+# Registry-backed Security Options
+# ============================================================
+
+- name: Apply Windows CIS registry-backed Security Options
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_security_option_registry_policies
+      }}

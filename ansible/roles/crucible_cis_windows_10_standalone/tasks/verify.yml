@@ -1,0 +1,634 @@
+---
+
+# ============================================================
+# BC-C inline verification
+#
+# Repeat the same desired-state operations.
+#
+# Because both Windows policy modules are idempotent,
+# the second pass MUST report no changes.
+#
+# We then perform a fresh WinRM/PSRP ping to ensure that
+# hardening did not destroy Crucible management access.
+# ============================================================
+
+
+- name: Verify account policies are converged
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_account_policy_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_account_policy_verification
+
+
+- name: Verify relaxed password-length policy is converged
+  ansible.windows.win_regedit:
+
+    path: >-
+      HKLM:\SYSTEM\CurrentControlSet\Control\SAM
+
+    name: RelaxMinimumPasswordLengthLimits
+
+    data: 1
+
+    type: dword
+
+    state: present
+
+  when:
+    - >-
+      '1.1.6'
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_relaxed_length_verification
+
+
+- name: Verify user-right assignments are converged
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_user_right_verification
+
+
+# ============================================================
+# Assert idempotence
+# ============================================================
+
+- name: Assert account-policy verification made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_account_policy_verification.results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows account policies were not
+      converged after remediation.
+
+
+- name: Assert relaxed password-length verification made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        not
+        (
+          crucible_cis_windows_10_relaxed_length_verification.changed
+          | default(false)
+        )
+
+    fail_msg: >-
+      RelaxMinimumPasswordLengthLimits was not
+      converged after remediation.
+
+  when:
+    - >-
+      '1.1.6'
+      in
+      crucible_cis_windows_10_execution_controls
+
+
+- name: Assert user-right verification made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_user_right_verification.results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows User Rights assignments
+      were not converged after remediation.
+
+
+# ============================================================
+# Security Options verification
+# ============================================================
+
+
+- name: Verify local-security-policy Security Options are converged
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_security_policy_options
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_security_policy_verification
+
+
+- name: Assert local Security Options made no second-pass changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_security_policy_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows Security Options backed by
+      the local security database failed to converge.
+
+
+# ============================================================
+# Account rename idempotence
+# ============================================================
+
+- name: Verify built-in account renames are converged
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Rid: "{{ item.rid }}"
+
+      TargetName: "{{ item.target_name }}"
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $Rid,
+
+          [Parameter(Mandatory = $true)]
+          [string] $TargetName
+      )
+
+      $Ansible.Changed = $false
+
+      $Account = Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match "-$Rid$"
+          } |
+          Select-Object -First 1
+
+      if ($null -eq $Account) {
+          throw (
+              "Could not locate built-in account " +
+              "with RID $Rid during validation."
+          )
+      }
+
+      if (
+          $Account.Name -cne
+          $TargetName
+      ) {
+          throw (
+              "Built-in account RID $Rid has name '" +
+              $Account.Name +
+              "' rather than expected name '" +
+              $TargetName +
+              "'."
+          )
+      }
+
+      $Ansible.Result = @{
+          rid = $Rid
+          name = $Account.Name
+          sid = $Account.SID.Value
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_builtin_account_renames
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      RID {{ item.rid }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+
+# ============================================================
+# Registry idempotence
+# ============================================================
+
+- name: Verify registry-backed Security Options are converged
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_security_option_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_registry_verification
+
+
+- name: Assert registry-backed Security Options made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_registry_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more registry-backed Windows CIS Security
+      Options failed second-pass convergence.
+
+
+# ============================================================
+# BC-H - Advanced profile policy verification
+#
+# Re-run the declarative registry policies.
+#
+# A second pass MUST be idempotent.
+# ============================================================
+
+
+- name: Verify BitLocker machine policies are converged
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_bitlocker_machine_registry_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bitlocker_profile_selected
+      | bool
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_bitlocker_policy_verification
+
+
+- name: Assert BitLocker machine policies are converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_bitlocker_policy_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more BitLocker CIS registry policies
+      failed second-pass convergence.
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_bitlocker_profile_selected
+      | bool
+
+
+- name: Verify Next Generation machine policies are converged
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_next_generation_machine_registry_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_next_generation_profile_selected
+      | bool
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_next_generation_policy_verification
+
+
+- name: Assert Next Generation machine policies are converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_10_next_generation_policy_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Next Generation CIS registry policies
+      failed second-pass convergence.
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_next_generation_profile_selected
+      | bool
+
+
+# ============================================================
+# Protect the Forge management plane
+# ============================================================
+
+- name: Verify Crucible WinRM service and HTTPS listener
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $Service = Get-Service `
+          -Name WinRM `
+          -ErrorAction Stop
+
+
+      $Listener = Get-NetTCPConnection `
+          -State Listen `
+          -LocalPort 5986 `
+          -ErrorAction SilentlyContinue `
+          | Select-Object -First 1
+
+
+      $Ansible.Result = @{
+          winrm_status = (
+              [string]$Service.Status
+          )
+
+          https_5986_listening = (
+              $null -ne $Listener
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_management_state
+
+
+- name: Assert Crucible WinRM infrastructure remains available
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_management_state.result
+        .winrm_status
+        ==
+        'Running'
+
+      - >-
+        crucible_cis_windows_10_management_state.result
+        .https_5986_listening
+        | bool
+
+    fail_msg: >-
+      Windows CIS hardening left the current Ansible
+      connection alive, but Crucible's persistent WinRM
+      HTTPS management infrastructure is no longer healthy.
+
+- name: Verify WinRM management survives hardening
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_management_ping
+
+
+- name: Assert Windows management connectivity remains available
+  ansible.builtin.assert:
+
+    that:
+      - >-
+        crucible_cis_windows_10_management_ping.ping
+        ==
+        "pong"
+
+    fail_msg: >-
+      Windows CIS hardening completed policy
+      remediation but Crucible management
+      connectivity did not survive validation.

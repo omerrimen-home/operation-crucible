@@ -350,8 +350,12 @@ def create_machine(
     hardening_plans = (
         validate_manifest_hardening(
             manifest,
+
             selected_configurations,
+
             hardening_catalog,
+
+            profile=profile,
         )
     )
 

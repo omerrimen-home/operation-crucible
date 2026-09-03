@@ -244,7 +244,7 @@ class ConfigurationCatalogTests(
         )
 
 
-    def test_windows_10_has_no_current_configuration(
+    def test_windows_10_matches_future_cis_configuration(
         self,
     ):
         configurations = (
@@ -255,9 +255,15 @@ class ConfigurationCatalogTests(
             )
         )
 
-        self.assertEqual(
-            configurations,
-            [],
+        ids = {
+            configuration.id
+            for configuration
+            in configurations
+        }
+
+        self.assertIn(
+            "windows-10-cis",
+            ids,
         )
 
 

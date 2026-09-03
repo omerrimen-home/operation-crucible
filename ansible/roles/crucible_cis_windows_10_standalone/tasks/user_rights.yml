@@ -1,0 +1,415 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 10 Stand-alone
+# Section 2.2 - User Rights Assignment
+#
+# action: set
+#     CIS defines the complete assignment.
+#
+# action: add
+#     CIS says the assignment must INCLUDE the named
+#     principal, so Crucible preserves other legitimate
+#     assignments.
+#
+# 2.2.29 is intentionally audit-only because the benchmark
+# requires the right to be configured according to the
+# environment rather than prescribing a universal account.
+# ============================================================
+
+
+- name: Define Windows CIS user-right assignments
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_user_right_settings:
+
+      - control_id: "2.2.1"
+        right: SeTrustedCredManAccessPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.2"
+        right: SeNetworkLogonRight
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'BUILTIN\Remote Desktop Users'
+
+      - control_id: "2.2.3"
+        right: SeTcbPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.4"
+        right: SeIncreaseQuotaPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'NT AUTHORITY\NETWORK SERVICE'
+
+      - control_id: "2.2.5"
+        right: SeInteractiveLogonRight
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'BUILTIN\Users'
+
+      - control_id: "2.2.6"
+        right: SeRemoteInteractiveLogonRight
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'BUILTIN\Remote Desktop Users'
+
+      - control_id: "2.2.7"
+        right: SeBackupPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.8"
+        right: SeSystemtimePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT AUTHORITY\LOCAL SERVICE'
+
+      - control_id: "2.2.9"
+        right: SeTimeZonePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'BUILTIN\Users'
+
+      - control_id: "2.2.10"
+        right: SeCreatePagefilePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.11"
+        right: SeCreateTokenPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.12"
+        right: SeCreateGlobalPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'NT AUTHORITY\NETWORK SERVICE'
+          - 'NT AUTHORITY\SERVICE'
+
+      - control_id: "2.2.13"
+        right: SeCreatePermanentPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.14"
+        right: SeCreateSymbolicLinkPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.15"
+        right: SeDebugPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+
+      # --------------------------------------------------------
+      # CIS specifically says "include Guests".
+      #
+      # Do NOT replace the current deny list with only Guests.
+      # --------------------------------------------------------
+
+      - control_id: "2.2.16"
+        right: SeDenyNetworkLogonRight
+        action: add
+        users:
+          - 'BUILTIN\Guests'
+
+      - control_id: "2.2.17"
+        right: SeDenyBatchLogonRight
+        action: add
+        users:
+          - 'BUILTIN\Guests'
+
+      - control_id: "2.2.18"
+        right: SeDenyServiceLogonRight
+        action: add
+        users:
+          - 'BUILTIN\Guests'
+
+      - control_id: "2.2.19"
+        right: SeDenyInteractiveLogonRight
+        action: add
+        users:
+          - 'BUILTIN\Guests'
+
+      - control_id: "2.2.20"
+        right: SeDenyRemoteInteractiveLogonRight
+        action: add
+        users:
+          - 'BUILTIN\Guests'
+
+
+      - control_id: "2.2.21"
+        right: SeEnableDelegationPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.22"
+        right: SeRemoteShutdownPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.23"
+        right: SeAuditPrivilege
+        action: set
+        users:
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'NT AUTHORITY\NETWORK SERVICE'
+
+      - control_id: "2.2.24"
+        right: SeImpersonatePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'NT AUTHORITY\NETWORK SERVICE'
+          - 'NT AUTHORITY\SERVICE'
+
+      - control_id: "2.2.25"
+        right: SeIncreaseBasePriorityPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'Window Manager\Window Manager Group'
+
+      - control_id: "2.2.26"
+        right: SeLoadDriverPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.27"
+        right: SeLockMemoryPrivilege
+        action: set
+        users: []
+
+
+      # --------------------------------------------------------
+      # Level 2
+      # --------------------------------------------------------
+
+      - control_id: "2.2.28"
+        right: SeBatchLogonRight
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+
+      # 2.2.29 deliberately omitted:
+      # SeServiceLogonRight is environment-dependent.
+
+
+      - control_id: "2.2.30"
+        right: SeSecurityPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.31"
+        right: SeRelabelPrivilege
+        action: set
+        users: []
+
+      - control_id: "2.2.32"
+        right: SeSystemEnvironmentPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.33"
+        right: SeManageVolumePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.34"
+        right: SeProfileSingleProcessPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.35"
+        right: SeSystemProfilePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'NT SERVICE\WdiServiceHost'
+
+      - control_id: "2.2.36"
+        right: SeAssignPrimaryTokenPrivilege
+        action: set
+        users:
+          - 'NT AUTHORITY\LOCAL SERVICE'
+          - 'NT AUTHORITY\NETWORK SERVICE'
+
+      - control_id: "2.2.37"
+        right: SeRestorePrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+      - control_id: "2.2.38"
+        right: SeShutdownPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+          - 'BUILTIN\Users'
+
+      - control_id: "2.2.39"
+        right: SeTakeOwnershipPrivilege
+        action: set
+        users:
+          - 'BUILTIN\Administrators'
+
+
+# ============================================================
+# Apply remediations
+# ============================================================
+
+- name: Apply Windows CIS user-right assignments
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+
+# ============================================================
+# 2.2.29 - Log on as a service
+#
+# CIS requires this to be configured, but does not provide
+# one universal principal list. Report the current assignment
+# without inventing a site policy.
+# ============================================================
+
+- name: CIS 2.2.29 | Audit Log on as a service assignment
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+      $ExportPath = Join-Path `
+          $Ansible.Tmpdir `
+          'crucible-user-rights.inf'
+
+      & secedit.exe `
+          /export `
+          /cfg $ExportPath `
+          /areas USER_RIGHTS `
+          | Out-Null
+
+      if ($LASTEXITCODE -ne 0) {
+          throw (
+              "secedit export failed with exit code " +
+              $LASTEXITCODE
+          )
+      }
+
+      $Line = Get-Content `
+          -LiteralPath $ExportPath `
+          | Where-Object {
+              $_ -match '^\s*SeServiceLogonRight\s*='
+          } `
+          | Select-Object -First 1
+
+      $Assigned = @()
+
+      if ($null -ne $Line) {
+
+          $Raw = (
+              $Line -split '=',
+              2
+          )[1].Trim()
+
+          if ($Raw) {
+
+              $Assigned = @(
+                  $Raw -split ','
+                  | ForEach-Object {
+                      $_.Trim()
+                  }
+                  | Where-Object {
+                      $_
+                  }
+              )
+          }
+      }
+
+      $Ansible.Result = @{
+          control_id = '2.2.29'
+          right = 'SeServiceLogonRight'
+          assigned = $Assigned
+      }
+
+  register: >-
+    crucible_cis_windows_10_service_logon_audit
+
+  when:
+    - >-
+      '2.2.29'
+      in
+      (
+        crucible_hardening.controls.audit_only
+        | default([])
+      )
+
+
+- name: CIS 2.2.29 | Report Log on as a service assignment
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_10_service_logon_audit.result
+
+  when:
+    - >-
+      crucible_cis_windows_10_service_logon_audit
+      is defined
+
+    - >-
+      not
+      (
+        crucible_cis_windows_10_service_logon_audit.skipped
+        | default(false)
+      )

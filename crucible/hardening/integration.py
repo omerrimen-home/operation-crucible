@@ -18,6 +18,9 @@ from crucible.hardening.planner import (
     build_hardening_plan,
 )
 
+from crucible.hardening.capabilities import (
+    derive_machine_hardening_capabilities,
+)
 
 def _configuration_entries_by_id(
     manifest: dict[str, Any],
@@ -75,11 +78,20 @@ def _configuration_entries_by_id(
 
 def validate_manifest_hardening(
     manifest: dict[str, Any],
+
     definitions: tuple[
         ConfigurationDefinition,
         ...
     ],
+
     hardening_catalog: HardeningCatalog,
+
+    *,
+
+    profile: (
+        dict[str, Any]
+        | None
+    ) = None,
 ) -> dict[
     str,
     HardeningPlan
@@ -111,9 +123,39 @@ def validate_manifest_hardening(
         )
     )
 
-    capabilities = (
+    configuration_capabilities = (
         combine_configuration_capabilities(
             definitions
+        )
+    )
+
+
+    if profile is None:
+
+        machine_capabilities: tuple[
+            str,
+            ...
+        ] = ()
+
+
+    else:
+
+        machine_capabilities = (
+            derive_machine_hardening_capabilities(
+                profile
+            )
+        )
+
+
+    capabilities = tuple(
+        sorted(
+            set(
+                configuration_capabilities
+            )
+            |
+            set(
+                machine_capabilities
+            )
         )
     )
 

@@ -1,0 +1,363 @@
+---
+
+# ============================================================
+# CIS Windows 10
+# Next Generation profile extension
+#
+# These policies include:
+#
+#   - Virtualization Based Security
+#   - Credential Guard / Device Guard-related policy
+#   - protected LSASS
+#   - Microsoft Defender Application Guard
+#
+# Crucible configures the benchmark policy state and records
+# whether the current guest appears capable of activating the
+# underlying hardware-dependent runtime.
+# ============================================================
+
+
+- name: Load Windows CIS advanced-profile policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Hardware/runtime compatibility probe
+# ============================================================
+
+- name: Inspect Next Generation Windows security prerequisites
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      # ------------------------------------------------------
+      # Operating-system architecture
+      # ------------------------------------------------------
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem
+
+
+      $Is64Bit = (
+          [string]$Os.OSArchitecture
+          -match
+          "64"
+      )
+
+
+      # ------------------------------------------------------
+      # Firmware / Secure Boot
+      # ------------------------------------------------------
+
+      $SecureBootSupported = $false
+
+      $SecureBootEnabled = $false
+
+      $SecureBootError = $null
+
+
+      try {
+
+          $SecureBootEnabled = (
+              [bool](
+                  Confirm-SecureBootUEFI `
+                      -ErrorAction Stop
+              )
+          )
+
+          $SecureBootSupported = $true
+      }
+
+      catch {
+
+          $SecureBootError = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Hardware-assisted virtualization exposure
+      # ------------------------------------------------------
+
+      $Processor = (
+          Get-CimInstance `
+              -ClassName Win32_Processor
+          |
+          Select-Object -First 1
+      )
+
+
+      $VirtualizationFirmwareEnabled = (
+          [bool](
+              $Processor.VirtualizationFirmwareEnabled
+          )
+      )
+
+
+      $SecondLevelAddressTranslation = (
+          [bool](
+              $Processor.SecondLevelAddressTranslationExtensions
+          )
+      )
+
+
+      $VmMonitorModeExtensions = (
+          [bool](
+              $Processor.VMMonitorModeExtensions
+          )
+      )
+
+
+      # ------------------------------------------------------
+      # Hypervisor state
+      # ------------------------------------------------------
+
+      $ComputerSystem = (
+          Get-CimInstance `
+              -ClassName Win32_ComputerSystem
+      )
+
+
+      $HypervisorPresent = (
+          [bool](
+              $ComputerSystem.HypervisorPresent
+          )
+      )
+
+
+      # ------------------------------------------------------
+      # Defender Application Guard optional feature
+      # ------------------------------------------------------
+
+      $ApplicationGuard = $null
+
+
+      try {
+
+          $Feature = (
+              Get-WindowsOptionalFeature `
+                  -Online `
+                  -FeatureName `
+                    Windows-Defender-ApplicationGuard `
+                  -ErrorAction Stop
+          )
+
+
+          $ApplicationGuard = @{
+              present = $true
+              state = (
+                  [string]$Feature.State
+              )
+          }
+      }
+
+      catch {
+
+          $ApplicationGuard = @{
+              present = $false
+              error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Report capability.
+      #
+      # This is informational rather than a hard failure.
+      #
+      # CIS policy state can still be configured, but an
+      # unsupported VM cannot be assumed to have an active VBS
+      # runtime merely because the registry policy exists.
+      # ------------------------------------------------------
+
+      $RuntimeLikelyCapable = (
+          $Is64Bit
+          -and
+          $SecureBootSupported
+          -and
+          $SecureBootEnabled
+          -and
+          $VirtualizationFirmwareEnabled
+      )
+
+
+      $Ansible.Result = @{
+
+          os_64_bit = $Is64Bit
+
+          secure_boot_supported = (
+              $SecureBootSupported
+          )
+
+          secure_boot_enabled = (
+              $SecureBootEnabled
+          )
+
+          secure_boot_error = (
+              $SecureBootError
+          )
+
+          virtualization_firmware_enabled = (
+              $VirtualizationFirmwareEnabled
+          )
+
+          second_level_address_translation = (
+              $SecondLevelAddressTranslation
+          )
+
+          vm_monitor_mode_extensions = (
+              $VmMonitorModeExtensions
+          )
+
+          hypervisor_present = (
+              $HypervisorPresent
+          )
+
+          defender_application_guard = (
+              $ApplicationGuard
+          )
+
+          runtime_likely_capable = (
+              $RuntimeLikelyCapable
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_next_generation_runtime
+
+
+- name: Record Next Generation runtime capability
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_10_next_generation_runtime_capable: >-
+      {{
+        crucible_cis_windows_10_next_generation_runtime
+        .result
+        .runtime_likely_capable
+        | default(false)
+        | bool
+      }}
+
+
+- name: Display Next Generation runtime capability
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_10_next_generation_runtime.result
+
+
+- name: Report limited Next Generation runtime capability
+  ansible.builtin.debug:
+
+    msg:
+      - >-
+        The CIS Next Generation policy state will be
+        applied, but this guest does not currently appear
+        to satisfy all runtime prerequisites for VBS.
+
+      - >-
+        This is expected on some VirtualBox guests when
+        Secure Boot or nested hardware virtualization is
+        not exposed.
+
+      - >-
+        BC-H validates benchmark policy state separately
+        from hardware-dependent runtime activation.
+
+  when:
+
+    - >-
+      not
+      crucible_cis_windows_10_next_generation_runtime_capable
+
+
+# ============================================================
+# Machine policies
+# ============================================================
+
+- name: Apply Windows CIS Next Generation machine policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_next_generation_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_next_generation_machine_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# User policies, if any.
+# ============================================================
+
+- name: Apply Windows CIS Next Generation user policies
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_10_next_generation_user_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_10_next_generation_user_registry_policies
+      | default([])
+      | length
+      > 0
+
+
+# ============================================================
+# Make sure this session survived policy application.
+# ============================================================
+
+- name: Verify Crucible management after Next Generation policies
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_next_generation_management_ping
+
+
+- name: Assert Crucible management survived Next Generation policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_next_generation_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Next Generation Windows CIS policy enforcement
+      completed, but Crucible WinRM HTTPS management
+      connectivity did not survive.

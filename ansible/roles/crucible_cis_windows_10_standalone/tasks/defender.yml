@@ -1,0 +1,388 @@
+---
+
+# ============================================================
+# CIS Windows 10
+# Section 18.10.43 - Microsoft Defender Antivirus
+# BC-F - Level 1
+# ============================================================
+
+
+- name: Load Windows CIS Defender policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/defender.yml
+
+
+# ============================================================
+# Defender availability
+#
+# We require the built-in Defender components to exist.
+# We deliberately DO NOT assert that MDE Plan 2 exists:
+# 18.10.43.4.1 can enforce the policy locally even though
+# actual EDR block-mode effectiveness depends on licensing.
+# ============================================================
+
+- name: Inspect Microsoft Defender availability
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $Service = Get-Service `
+          -Name "WinDefend" `
+          -ErrorAction SilentlyContinue
+
+
+      $MpCommand = Get-Command `
+          -Name "Get-MpComputerStatus" `
+          -ErrorAction SilentlyContinue
+
+
+      $Ansible.Result = @{
+
+          service_present = (
+              $null -ne $Service
+          )
+
+          service_state = (
+              if ($null -ne $Service) {
+                  [string]$Service.Status
+              }
+              else {
+                  $null
+              }
+          )
+
+          mp_cmdlet_present = (
+              $null -ne $MpCommand
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_10_defender_preflight
+
+
+- name: Assert Microsoft Defender components are available
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_defender_preflight.result
+        .service_present
+
+      - >-
+        crucible_cis_windows_10_defender_preflight.result
+        .mp_cmdlet_present
+
+    fail_msg: >-
+      Microsoft Defender Antivirus is not available on this
+      Windows 10 guest. BC-F Defender hardening cannot be
+      applied safely.
+
+
+# ============================================================
+# Main Defender policy values
+# ============================================================
+
+- name: Apply Windows CIS Defender registry policies
+  ansible.windows.win_regedit:
+
+    path: >-
+      {{
+        item.path
+      }}
+
+    name: >-
+      {{
+        item.name
+      }}
+
+    data: >-
+      {{
+        item.data
+      }}
+
+    type: >-
+      {{
+        item.type
+      }}
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_defender_policy_changes
+
+
+# ============================================================
+# ASR rule set - 18.10.43.6.1.2
+# ============================================================
+
+- name: Apply Windows CIS Defender ASR rules
+  ansible.windows.win_regedit:
+
+    path: >-
+      HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules
+
+    name: >-
+      {{
+        item
+      }}
+
+    data: "1"
+
+    type: string
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_asr_rules
+    }}
+
+  loop_control:
+
+    label: >-
+      {{
+        item
+      }}
+
+  when:
+
+    - >-
+      '18.10.43.6.1.2'
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_defender_asr_changes
+
+
+# ============================================================
+# Verify normal Defender policies
+# ============================================================
+
+- name: Read Windows CIS Defender registry policies
+  ansible.windows.win_reg_stat:
+
+    path: >-
+      {{
+        item.path
+      }}
+
+    name: >-
+      {{
+        item.name
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_defender_policy_verification
+
+
+- name: Assert Windows CIS Defender registry policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        item.exists
+        | default(false)
+
+      - >-
+        (
+          item.value
+          | default('')
+          | string
+        )
+        ==
+        (
+          item.item.data
+          | string
+        )
+
+    fail_msg: >-
+      Defender CIS policy
+      {{ item.item.control_id }}
+      failed verification:
+      {{ item.item.path }}\{{ item.item.name }}
+      expected {{ item.item.data }},
+      found {{ item.value | default('missing') }}.
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_policy_verification.results
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{
+        item.item.control_id
+        | default('unknown')
+      }}
+
+  when:
+
+    - >-
+      not (
+        item.skipped
+        | default(false)
+      )
+
+
+# ============================================================
+# Verify all thirteen ASR rules
+# ============================================================
+
+- name: Read Windows CIS Defender ASR rules
+  ansible.windows.win_reg_stat:
+
+    path: >-
+      HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Windows Defender Exploit Guard\ASR\Rules
+
+    name: >-
+      {{
+        item
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_asr_rules
+    }}
+
+  loop_control:
+
+    label: >-
+      {{
+        item
+      }}
+
+  when:
+
+    - >-
+      '18.10.43.6.1.2'
+      in
+      crucible_cis_windows_10_execution_controls
+
+  register: >-
+    crucible_cis_windows_10_defender_asr_verification
+
+
+- name: Assert Windows CIS Defender ASR rules
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        item.exists
+        | default(false)
+
+      - >-
+        (
+          item.value
+          | default('')
+          | string
+        )
+        ==
+        '1'
+
+    fail_msg: >-
+      Defender ASR rule
+      {{ item.item }}
+      was not configured in Block mode.
+
+  loop: >-
+    {{
+      crucible_cis_windows_10_defender_asr_verification.results
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{
+        item.item
+        | default('unknown')
+      }}
+
+  when:
+
+    - >-
+      not (
+        item.skipped
+        | default(false)
+      )
+
+
+# ============================================================
+# Critical control-plane check.
+#
+# ASR and Network Protection must not interfere with the
+# Crucible WinRM HTTPS management channel.
+# ============================================================
+
+- name: Verify Crucible management after Defender hardening
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_10_defender_management_ping
+
+
+- name: Assert Crucible management survived Defender hardening
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_10_defender_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Microsoft Defender CIS remediation completed,
+      but the Crucible WinRM HTTPS management channel
+      is no longer usable.

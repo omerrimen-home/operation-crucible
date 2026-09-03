@@ -1,0 +1,407 @@
+---
+
+# ============================================================
+# Windows 10 CIS v4.0.0
+#
+# Declarative registry-backed Security Options.
+#
+# This data structure is intentionally separate from the
+# task implementation. Later Administrative Template
+# milestones can use the same registry-policy engine.
+# ============================================================
+
+
+crucible_cis_windows_10_security_option_registry_policies:
+
+
+  # ==========================================================
+  # 2.3.1 Accounts
+  # ==========================================================
+
+  - control_id: "2.3.1.1"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: NoConnectedUser
+    type: dword
+    data: 3
+
+  - control_id: "2.3.1.3"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: LimitBlankPasswordUse
+    type: dword
+    data: 1
+
+
+  # ==========================================================
+  # 2.3.2 Audit
+  # ==========================================================
+
+  - control_id: "2.3.2.1"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: SCENoApplyLegacyAuditPolicy
+    type: dword
+    data: 1
+
+  - control_id: "2.3.2.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: CrashOnAuditFail
+    type: dword
+    data: 0
+
+
+  # ==========================================================
+  # 2.3.7 Interactive logon
+  #
+  # 2.3.7.3 is BitLocker-only and is intentionally deferred.
+  # ==========================================================
+
+  - control_id: "2.3.7.1"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: DisableCAD
+    type: dword
+    data: 0
+
+  - control_id: "2.3.7.2"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: DontDisplayLastUserName
+    type: dword
+    data: 1
+
+  - control_id: "2.3.7.4"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: InactivityTimeoutSecs
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_inactivity_timeout_seconds
+        | int
+      }}
+
+  - control_id: "2.3.7.5"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: legalnoticetext
+    type: string
+    data: >-
+      {{
+        crucible_cis_windows_10_legal_notice_text
+      }}
+
+  - control_id: "2.3.7.6"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: legalnoticecaption
+    type: string
+    data: >-
+      {{
+        crucible_cis_windows_10_legal_notice_title
+      }}
+
+  - control_id: "2.3.7.7"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+    name: PasswordExpiryWarning
+    type: dword
+    data: >-
+      {{
+        crucible_cis_windows_10_password_expiry_warning_days
+        | int
+      }}
+
+  - control_id: "2.3.7.8"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+    name: ScRemoveOption
+    type: string
+    data: '1'
+
+
+  # ==========================================================
+  # 2.3.8 Microsoft network client
+  # ==========================================================
+
+  - control_id: "2.3.8.1"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+    name: RequireSecuritySignature
+    type: dword
+    data: 1
+
+  - control_id: "2.3.8.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+    name: EnableSecuritySignature
+    type: dword
+    data: 1
+
+  - control_id: "2.3.8.3"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+    name: EnablePlainTextPassword
+    type: dword
+    data: 0
+
+
+  # ==========================================================
+  # 2.3.9 Microsoft network server
+  # ==========================================================
+
+  - control_id: "2.3.9.1"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: AutoDisconnect
+    type: dword
+    data: 15
+
+  - control_id: "2.3.9.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: RequireSecuritySignature
+    type: dword
+    data: 1
+
+  - control_id: "2.3.9.3"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: EnableSecuritySignature
+    type: dword
+    data: 1
+
+  - control_id: "2.3.9.4"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: EnableForcedLogOff
+    type: dword
+    data: 1
+
+  - control_id: "2.3.9.5"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: SMBServerNameHardeningLevel
+    type: dword
+    data: 1
+
+
+  # ==========================================================
+  # 2.3.10 Network access
+  #
+  # 2.3.10.1 is handled through the local security policy
+  # backend rather than the registry engine.
+  # ==========================================================
+
+  - control_id: "2.3.10.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: RestrictAnonymousSAM
+    type: dword
+    data: 1
+
+  - control_id: "2.3.10.3"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: RestrictAnonymous
+    type: dword
+    data: 1
+
+  - control_id: "2.3.10.4"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: DisableDomainCreds
+    type: dword
+    data: 1
+
+  - control_id: "2.3.10.5"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: EveryoneIncludesAnonymous
+    type: dword
+    data: 0
+
+  - control_id: "2.3.10.6"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: NullSessionPipes
+    type: multistring
+    data: []
+
+
+  # ----------------------------------------------------------
+  # Exact remotely-accessible registry paths.
+  # ----------------------------------------------------------
+
+  - control_id: "2.3.10.7"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurePipeServers\Winreg\AllowedExactPaths'
+    name: Machine
+    type: multistring
+    data:
+      - 'System\CurrentControlSet\Control\ProductOptions'
+      - 'System\CurrentControlSet\Control\Server Applications'
+      - 'Software\Microsoft\Windows NT\CurrentVersion'
+
+
+  - control_id: "2.3.10.8"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurePipeServers\Winreg\AllowedPaths'
+    name: Machine
+    type: multistring
+    data:
+      - 'System\CurrentControlSet\Control\Print\Printers'
+      - 'System\CurrentControlSet\Services\Eventlog'
+      - 'Software\Microsoft\OLAP Server'
+      - 'Software\Microsoft\Windows NT\CurrentVersion\Print'
+      - 'Software\Microsoft\Windows NT\CurrentVersion\Windows'
+      - 'System\CurrentControlSet\Control\ContentIndex'
+      - 'System\CurrentControlSet\Control\Terminal Server'
+      - 'System\CurrentControlSet\Control\Terminal Server\UserConfig'
+      - 'System\CurrentControlSet\Control\Terminal Server\DefaultUserConfiguration'
+      - 'Software\Microsoft\Windows NT\CurrentVersion\Perflib'
+      - 'System\CurrentControlSet\Services\SysmonLog'
+
+
+  - control_id: "2.3.10.9"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: RestrictNullSessAccess
+    type: dword
+    data: 1
+
+  - control_id: "2.3.10.10"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: RestrictRemoteSAM
+    type: string
+    data: 'O:BAG:BAD:(A;;RC;;;BA)'
+
+  - control_id: "2.3.10.11"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters'
+    name: NullSessionShares
+    type: multistring
+    data: []
+
+  - control_id: "2.3.10.12"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: ForceGuest
+    type: dword
+    data: 0
+
+
+  # ==========================================================
+  # 2.3.11 Network security
+  #
+  # 2.3.11.6 remains benchmark-Manual.
+  # ==========================================================
+
+  - control_id: "2.3.11.1"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: UseMachineId
+    type: dword
+    data: 1
+
+  - control_id: "2.3.11.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'
+    name: AllowNullSessionFallback
+    type: dword
+    data: 0
+
+  - control_id: "2.3.11.3"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\pku2u'
+    name: AllowOnlineID
+    type: dword
+    data: 0
+
+  - control_id: "2.3.11.4"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters'
+    name: SupportedEncryptionTypes
+    type: dword
+    data: 2147483640
+
+  - control_id: "2.3.11.5"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: NoLMHash
+    type: dword
+    data: 1
+
+  - control_id: "2.3.11.7"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: LmCompatibilityLevel
+    type: dword
+    data: 5
+
+  - control_id: "2.3.11.8"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+    name: LDAPClientIntegrity
+    type: dword
+    data: 1
+
+  - control_id: "2.3.11.9"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'
+    name: NTLMMinClientSec
+    type: dword
+    data: 537395200
+
+  - control_id: "2.3.11.10"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'
+    name: NTLMMinServerSec
+    type: dword
+    data: 537395200
+
+  - control_id: "2.3.11.11"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'
+    name: AuditReceivingNTLMTraffic
+    type: dword
+    data: 2
+
+  - control_id: "2.3.11.12"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'
+    name: RestrictSendingNTLMTraffic
+    type: dword
+    data: 1
+
+
+  # ==========================================================
+  # 2.3.15 System objects
+  # ==========================================================
+
+  - control_id: "2.3.15.1"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Kernel'
+    name: ObCaseInsensitive
+    type: dword
+    data: 1
+
+  - control_id: "2.3.15.2"
+    path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager'
+    name: ProtectionMode
+    type: dword
+    data: 1
+
+
+  # ==========================================================
+  # 2.3.17 User Account Control
+  # ==========================================================
+
+  - control_id: "2.3.17.1"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: FilterAdministratorToken
+    type: dword
+    data: 1
+
+  - control_id: "2.3.17.2"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: ConsentPromptBehaviorAdmin
+    type: dword
+    data: 2
+
+  - control_id: "2.3.17.3"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: ConsentPromptBehaviorUser
+    type: dword
+    data: 0
+
+  - control_id: "2.3.17.4"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: EnableInstallerDetection
+    type: dword
+    data: 1
+
+  - control_id: "2.3.17.5"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: EnableSecureUIAPaths
+    type: dword
+    data: 1
+
+  - control_id: "2.3.17.6"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: EnableLUA
+    type: dword
+    data: 1
+
+  - control_id: "2.3.17.7"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: PromptOnSecureDesktop
+    type: dword
+    data: 1
+
+  - control_id: "2.3.17.8"
+    path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    name: EnableVirtualization
+    type: dword
+    data: 1
