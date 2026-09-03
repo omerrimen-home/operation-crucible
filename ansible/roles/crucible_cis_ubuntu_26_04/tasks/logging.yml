@@ -8,6 +8,19 @@
     state: present
 
 
+- name: Ensure rsyslog configuration directory exists
+  ansible.builtin.file:
+
+    path: /etc/rsyslog.d
+
+    state: directory
+
+    owner: root
+    group: root
+
+    mode: "0755"
+
+
 - name: Create journald configuration directory
   ansible.builtin.file:
 

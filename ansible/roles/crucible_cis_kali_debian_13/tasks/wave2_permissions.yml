@@ -21,6 +21,60 @@
 
   changed_when: false
 
+  # GNU find returns rc=1 when individual paths cannot
+  # be traversed. Desktop environments commonly expose
+  # FUSE-backed paths such as ~/.gvfs and ~/.cache/doc
+  # that deliberately reject traversal even during a
+  # privileged filesystem audit.
+  #
+  # The successfully scanned paths remain valid in stdout.
+  # Higher return codes still represent a real execution
+  # failure and remain fatal.
+  failed_when:
+
+    - >-
+      crucible_cis_world_writable_directories.rc
+      not in
+      [
+        0,
+        1
+      ]
+
+
+- name: Report inaccessible paths during world-writable directory scan
+  ansible.builtin.debug:
+
+    msg:
+      - >-
+        The filesystem scan encountered paths that
+        could not be traversed.
+
+      - >-
+        This is expected for some desktop/FUSE
+        filesystems such as GVFS and document portals.
+
+      - >-
+        Inaccessible paths:
+        {{
+          crucible_cis_world_writable_directories
+          .stderr_lines
+          | default([])
+        }}
+
+  when:
+
+    - >-
+      crucible_cis_world_writable_directories.rc
+      ==
+      1
+
+    - >-
+      crucible_cis_world_writable_directories
+      .stderr_lines
+      | default([])
+      | length
+      > 0
+
 
 - name: Add sticky bit to world-writable directories
   ansible.builtin.file:
@@ -53,6 +107,52 @@
     crucible_cis_world_writable_files
 
   changed_when: false
+
+  failed_when:
+
+    - >-
+      crucible_cis_world_writable_files.rc
+      not in
+      [
+        0,
+        1
+      ]
+
+
+- name: Report inaccessible paths during world-writable file scan
+  ansible.builtin.debug:
+
+    msg:
+      - >-
+        The filesystem scan encountered paths that
+        could not be traversed.
+
+      - >-
+        Successfully discovered world-writable files
+        remain valid and will continue through the
+        configured Crucible remediation policy.
+
+      - >-
+        Inaccessible paths:
+        {{
+          crucible_cis_world_writable_files
+          .stderr_lines
+          | default([])
+        }}
+
+  when:
+
+    - >-
+      crucible_cis_world_writable_files.rc
+      ==
+      1
+
+    - >-
+      crucible_cis_world_writable_files
+      .stderr_lines
+      | default([])
+      | length
+      > 0
 
 
 - name: Remove other-write from world-writable files when explicitly enabled

@@ -68,6 +68,11 @@
     file: ssh.yml
 
 
+- name: CIS Kali | Logging baseline
+  ansible.builtin.include_tasks:
+    file: logging.yml
+
+
 - name: CIS Kali | Sudo hardening
   ansible.builtin.include_tasks:
     file: sudo.yml
@@ -76,11 +81,6 @@
 - name: CIS Kali | Account baseline
   ansible.builtin.include_tasks:
     file: accounts.yml
-
-
-- name: CIS Kali | Logging baseline
-  ansible.builtin.include_tasks:
-    file: logging.yml
 
 
 - name: CIS Kali | System file permissions

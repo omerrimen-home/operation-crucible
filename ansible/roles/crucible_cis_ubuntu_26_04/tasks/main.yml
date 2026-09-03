@@ -68,6 +68,11 @@
     file: ssh.yml
 
 
+- name: CIS Ubuntu | Logging baseline
+  ansible.builtin.include_tasks:
+    file: logging.yml
+
+
 - name: CIS Ubuntu | Sudo hardening
   ansible.builtin.include_tasks:
     file: sudo.yml
@@ -76,11 +81,6 @@
 - name: CIS Ubuntu | Account baseline
   ansible.builtin.include_tasks:
     file: accounts.yml
-
-
-- name: CIS Ubuntu | Logging baseline
-  ansible.builtin.include_tasks:
-    file: logging.yml
 
 
 - name: CIS Ubuntu | System file permissions

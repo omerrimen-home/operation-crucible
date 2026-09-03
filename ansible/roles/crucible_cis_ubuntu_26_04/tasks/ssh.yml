@@ -100,6 +100,24 @@
     - Reload ssh
 
 
+- name: Ensure Crucible CIS SSH policy is loaded before vendor policy
+  ansible.builtin.lineinfile:
+
+    path: /etc/ssh/sshd_config
+
+    regexp: '^\s*Include\s+/etc/ssh/sshd_config\.d/10-crucible-cis\.conf\s*$'
+
+    line: 'Include /etc/ssh/sshd_config.d/10-crucible-cis.conf'
+
+    insertbefore: BOF
+
+    backup: true
+
+  notify:
+
+    - Reload ssh
+
+
 - name: Validate effective SSH configuration
   ansible.builtin.command:
 
@@ -108,6 +126,73 @@
       - -t
 
   changed_when: false
+
+
+- name: Read effective SSH policy after remediation
+  ansible.builtin.command:
+
+    argv:
+      - /usr/sbin/sshd
+      - -T
+
+  register:
+    crucible_cis_ssh_effective_policy
+
+  changed_when: false
+
+
+- name: Verify critical SSH policy after remediation
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        'permitrootlogin no'
+        in
+        crucible_cis_ssh_effective_policy.stdout
+
+      - >-
+        'permitemptypasswords no'
+        in
+        crucible_cis_ssh_effective_policy.stdout
+
+      - >-
+        'permituserenvironment no'
+        in
+        crucible_cis_ssh_effective_policy.stdout
+
+      - >-
+        'usepam yes'
+        in
+        crucible_cis_ssh_effective_policy.stdout
+
+      - >-
+        (
+          'maxauthtries '
+          ~
+          (
+            crucible_cis_ssh_max_auth_tries
+            | string
+          )
+        )
+        in
+        crucible_cis_ssh_effective_policy.stdout
+
+    fail_msg: |
+      Crucible's SSH configuration is syntactically valid,
+      but the effective sshd policy does not match the
+      requested CIS baseline.
+
+      Effective critical settings:
+
+      {{
+        crucible_cis_ssh_effective_policy.stdout_lines
+        | select(
+            'match',
+            '^(permitrootlogin|permitemptypasswords|permituserenvironment|usepam|maxauthtries) '
+          )
+        | list
+      }}
 
 
 - name: Apply SSH handler now

@@ -156,6 +156,67 @@
       in
       ansible_facts.services
 
+    - >-
+      ansible_facts.services[
+        item.unit
+      ].source
+      | default('')
+      ==
+      'systemd'
+
+    - >-
+      ansible_facts.services[
+        item.unit
+      ].status
+      | default('')
+      !=
+      'not-found'
+
+- name: Report unavailable server service units
+  ansible.builtin.debug:
+
+    msg: >-
+      CIS {{ item.control }}:
+      {{ item.unit }} is not an actionable systemd
+      unit on this guest. No service remediation is
+      required for this unit.
+
+  loop: >-
+    {{
+      crucible_cis_server_service_units
+    }}
+
+  when:
+
+    - >-
+      item.control
+      in
+      crucible_cis_execution_controls
+
+    - >-
+      (
+        item.unit
+        not in
+        ansible_facts.services
+      )
+      or
+      (
+        ansible_facts.services[
+          item.unit
+        ].source
+        | default('')
+        !=
+        'systemd'
+      )
+      or
+      (
+        ansible_facts.services[
+          item.unit
+        ].status
+        | default('')
+        ==
+        'not-found'
+      )
 
 #
 # Client packages are considerably less risky to
