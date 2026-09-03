@@ -141,6 +141,16 @@
   changed_when: false
 
 
+- name: Normalize effective SSH policy
+  ansible.builtin.set_fact:
+
+    crucible_cis_ssh_effective_policy_normalized: >-
+      {{
+        crucible_cis_ssh_effective_policy.stdout
+        | lower
+      }}
+
+
 - name: Verify critical SSH policy after remediation
   ansible.builtin.assert:
 
@@ -149,22 +159,22 @@
       - >-
         'permitrootlogin no'
         in
-        crucible_cis_ssh_effective_policy.stdout
+        crucible_cis_ssh_effective_policy_normalized
 
       - >-
         'permitemptypasswords no'
         in
-        crucible_cis_ssh_effective_policy.stdout
+        crucible_cis_ssh_effective_policy_normalized
 
       - >-
         'permituserenvironment no'
         in
-        crucible_cis_ssh_effective_policy.stdout
+        crucible_cis_ssh_effective_policy_normalized
 
       - >-
         'usepam yes'
         in
-        crucible_cis_ssh_effective_policy.stdout
+        crucible_cis_ssh_effective_policy_normalized
 
       - >-
         (
@@ -176,7 +186,7 @@
           )
         )
         in
-        crucible_cis_ssh_effective_policy.stdout
+        crucible_cis_ssh_effective_policy_normalized
 
     fail_msg: |
       Crucible's SSH configuration is syntactically valid,

@@ -27,6 +27,16 @@
   changed_when: false
 
 
+- name: Normalize effective SSH configuration
+  ansible.builtin.set_fact:
+
+    crucible_cis_sshd_effective_normalized: >-
+      {{
+        crucible_cis_sshd_effective.stdout
+        | lower
+      }}
+
+
 - name: Validate critical SSH settings
   ansible.builtin.assert:
 
@@ -35,17 +45,17 @@
       - >-
         'permitrootlogin no'
         in
-        crucible_cis_sshd_effective.stdout
+        crucible_cis_sshd_effective_normalized
 
       - >-
         'permitemptypasswords no'
         in
-        crucible_cis_sshd_effective.stdout
+        crucible_cis_sshd_effective_normalized
 
       - >-
         'usepam yes'
         in
-        crucible_cis_sshd_effective.stdout
+        crucible_cis_sshd_effective_normalized
 
       - >-
         (
@@ -57,7 +67,22 @@
           )
         )
         in
-        crucible_cis_sshd_effective.stdout
+        crucible_cis_sshd_effective_normalized
+
+    fail_msg: |
+      Effective sshd configuration does not match
+      the required Crucible CIS baseline.
+
+      Critical effective settings:
+
+      {{
+        crucible_cis_sshd_effective.stdout_lines
+        | select(
+            'match',
+            '(?i)^(permitrootlogin|permitemptypasswords|usepam|maxauthtries) '
+          )
+        | list
+      }}
 
 
 - name: Validate AppArmor service
