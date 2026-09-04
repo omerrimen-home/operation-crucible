@@ -543,6 +543,143 @@ configurations:
     capabilities: []
 
 
+  windows-11-cis:
+
+    display_name: CIS Microsoft Windows 11 Stand-alone Hardening
+
+    description: >
+      Applies the Operation Crucible implementation of
+      the CIS Microsoft Windows 11 Stand-alone Benchmark
+      v5.0.0. The benchmark profile controls the security
+      baseline and optional BitLocker additions, while
+      implementation waves control remediation risk and
+      sequencing.
+
+    selectable: true
+
+    supported_os:
+
+      - family: windows
+        distribution: windows
+        version: "11"
+
+    requirements:
+
+      network:
+
+        min_topology_interfaces: 0
+
+        min_static_ipv4_interfaces: 0
+
+        min_internal_network_interfaces: 0
+
+        min_static_internal_interfaces: 0
+
+    relationships:
+
+      requires: []
+
+      conflicts: []
+
+    implementation:
+
+      backend: ansible
+
+      playbook: >
+        ansible/playbooks/configurations/windows_11_cis.yml
+
+      order: 950
+
+    parameters:
+
+      profile: auto
+
+      exceptions: []
+
+      implementation_wave: "3"
+
+
+      # ------------------------------------------------------
+      # Account policies
+      # ------------------------------------------------------
+
+      password_history: 24
+
+      password_max_age_days: 365
+
+      password_min_age_days: 1
+
+      password_min_length: 14
+
+      account_lockout_duration_minutes: 15
+
+      account_lockout_threshold: 5
+
+      account_lockout_reset_minutes: 15
+
+
+      # ------------------------------------------------------
+      # Compatibility parameters reserved for later BD waves
+      # ------------------------------------------------------
+
+      preserve_crucible_winrm: true
+
+      disable_remote_desktop: true
+
+      disable_print_spooler: false
+
+      disable_bluetooth: true
+
+      disable_xbox_services: true
+
+      builtin_administrator_name: CrucibleAdmin
+
+      builtin_guest_name: CrucibleGuest
+
+      inactivity_timeout_seconds: 900
+
+      password_expiry_warning_days: 14
+
+      firewall_log_max_size_kb: 16384
+
+      event_log_application_max_size_kb: 32768
+
+      event_log_security_max_size_kb: 196608
+
+      event_log_setup_max_size_kb: 32768
+
+      event_log_system_max_size_kb: 32768
+
+      legal_notice_title: >-
+        Operation Crucible
+
+      legal_notice_text: >-
+        Authorized users only. Activity may be
+        monitored and reported.
+
+    hardening:
+
+      benchmark: cis-microsoft-windows-11-standalone
+
+      profile_parameter: profile
+
+      exceptions_parameter: exceptions
+
+      risk_parameter: implementation_wave
+
+      max_implemented_wave: 3
+
+      validation_mode: inline
+
+    firewall:
+
+      inbound: []
+
+      forward: []
+
+    capabilities: []
+
+
   active-directory-domain-controller:
     display_name: Active Directory Domain Controller
 

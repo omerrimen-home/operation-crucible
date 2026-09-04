@@ -1,0 +1,233 @@
+---
+
+# ============================================================
+# CIS Windows 11
+# Section 5 - System Services
+# ============================================================
+
+
+- name: Load Windows CIS Level 1 service inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/services.yml
+
+
+- name: Build complete Windows CIS service policy inventory
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_service_policies: >-
+      {{
+        (
+          crucible_cis_windows_11_level1_services
+          | default([])
+        )
+        +
+        (
+          crucible_cis_windows_11_level2_services
+          | default([])
+        )
+      }}
+
+
+- name: Disable Windows CIS services
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ServiceName: >-
+        {{
+          item.service_name
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $ServiceName
+      )
+
+      $Ansible.Changed = $false
+
+
+      # ------------------------------------------------------
+      # Query through CIM so StartupType is available even
+      # when the service is not currently running.
+      # ------------------------------------------------------
+
+      $EscapedServiceName = (
+          $ServiceName.Replace(
+              "'",
+              "''"
+          )
+      )
+
+      $Service = Get-CimInstance `
+          -ClassName Win32_Service `
+          -Filter (
+              "Name='{0}'" -f
+              $EscapedServiceName
+          ) `
+          -ErrorAction SilentlyContinue
+
+
+      # ------------------------------------------------------
+      # Not installed.
+      #
+      # Many CIS service recommendations explicitly allow
+      # "Disabled or Not Installed".
+      #
+      # Even where the title simply says Disabled, absence
+      # leaves no running/listening service to remediate.
+      # ------------------------------------------------------
+
+      if ($null -eq $Service) {
+
+          $Ansible.Result = @{
+              service = $ServiceName
+              installed = $false
+              startup_type = $null
+              state = $null
+              compliant = $true
+          }
+
+          return
+      }
+
+
+      # ------------------------------------------------------
+      # Disable startup
+      # ------------------------------------------------------
+
+      if (
+          [string]$Service.StartMode -ine "Disabled"
+      ) {
+
+          Set-Service `
+              -Name $ServiceName `
+              -StartupType Disabled `
+              -ErrorAction Stop
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ------------------------------------------------------
+      # Stop the currently running instance as well.
+      # ------------------------------------------------------
+
+      $RuntimeService = Get-Service `
+          -Name $ServiceName `
+          -ErrorAction Stop
+
+      if (
+          $RuntimeService.Status -ne
+          [System.ServiceProcess.ServiceControllerStatus]::Stopped
+      ) {
+
+          Stop-Service `
+              -Name $ServiceName `
+              -Force `
+              -ErrorAction Stop
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ------------------------------------------------------
+      # Read back and verify
+      # ------------------------------------------------------
+
+      $VerifiedService = Get-CimInstance `
+          -ClassName Win32_Service `
+          -Filter (
+              "Name='{0}'" -f
+              $EscapedServiceName
+          ) `
+          -ErrorAction Stop
+
+      $VerifiedRuntime = Get-Service `
+          -Name $ServiceName `
+          -ErrorAction Stop
+
+
+      if (
+          [string]$VerifiedService.StartMode -ine "Disabled"
+      ) {
+
+          throw (
+              "Service '$ServiceName' did not converge " +
+              "to StartupType Disabled."
+          )
+      }
+
+
+      if (
+          $VerifiedRuntime.Status -ne
+          [System.ServiceProcess.ServiceControllerStatus]::Stopped
+      ) {
+
+          throw (
+              "Service '$ServiceName' remained active " +
+              "after CIS remediation."
+          )
+      }
+
+
+      $Ansible.Result = @{
+          service = $ServiceName
+          installed = $true
+          startup_type = (
+              [string]$VerifiedService.StartMode
+          )
+          state = (
+              [string]$VerifiedRuntime.Status
+          )
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+        crucible_cis_windows_11_service_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.service_name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_service_results
+
+
+- name: Verify Crucible management survives service hardening
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_service_management_ping
+
+
+- name: Assert Crucible management survived service hardening
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_service_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows CIS service remediation completed,
+      but the Crucible WinRM HTTPS management channel
+      did not survive.

@@ -65,6 +65,10 @@ images/iso/*.iso
 # Crucible runtime state
 .crucible/
 
+# Developer end rubbish
+tests/
+tools/
+
 # VM disk formats
 *.vdi
 *.vmdk

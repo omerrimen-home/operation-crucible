@@ -1,0 +1,220 @@
+---
+
+# ============================================================
+# Operation Crucible
+# Windows 11 CIS milestone BD completion
+# ============================================================
+
+
+- name: Verify Windows 11 CIS final validation passed
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_final_validation_passed
+        | default(false)
+        | bool
+
+    fail_msg: >-
+      Refusing to write the Windows 11 CIS completion
+      marker because final milestone BD validation did
+      not pass.
+
+
+- name: Ensure Windows 11 hardening state directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      {{
+        crucible_cis_windows_11_state_directory
+      }}
+
+    state: directory
+
+
+- name: Write Windows 11 CIS completion state
+  ansible.windows.win_copy:
+
+    dest: >-
+      {{
+        crucible_cis_windows_11_completion_path
+      }}
+
+    content: >-
+      {{
+        {
+          'schema_version': 1,
+
+          'configuration':
+            'windows-11-cis',
+
+          'milestone':
+            'BD',
+
+          'final_stage':
+            'BD-F',
+
+          'benchmark': {
+
+            'id':
+              crucible_hardening.benchmark.id,
+
+            'version':
+              crucible_hardening.benchmark.version
+          },
+
+          'profile': {
+
+            'id':
+              crucible_hardening.profile.id,
+
+            'display_name':
+              crucible_hardening.profile.display_name
+          },
+
+          'implementation': {
+
+            'wave':
+              crucible_cis_windows_11_implementation_wave,
+
+            'benchmark_control_inventory_complete':
+              true,
+
+            'inventory_control_count':
+              488,
+
+            'source_automated_controls':
+              486,
+
+            'source_manual_controls':
+              2,
+
+            'not_implemented_controls':
+              0,
+
+            'implemented_areas': [
+
+              'account-policies',
+
+              'user-rights',
+
+              'security-options',
+
+              'system-services',
+
+              'windows-defender-firewall',
+
+              'advanced-audit-policy',
+
+              'administrative-templates-computer',
+
+              'administrative-templates-user',
+
+              'bitlocker',
+
+              'virtualization-based-security',
+
+              'lsass-protection',
+
+              'microsoft-defender-application-guard'
+            ],
+
+            'execution_controls':
+              (
+                crucible_cis_windows_11_execution_controls
+                | default([])
+                | sort
+              ),
+
+            'execution_control_count':
+              (
+                crucible_cis_windows_11_execution_controls
+                | default([])
+                | length
+              ),
+
+            'fingerprint':
+              crucible_cis_windows_11_finalization_fingerprint
+          },
+
+          'validation': {
+
+            'status':
+              'implementation-validation-passed',
+
+            'post_reboot_validation':
+              'passed',
+
+            'management_connectivity':
+              'passed',
+
+            'evidence':
+              crucible_cis_windows_11_evidence_path
+          },
+
+          'compliance': {
+
+            'status':
+              'not-attested',
+
+            'manual_controls':
+              (
+                crucible_hardening.controls.manual
+                | default([])
+                | sort
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.controls.user_exceptions
+                | default([])
+                | sort
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.controls.derived_exceptions
+                | default([])
+                | sort
+              )
+          }
+        }
+        |
+        to_nice_yaml(
+          indent=2,
+          sort_keys=false
+        )
+      }}
+
+
+- name: Verify Windows 11 CIS completion marker exists
+  ansible.windows.win_stat:
+
+    path: >-
+      {{
+        crucible_cis_windows_11_completion_path
+      }}
+
+  register: >-
+    crucible_cis_windows_11_completion_stat
+
+
+- name: Assert Windows 11 CIS completion marker exists
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_completion_stat.stat.exists
+        | bool
+
+      - >-
+        crucible_cis_windows_11_completion_stat.stat.size
+        | int
+        >
+        0
+
+    fail_msg: >-
+      Windows 11 CIS final validation passed but Crucible
+      could not persist the milestone BD completion marker.

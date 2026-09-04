@@ -1,0 +1,713 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+#
+# Final milestone BD preflight
+# ============================================================
+
+
+# ============================================================
+# Guest validation
+# ============================================================
+
+- name: Verify Windows guest
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        ansible_facts.os_family
+        ==
+        "Windows"
+
+    fail_msg: >-
+      crucible_cis_windows_11_standalone may only
+      run against Microsoft Windows guests.
+
+
+- name: Verify Windows 11 guest
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          ansible_facts.distribution
+          | default('')
+        )
+        is search('Windows 11')
+
+    fail_msg: >-
+      crucible_cis_windows_11_standalone currently
+      targets Windows 11 only.
+
+
+# ============================================================
+# Hardening runtime
+# ============================================================
+
+- name: Verify Windows 11 hardening runtime
+  ansible.builtin.assert:
+
+    that:
+
+      - crucible_hardening is defined
+
+      - >-
+        crucible_hardening.benchmark.id
+        ==
+        "cis-microsoft-windows-11-standalone"
+
+      - >-
+        crucible_hardening.benchmark.version
+        ==
+        "5.0.0"
+
+    fail_msg: >-
+      Windows 11 CIS hardening runtime metadata is
+      missing or targets the wrong benchmark.
+
+
+# ============================================================
+# Supported benchmark profiles
+# ============================================================
+
+- name: Verify supported Windows 11 CIS profile
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_hardening.profile.id
+        in
+        [
+          'level1',
+          'level1-bitlocker',
+          'level2',
+          'level2-bitlocker',
+          'bitlocker'
+        ]
+
+    fail_msg: >-
+      Unsupported Windows 11 CIS benchmark profile:
+      {{ crucible_hardening.profile.id | default('undefined') }}.
+
+
+# ============================================================
+# Implementation wave
+#
+# Wave 1:
+#   ordinary Level 1 baseline
+#
+# Wave 2:
+#   Level 1 + Level 2
+#
+# Wave 3:
+#   Level 1 + Level 2 + hardware/high-impact policy,
+#   including BitLocker profile controls when selected.
+# ============================================================
+
+- name: Verify supported Windows 11 implementation wave
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_implementation_wave
+        in
+        [
+          '1',
+          '2',
+          '3'
+        ]
+
+    fail_msg: >-
+      Windows 11 CIS implementation_wave must be
+      "1", "2", or "3".
+
+
+# ============================================================
+# Account Policy validation
+# ============================================================
+
+- name: Validate Windows 11 CIS password parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_password_history
+        | int
+        ==
+        24
+
+      - >-
+        crucible_cis_windows_11_password_max_age_days
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_password_max_age_days
+        | int
+        <=
+        365
+
+      - >-
+        crucible_cis_windows_11_password_min_age_days
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_password_min_age_days
+        | int
+        <=
+        crucible_cis_windows_11_password_max_age_days
+        | int
+
+      - >-
+        crucible_cis_windows_11_password_min_length
+        | int
+        >=
+        14
+
+    fail_msg: >-
+      One or more Windows 11 CIS password parameters
+      fall outside the implemented benchmark bounds.
+
+
+- name: Validate Windows 11 CIS lockout parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_lockout_duration_minutes
+        | int
+        >=
+        15
+
+      - >-
+        crucible_cis_windows_11_lockout_threshold
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_lockout_threshold
+        | int
+        <=
+        5
+
+      - >-
+        crucible_cis_windows_11_lockout_reset_minutes
+        | int
+        >=
+        15
+
+      - >-
+        crucible_cis_windows_11_lockout_reset_minutes
+        | int
+        <=
+        crucible_cis_windows_11_lockout_duration_minutes
+        | int
+
+    fail_msg: >-
+      One or more Windows 11 CIS account-lockout
+      parameters fall outside the implemented
+      benchmark bounds.
+
+
+# ============================================================
+# Local Policy parameters
+# ============================================================
+
+- name: Validate Windows 11 CIS built-in account names
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_builtin_administrator_name
+        | length
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_builtin_administrator_name
+        | length
+        <=
+        20
+
+      - >-
+        crucible_cis_windows_11_builtin_guest_name
+        | length
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_builtin_guest_name
+        | length
+        <=
+        20
+
+      - >-
+        crucible_cis_windows_11_builtin_administrator_name
+        | lower
+        !=
+        'administrator'
+
+      - >-
+        crucible_cis_windows_11_builtin_guest_name
+        | lower
+        !=
+        'guest'
+
+      - >-
+        crucible_cis_windows_11_builtin_administrator_name
+        | lower
+        !=
+        crucible_cis_windows_11_builtin_guest_name
+        | lower
+
+    fail_msg: >-
+      Windows 11 CIS built-in account names must be
+      unique non-default names between 1 and 20 characters.
+
+
+- name: Validate Windows 11 interactive-logon parameters
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_inactivity_timeout_seconds
+        | int
+        >=
+        1
+
+      - >-
+        crucible_cis_windows_11_inactivity_timeout_seconds
+        | int
+        <=
+        900
+
+      - >-
+        crucible_cis_windows_11_password_expiry_warning_days
+        | int
+        >=
+        5
+
+      - >-
+        crucible_cis_windows_11_password_expiry_warning_days
+        | int
+        <=
+        14
+
+      - >-
+        crucible_cis_windows_11_legal_notice_title
+        | length
+        >
+        0
+
+      - >-
+        crucible_cis_windows_11_legal_notice_text
+        | length
+        >
+        0
+
+    fail_msg: >-
+      Windows 11 CIS interactive-logon parameters
+      are invalid.
+
+
+# ============================================================
+# Firewall
+# ============================================================
+
+- name: Validate Windows 11 CIS firewall log size
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_firewall_log_max_size_kb
+        | int
+        >=
+        16384
+
+    fail_msg: >-
+      Windows 11 CIS firewall_log_max_size_kb
+      must be at least 16384 KB.
+
+
+# ============================================================
+# Profile helpers
+# ============================================================
+
+- name: Resolve Windows 11 BitLocker profile selection
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_bitlocker_profile_selected: >-
+      {{
+        crucible_hardening.profile.id
+        in
+        [
+          'level1-bitlocker',
+          'level2-bitlocker',
+          'bitlocker'
+        ]
+      }}
+
+
+# ============================================================
+# Initialize execution state
+# ============================================================
+
+- name: Initialize Windows 11 CIS execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: []
+
+    crucible_cis_windows_11_reboot_required: false
+
+
+# ============================================================
+# Wave 1
+#
+# Wave 1 ALWAYS runs.
+#
+# Profile applicability has already been resolved by the
+# hardening planner, so this only selects applicable controls
+# carrying the wave:1 implementation tag.
+# ============================================================
+
+- name: Resolve Windows 11 Wave 1 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows 11 Wave 1 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      'wave:1'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Wave 2
+#
+# Wave 2 must execute for BOTH:
+#
+#   implementation_wave == 2
+#   implementation_wave == 3
+#
+# Wave 3 is cumulative, not an alternative to Wave 2.
+# ============================================================
+
+- name: Resolve Windows 11 Wave 2 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows 11 Wave 2 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      'wave:2'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Wave 3
+#
+# High-impact / hardware-sensitive Windows policy.
+#
+# Applicability is still controlled by the benchmark profile.
+#
+# Examples:
+#
+#   - source BitLocker profile controls
+#   - Virtualization Based Security
+#   - Credential Guard
+#   - Application Guard
+#   - protected LSASS / UEFI-lock policy
+# ============================================================
+
+- name: Resolve Windows 11 Wave 3 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows 11 Wave 3 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_11_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Risk tier
+# ============================================================
+
+- name: Resolve Windows 11 CIS risk tier
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_risk_tier: >-
+      {{
+        {
+          '1': 'low',
+          '2': 'moderate',
+          '3': 'high'
+        }[
+          crucible_cis_windows_11_implementation_wave
+        ]
+      }}
+
+
+# ============================================================
+# Execution summary
+# ============================================================
+
+- name: Display Windows 11 CIS execution summary
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_windows_11_implementation_wave }}
+
+      - >-
+        Risk tier:
+        {{ crucible_cis_windows_11_risk_tier }}
+
+      - >-
+        BitLocker profile:
+        {{
+          crucible_cis_windows_11_bitlocker_profile_selected
+        }}
+
+      - >-
+        Execution controls:
+        {{
+          crucible_cis_windows_11_execution_controls
+          | length
+        }}
+
+      - >-
+        Manual:
+        {{
+          crucible_hardening.counts.manual
+          | default(0)
+        }}
+
+      - >-
+        Conditional:
+        {{
+          crucible_hardening.counts.conditional
+          | default(0)
+        }}
+
+      - >-
+        User exceptions:
+        {{
+          crucible_hardening.counts.user_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Derived exceptions:
+        {{
+          crucible_hardening.counts.derived_exceptions
+          | default(0)
+        }}
+
+      - >-
+        Not implemented:
+        {{
+          crucible_hardening.counts.not_implemented
+          | default(0)
+        }}

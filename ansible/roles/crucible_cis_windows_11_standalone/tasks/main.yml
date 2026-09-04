@@ -1,0 +1,192 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+#
+# Final milestone BD dispatcher
+# ============================================================
+
+
+# ============================================================
+# Preflight / planning
+# ============================================================
+
+- name: CIS Windows 11 | Preflight
+  ansible.builtin.include_tasks:
+
+    file: preflight.yml
+
+
+# ============================================================
+# Section 1 - Account Policies
+# ============================================================
+
+- name: CIS Windows 11 | Account Policies
+  ansible.builtin.include_tasks:
+
+    file: account_policies.yml
+
+
+# ============================================================
+# Section 2 - Local Policies
+# ============================================================
+
+- name: CIS Windows 11 | User Rights Assignment
+  ansible.builtin.include_tasks:
+
+    file: user_rights.yml
+
+
+- name: CIS Windows 11 | Security Options
+  ansible.builtin.include_tasks:
+
+    file: security_options.yml
+
+
+# ============================================================
+# Section 5 - System Services
+# ============================================================
+
+- name: CIS Windows 11 | System Services
+  ansible.builtin.include_tasks:
+
+    file: services.yml
+
+
+# ============================================================
+# Section 9 - Windows Defender Firewall
+# ============================================================
+
+- name: CIS Windows 11 | Windows Defender Firewall
+  ansible.builtin.include_tasks:
+
+    file: firewall.yml
+
+
+# ============================================================
+# Section 17 - Advanced Audit Policy
+# ============================================================
+
+- name: CIS Windows 11 | Advanced Audit Policy
+  ansible.builtin.include_tasks:
+
+    file: advanced_audit.yml
+
+
+# ============================================================
+# Sections 18/19 - Ordinary Administrative Templates
+# ============================================================
+
+- name: CIS Windows 11 | Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: administrative_templates.yml
+
+
+# ============================================================
+# BD-F - BitLocker profile
+#
+# BitLocker recommendations are both:
+#
+#   - profile-selected
+#   - Wave 3
+# ============================================================
+
+- name: CIS Windows 11 | BitLocker profile policy
+  ansible.builtin.include_tasks:
+
+    file: bitlocker.yml
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_bitlocker_profile_selected
+      | bool
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      ==
+      '3'
+
+
+# ============================================================
+# BD-F - Advanced Windows 11 security
+#
+# Windows 11 v5 folds the old NG material into L1.
+# Crucible deliberately places execution in Wave 3.
+# ============================================================
+
+- name: CIS Windows 11 | Advanced Windows security
+  ansible.builtin.include_tasks:
+
+    file: advanced_security.yml
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      ==
+      '3'
+
+
+# ============================================================
+# Inline validation before finalization
+# ============================================================
+
+- name: CIS Windows 11 | Verify Account Policies
+  ansible.builtin.include_tasks:
+
+    file: verify.yml
+
+
+- name: CIS Windows 11 | Verify Local Policies
+  ansible.builtin.include_tasks:
+
+    file: verify_bd_c.yml
+
+
+- name: CIS Windows 11 | Verify services firewall and audit
+  ansible.builtin.include_tasks:
+
+    file: verify_bd_d.yml
+
+
+- name: CIS Windows 11 | Verify Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: verify_bd_e.yml
+
+
+- name: CIS Windows 11 | Verify Wave 3 advanced policy
+  ansible.builtin.include_tasks:
+
+    file: verify_bd_f.yml
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_implementation_wave
+      ==
+      '3'
+
+
+# ============================================================
+# Final controlled reboot + complete post-reboot validation
+# ============================================================
+
+- name: CIS Windows 11 | Final validation
+  ansible.builtin.include_tasks:
+
+    file: final_validation.yml
+
+
+# ============================================================
+# Completion marker
+# ============================================================
+
+- name: CIS Windows 11 | Completion
+  ansible.builtin.include_tasks:
+
+    file: completion.yml

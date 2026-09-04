@@ -1,0 +1,289 @@
+---
+
+# ============================================================
+# BD-B Account Policy verification
+# ============================================================
+
+- name: Inspect Windows 11 CIS account-policy state
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      PasswordHistory: >-
+        {{
+          crucible_cis_windows_11_password_history
+          | int
+        }}
+
+      PasswordMaxAge: >-
+        {{
+          crucible_cis_windows_11_password_max_age_days
+          | int
+        }}
+
+      PasswordMinAge: >-
+        {{
+          crucible_cis_windows_11_password_min_age_days
+          | int
+        }}
+
+      PasswordMinLength: >-
+        {{
+          crucible_cis_windows_11_password_min_length
+          | int
+        }}
+
+      LockoutDuration: >-
+        {{
+          crucible_cis_windows_11_lockout_duration_minutes
+          | int
+        }}
+
+      LockoutThreshold: >-
+        {{
+          crucible_cis_windows_11_lockout_threshold
+          | int
+        }}
+
+      LockoutReset: >-
+        {{
+          crucible_cis_windows_11_lockout_reset_minutes
+          | int
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [int]$PasswordHistory,
+          [int]$PasswordMaxAge,
+          [int]$PasswordMinAge,
+          [int]$PasswordMinLength,
+          [int]$LockoutDuration,
+          [int]$LockoutThreshold,
+          [int]$LockoutReset
+      )
+
+      $Ansible.Changed = $false
+
+
+      $ExportPath = Join-Path `
+          $Ansible.Tmpdir `
+          'crucible-win11-cis-security.inf'
+
+
+      & secedit.exe `
+          /export `
+          /cfg $ExportPath `
+          /areas SECURITYPOLICY `
+          | Out-Null
+
+
+      if ($LASTEXITCODE -ne 0) {
+
+          throw (
+              "secedit export failed with exit code " +
+              $LASTEXITCODE
+          )
+      }
+
+
+      $Lines = @(
+          Get-Content `
+              -LiteralPath $ExportPath
+      )
+
+
+      function Get-SecurityValue {
+
+          param (
+              [Parameter(Mandatory)]
+              [string]$Name
+          )
+
+
+          $Pattern = (
+              '^\s*' +
+              [regex]::Escape($Name) +
+              '\s*=\s*(.*?)\s*$'
+          )
+
+
+          $Line = (
+              $Lines
+              |
+              Where-Object {
+                  $_ -match $Pattern
+              }
+              |
+              Select-Object -First 1
+          )
+
+
+          if ($null -eq $Line) {
+
+              return $null
+          }
+
+
+          if ($Line -match $Pattern) {
+
+              return $Matches[1].Trim()
+          }
+
+
+          return $null
+      }
+
+
+      $Expected = [ordered]@{
+
+          PasswordHistorySize = (
+              [string]$PasswordHistory
+          )
+
+          MaximumPasswordAge = (
+              [string]$PasswordMaxAge
+          )
+
+          MinimumPasswordAge = (
+              [string]$PasswordMinAge
+          )
+
+          MinimumPasswordLength = (
+              [string]$PasswordMinLength
+          )
+
+          PasswordComplexity = '1'
+
+          ClearTextPassword = '0'
+
+          LockoutDuration = (
+              [string]$LockoutDuration
+          )
+
+          LockoutBadCount = (
+              [string]$LockoutThreshold
+          )
+
+          ResetLockoutCount = (
+              [string]$LockoutReset
+          )
+      }
+
+
+      $Observed = [ordered]@{}
+
+      $Failures = @()
+
+
+      foreach (
+          $Entry
+          in
+          $Expected.GetEnumerator()
+      ) {
+
+          $Actual = (
+              Get-SecurityValue `
+                  -Name $Entry.Key
+          )
+
+
+          $Observed[
+              $Entry.Key
+          ] = $Actual
+
+
+          if (
+              [string]$Actual
+              -ne
+              [string]$Entry.Value
+          ) {
+
+              $Failures += (
+                  $Entry.Key +
+                  ': expected=' +
+                  [string]$Entry.Value +
+                  ', actual=' +
+                  [string]$Actual
+              )
+          }
+      }
+
+
+      $RelaxPasswordLength = (
+          Get-ItemProperty `
+              -LiteralPath `
+                'HKLM:\SYSTEM\CurrentControlSet\Control\SAM' `
+              -Name RelaxMinimumPasswordLengthLimits `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      $RelaxValue = $null
+
+
+      if ($null -ne $RelaxPasswordLength) {
+
+          $RelaxValue = (
+              $RelaxPasswordLength
+              .RelaxMinimumPasswordLengthLimits
+          )
+      }
+
+
+      if (
+          [int]$RelaxValue
+          -ne
+          1
+      ) {
+
+          $Failures += (
+              'RelaxMinimumPasswordLengthLimits: ' +
+              'expected=1, actual=' +
+              [string]$RelaxValue
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          observed = $Observed
+
+          relax_minimum_password_length_limits = (
+              $RelaxValue
+          )
+
+          failures = $Failures
+      }
+
+  register: >-
+    crucible_cis_windows_11_account_policy_validation
+
+
+- name: Assert Windows 11 CIS account-policy convergence
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_account_policy_validation
+        .result
+        .failures
+        | length
+        ==
+        0
+
+    fail_msg: >-
+      Windows 11 CIS BD-B account-policy validation failed:
+      {{
+        crucible_cis_windows_11_account_policy_validation
+        .result
+        .failures
+      }}
+
+
+- name: Display Windows 11 CIS account-policy evidence
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_11_account_policy_validation.result

@@ -1,0 +1,118 @@
+---
+
+# ============================================================
+# Windows 11 CIS BD-F verification
+#
+# All BD-F controls are registry-backed.
+#
+# A second pass must be idempotent.
+# ============================================================
+
+
+- name: Load Windows 11 CIS advanced policy inventory for validation
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+- name: Build Windows 11 BD-F machine policy inventory
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_bd_f_machine_policies: >-
+      {{
+        (
+          crucible_cis_windows_11_bitlocker_machine_registry_policies
+          | default([])
+        )
+        +
+        (
+          crucible_cis_windows_11_advanced_security_machine_registry_policies
+          | default([])
+        )
+      }}
+
+
+- name: Verify Windows 11 BD-F registry policies are converged
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_bd_f_machine_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_bd_f_registry_verification
+
+
+- name: Assert Windows 11 BD-F registry policies converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_11_bd_f_registry_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 BD-F advanced security
+      policies failed second-pass convergence.
+
+
+- name: Verify Crucible management after BD-F verification
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_bd_f_management_ping
+
+
+- name: Assert Crucible management survived BD-F verification
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_bd_f_management_ping.ping
+        ==
+        'pong'

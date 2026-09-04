@@ -322,3 +322,99 @@ benchmarks:
 
     controls_file: >
       hardening/benchmarks/cis-microsoft-windows-10-standalone.yml
+
+
+  cis-microsoft-windows-11-standalone:
+
+    display_name: CIS Microsoft Windows 11 Stand-alone
+
+    description: >
+      Operation Crucible implementation of the CIS
+      Microsoft Windows 11 Stand-alone Benchmark.
+
+    authority: CIS
+
+    benchmark_version: "5.0.0"
+
+    # BD-A imports and classifies the complete benchmark.
+    # Leave the benchmark planned until the Windows 11
+    # remediation role has been ported and validated.
+
+    status: implemented
+
+    target:
+      type: os
+
+      supported_profiles:
+        - windows-11
+
+    profiles:
+
+      level1:
+        display_name: Level 1
+
+        description: >
+          Practical general-use Windows 11 security
+          baseline.
+
+        applies_to_profiles:
+          - windows-11
+
+        default_for_profiles:
+          - windows-11
+
+
+      level1-bitlocker:
+        display_name: Level 1 + BitLocker
+
+        description: >
+          Level 1 Windows 11 baseline plus CIS
+          BitLocker recommendations.
+
+        applies_to_profiles:
+          - windows-11
+
+        default_for_profiles: []
+
+
+      level2:
+        display_name: Level 2
+
+        description: >
+          High-security Windows 11 baseline extending
+          Level 1 and accepting additional reductions
+          in functionality and manageability.
+
+        applies_to_profiles:
+          - windows-11
+
+        default_for_profiles: []
+
+
+      level2-bitlocker:
+        display_name: Level 2 + BitLocker
+
+        description: >
+          Level 2 Windows 11 baseline plus CIS
+          BitLocker recommendations.
+
+        applies_to_profiles:
+          - windows-11
+
+        default_for_profiles: []
+
+
+      bitlocker:
+        display_name: BitLocker
+
+        description: >
+          CIS BitLocker recommendation add-on without
+          the Level 1 or Level 2 baseline.
+
+        applies_to_profiles:
+          - windows-11
+
+        default_for_profiles: []
+
+    controls_file: >
+      hardening/benchmarks/cis-microsoft-windows-11-standalone.yml

@@ -1,0 +1,437 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+#
+# BD-F advanced Windows security
+#
+#   18.9.5.1 - 18.9.5.7
+#       Virtualization Based Security
+#
+#   18.9.27.2
+#       LSASS protected process with UEFI lock
+#
+#   18.10.43.1 - 18.10.43.6
+#       Microsoft Defender Application Guard
+#
+# Windows 11 places the former NG controls in Level 1.
+# Crucible executes them in Wave 3 because their runtime
+# behavior remains hardware / firmware sensitive.
+# ============================================================
+
+
+- name: Load Windows 11 CIS advanced policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Resolve which advanced controls actually execute
+# ============================================================
+
+- name: Resolve Windows 11 advanced-security execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_advanced_security_execution_ids: >-
+      {{
+        (
+          crucible_cis_windows_11_advanced_security_machine_registry_policies
+          | default([])
+          | map(attribute='control_id')
+          | unique
+          | list
+        )
+        |
+        intersect(
+          crucible_cis_windows_11_execution_controls
+          | default([])
+        )
+      }}
+
+
+# ============================================================
+# Hardware/runtime capability
+# ============================================================
+
+- name: Inspect Windows 11 advanced-security prerequisites
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      # ------------------------------------------------------
+      # Operating system
+      # ------------------------------------------------------
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem
+
+
+      $Is64Bit = (
+          [string]$Os.OSArchitecture -match '64'
+      )
+
+
+      # ------------------------------------------------------
+      # Secure Boot
+      # ------------------------------------------------------
+
+      $SecureBootSupported = $false
+
+      $SecureBootEnabled = $false
+
+      $SecureBootError = $null
+
+
+      try {
+
+          $SecureBootEnabled = (
+              [bool](
+                  Confirm-SecureBootUEFI `
+                      -ErrorAction Stop
+              )
+          )
+
+
+          $SecureBootSupported = $true
+      }
+
+      catch {
+
+          $SecureBootError = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Processor virtualization capability
+      # ------------------------------------------------------
+
+      $Processor = Get-CimInstance `
+          -ClassName Win32_Processor |
+          Select-Object -First 1
+
+
+      $VirtualizationFirmwareEnabled = (
+          [bool]$Processor.VirtualizationFirmwareEnabled
+      )
+
+
+      $Slat = (
+          [bool]$Processor.SecondLevelAddressTranslationExtensions
+      )
+
+
+      $VmMonitor = (
+          [bool]$Processor.VMMonitorModeExtensions
+      )
+
+
+      # ------------------------------------------------------
+      # Hypervisor
+      # ------------------------------------------------------
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem
+
+
+      $HypervisorPresent = (
+          [bool]$ComputerSystem.HypervisorPresent
+      )
+
+
+      # ------------------------------------------------------
+      # Application Guard optional feature
+      # ------------------------------------------------------
+
+      $ApplicationGuard = @{
+          query_succeeded = $false
+          state = $null
+      }
+
+
+      try {
+
+          $Feature = Get-WindowsOptionalFeature `
+              -Online `
+              -FeatureName Windows-Defender-ApplicationGuard `
+              -ErrorAction Stop
+
+
+          $ApplicationGuard.query_succeeded = $true
+
+          $ApplicationGuard.state = (
+              [string]$Feature.State
+          )
+      }
+
+      catch {
+
+          $ApplicationGuard.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Device Guard runtime
+      # ------------------------------------------------------
+
+      $DeviceGuard = @{
+          available = $false
+      }
+
+
+      try {
+
+          $Dg = Get-CimInstance `
+              -Namespace root\Microsoft\Windows\DeviceGuard `
+              -ClassName Win32_DeviceGuard `
+              -ErrorAction Stop
+
+
+          $DeviceGuard.available = $true
+
+          $DeviceGuard.virtualization_based_security_status = (
+              [int]$Dg.VirtualizationBasedSecurityStatus
+          )
+
+          $DeviceGuard.security_services_configured = @(
+              $Dg.SecurityServicesConfigured
+          )
+
+          $DeviceGuard.security_services_running = @(
+              $Dg.SecurityServicesRunning
+          )
+      }
+
+      catch {
+
+          $DeviceGuard.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      $RuntimeLikelyCapable = (
+
+          $Is64Bit
+
+          -and
+
+          $SecureBootSupported
+
+          -and
+
+          $SecureBootEnabled
+
+          -and
+
+          $VirtualizationFirmwareEnabled
+      )
+
+
+      $Ansible.Result = @{
+
+          os_64_bit = (
+              $Is64Bit
+          )
+
+          secure_boot_supported = (
+              $SecureBootSupported
+          )
+
+          secure_boot_enabled = (
+              $SecureBootEnabled
+          )
+
+          secure_boot_error = (
+              $SecureBootError
+          )
+
+          virtualization_firmware_enabled = (
+              $VirtualizationFirmwareEnabled
+          )
+
+          second_level_address_translation = (
+              $Slat
+          )
+
+          vm_monitor_mode_extensions = (
+              $VmMonitor
+          )
+
+          hypervisor_present = (
+              $HypervisorPresent
+          )
+
+          application_guard = (
+              $ApplicationGuard
+          )
+
+          device_guard = (
+              $DeviceGuard
+          )
+
+          runtime_likely_capable = (
+              $RuntimeLikelyCapable
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_11_advanced_security_runtime
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+- name: Display Windows 11 advanced-security capability
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_11_advanced_security_runtime.result
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+- name: Report limited advanced-security runtime capability
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Windows 11 CIS Wave 3 policy state is being
+        configured, but this guest does not currently
+        appear to satisfy all runtime prerequisites for
+        hardware-backed VBS activation.
+
+      - >-
+        Registry-policy compliance and hardware-dependent
+        runtime activation are recorded separately.
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0
+
+    - >-
+      not
+      (
+        crucible_cis_windows_11_advanced_security_runtime
+        .result
+        .runtime_likely_capable
+        | default(false)
+        | bool
+      )
+
+
+# ============================================================
+# Explicit warning for persistent UEFI-lock policy
+# ============================================================
+
+- name: Report LSASS UEFI-lock enforcement
+  ansible.builtin.debug:
+
+    msg: >-
+      CIS 18.9.27.2 is executing. The benchmark requires
+      LSASS protected-process mode with UEFI lock. Reversing
+      this state later requires explicit remediation; merely
+      removing the policy is not sufficient.
+
+  when:
+
+    - >-
+      '18.9.27.2'
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+# ============================================================
+# Apply policy
+# ============================================================
+
+- name: Apply Windows 11 CIS advanced-security policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_11_advanced_security_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after advanced-security policy
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_advanced_management_ping
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+- name: Assert Crucible management survived advanced-security policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_advanced_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows 11 advanced CIS policy enforcement completed
+      but Crucible management connectivity did not survive.
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_advanced_security_execution_ids
+      | length
+      >
+      0

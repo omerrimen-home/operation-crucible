@@ -1,0 +1,195 @@
+---
+
+# ============================================================
+# Windows 11 CIS BD-E verification
+#
+# Administrative Template policy is declarative.
+#
+# A second pass must make no changes.
+# ============================================================
+
+
+# ============================================================
+# Machine policies
+# ============================================================
+
+- name: Verify Windows 11 machine Administrative Templates
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_administrative_template_machine_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_bd_e_machine_verification
+
+
+- name: Assert Windows 11 machine Administrative Templates converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_11_bd_e_machine_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 CIS machine Administrative
+      Template policies failed second-pass convergence.
+
+
+# ============================================================
+# User policies
+#
+# Re-run the same all-user engine. Every existing profile and
+# the Default User hive must already contain the desired
+# values.
+# ============================================================
+
+- name: Verify Windows 11 user Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_11_administrative_template_user_policies
+        | default([])
+      }}
+
+
+- name: Assert Windows 11 user Administrative Templates converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_windows_user_registry_policy_results
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 CIS user Administrative
+      Template policies failed second-pass convergence.
+
+
+# ============================================================
+# Management infrastructure
+# ============================================================
+
+- name: Inspect Crucible WinRM infrastructure after BD-E
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $Service = Get-Service `
+          -Name WinRM `
+          -ErrorAction Stop
+
+
+      $Listener = Get-NetTCPConnection `
+          -State Listen `
+          -LocalPort 5986 `
+          -ErrorAction SilentlyContinue |
+          Select-Object -First 1
+
+
+      $Ansible.Result = @{
+
+          winrm_status = (
+              [string]$Service.Status
+          )
+
+          https_5986_listening = (
+              $null -ne $Listener
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_11_bd_e_management_state
+
+
+- name: Assert Crucible management infrastructure survived BD-E
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_bd_e_management_state
+        .result
+        .winrm_status
+        ==
+        'Running'
+
+      - >-
+        crucible_cis_windows_11_bd_e_management_state
+        .result
+        .https_5986_listening
+        | bool
+
+    fail_msg: >-
+      Windows 11 Administrative Template hardening damaged
+      Crucible's persistent WinRM HTTPS management channel.

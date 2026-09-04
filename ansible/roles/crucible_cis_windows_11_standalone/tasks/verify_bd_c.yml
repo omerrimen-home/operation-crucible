@@ -1,0 +1,346 @@
+---
+
+# ============================================================
+# BD-C inline convergence validation
+# ============================================================
+
+
+# ============================================================
+# User Rights
+# ============================================================
+
+- name: Verify Windows 11 user-right assignments are converged
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_user_right_verification
+
+
+- name: Assert Windows 11 user-right verification made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_11_user_right_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 CIS User Rights assignments
+      were not converged after remediation.
+
+
+# ============================================================
+# 2.2.28 feature-aware User Right
+# ============================================================
+
+- name: Verify Windows 11 service-logon assignment is converged
+  ansible.windows.win_user_right:
+
+    name: SeServiceLogonRight
+
+    users: >-
+      {{
+        crucible_cis_windows_11_service_logon_users
+        | default([])
+      }}
+
+    action: set
+
+  when:
+
+    - >-
+      '2.2.28'
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_service_logon_verification
+
+
+- name: Assert service-logon assignment made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        not
+        (
+          crucible_cis_windows_11_service_logon_verification
+          .changed
+          | default(false)
+        )
+
+    fail_msg: >-
+      Windows 11 CIS 2.2.28 failed second-pass convergence.
+
+  when:
+
+    - >-
+      '2.2.28'
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+# ============================================================
+# Local Security Policy Security Options
+# ============================================================
+
+- name: Verify Windows 11 local Security Options are converged
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_security_policy_options
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_security_policy_verification
+
+
+- name: Assert local Security Options made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_11_security_policy_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 Security Options backed
+      by the local security database failed convergence.
+
+
+# ============================================================
+# Built-in account names
+# ============================================================
+
+- name: Verify Windows 11 built-in account renames
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Rid: "{{ item.rid }}"
+
+      TargetName: "{{ item.target_name }}"
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $Rid,
+
+          [Parameter(Mandatory = $true)]
+          [string] $TargetName
+      )
+
+      $Ansible.Changed = $false
+
+
+      $Account = Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match "-$Rid$"
+          } |
+          Select-Object -First 1
+
+
+      if ($null -eq $Account) {
+
+          throw (
+              "Could not locate built-in account " +
+              "RID $Rid during validation."
+          )
+      }
+
+
+      if (
+          $Account.Name
+          -cne
+          $TargetName
+      ) {
+
+          throw (
+              "Built-in account RID $Rid has name '" +
+              $Account.Name +
+              "' rather than expected name '" +
+              $TargetName +
+              "'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          rid = $Rid
+
+          name = (
+              $Account.Name
+          )
+
+          sid = (
+              $Account.SID.Value
+          )
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_builtin_account_renames
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      RID {{ item.rid }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+# ============================================================
+# Registry-backed Security Options
+# ============================================================
+
+- name: Verify Windows 11 registry-backed Security Options
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_security_option_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_registry_verification
+
+
+- name: Assert registry-backed Security Options made no changes
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_11_registry_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows 11 CIS registry-backed
+      Security Options failed second-pass convergence.

@@ -1,0 +1,200 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+# BitLocker profile extension
+#
+# IMPORTANT:
+#
+# This configures CIS BitLocker POLICY.
+#
+# It deliberately does NOT start drive encryption, create
+# recovery passwords, escrow keys, or otherwise alter the
+# encryption lifecycle of the VM.
+# ============================================================
+
+
+- name: Load Windows 11 CIS advanced policy inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Runtime capability evidence
+# ============================================================
+
+- name: Inspect Windows 11 BitLocker runtime capability
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      $BitLockerCommand = Get-Command `
+          -Name Get-BitLockerVolume `
+          -ErrorAction SilentlyContinue
+
+
+      $TpmCommand = Get-Command `
+          -Name Get-Tpm `
+          -ErrorAction SilentlyContinue
+
+
+      $TpmResult = @{
+          cmdlet_present = (
+              $null -ne $TpmCommand
+          )
+      }
+
+
+      if ($null -ne $TpmCommand) {
+
+          try {
+
+              $Tpm = Get-Tpm
+
+
+              $TpmResult.present = (
+                  [bool]$Tpm.TpmPresent
+              )
+
+              $TpmResult.ready = (
+                  [bool]$Tpm.TpmReady
+              )
+
+              $TpmResult.enabled = (
+                  [bool]$Tpm.TpmEnabled
+              )
+
+              $TpmResult.activated = (
+                  [bool]$Tpm.TpmActivated
+              )
+          }
+
+          catch {
+
+              $TpmResult.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      $VolumeResult = @{
+          cmdlet_present = (
+              $null -ne $BitLockerCommand
+          )
+      }
+
+
+      if ($null -ne $BitLockerCommand) {
+
+          try {
+
+              $Volume = Get-BitLockerVolume `
+                  -MountPoint $env:SystemDrive `
+                  -ErrorAction Stop
+
+
+              $VolumeResult.mount_point = (
+                  [string]$Volume.MountPoint
+              )
+
+              $VolumeResult.volume_status = (
+                  [string]$Volume.VolumeStatus
+              )
+
+              $VolumeResult.protection_status = (
+                  [string]$Volume.ProtectionStatus
+              )
+
+              $VolumeResult.encryption_percentage = (
+                  [int]$Volume.EncryptionPercentage
+              )
+          }
+
+          catch {
+
+              $VolumeResult.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      $Ansible.Result = @{
+
+          tpm = $TpmResult
+
+          os_volume = $VolumeResult
+      }
+
+  register: >-
+    crucible_cis_windows_11_bitlocker_runtime
+
+
+- name: Display Windows 11 BitLocker runtime state
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_11_bitlocker_runtime.result
+
+
+# ============================================================
+# BitLocker machine policy
+# ============================================================
+
+- name: Apply Windows 11 CIS BitLocker policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_11_bitlocker_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_bitlocker_machine_registry_policies
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after BitLocker policies
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_bitlocker_management_ping
+
+
+- name: Assert Crucible management survived BitLocker policies
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_bitlocker_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows 11 BitLocker CIS policy enforcement
+      completed but Crucible management did not survive.

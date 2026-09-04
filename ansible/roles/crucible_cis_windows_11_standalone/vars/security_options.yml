@@ -1,0 +1,278 @@
+---
+#
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+# Section 2.3 - Security Options
+#
+# Generated during BD-C from the validated Windows 10 policy
+# backend plus the reviewed Windows 11 v5 deltas.
+#
+# Do not mechanically substitute Windows 10 control IDs into
+# this file. Windows 11 removed and renumbered multiple
+# Security Options recommendations.
+#
+
+crucible_cis_windows_11_security_option_registry_policies:
+- control_id: 2.3.1.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: LimitBlankPasswordUse
+  type: dword
+  data: 1
+- control_id: 2.3.2.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: SCENoApplyLegacyAuditPolicy
+  type: dword
+  data: 1
+- control_id: 2.3.2.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: CrashOnAuditFail
+  type: dword
+  data: 0
+- control_id: 2.3.4.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Print\Providers\LanMan Print Services\Servers
+  name: AddPrinterDrivers
+  type: dword
+  data: 1
+- control_id: 2.3.7.1
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: DisableCAD
+  type: dword
+  data: 0
+- control_id: 2.3.7.2
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: DontDisplayLastUserName
+  type: dword
+  data: 1
+- control_id: 2.3.7.3
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: InactivityTimeoutSecs
+  type: dword
+  data: "{{\n  crucible_cis_windows_11_inactivity_timeout_seconds\n  | int\n}}"
+- control_id: 2.3.7.4
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: legalnoticetext
+  type: string
+  data: "{{\n  crucible_cis_windows_11_legal_notice_text\n}}"
+- control_id: 2.3.7.5
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: legalnoticecaption
+  type: string
+  data: "{{\n  crucible_cis_windows_11_legal_notice_title\n}}"
+- control_id: 2.3.7.6
+  path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+  name: PasswordExpiryWarning
+  type: dword
+  data: "{{\n  crucible_cis_windows_11_password_expiry_warning_days\n  | int\n}}"
+- control_id: 2.3.7.7
+  path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+  name: ScRemoveOption
+  type: string
+  data: '1'
+- control_id: 2.3.8.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters
+  name: RequireSecuritySignature
+  type: dword
+  data: 1
+- control_id: 2.3.8.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters
+  name: EnablePlainTextPassword
+  type: dword
+  data: 0
+- control_id: 2.3.9.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: AutoDisconnect
+  type: dword
+  data: 15
+- control_id: 2.3.9.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: RequireSecuritySignature
+  type: dword
+  data: 1
+- control_id: 2.3.9.3
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: EnableForcedLogOff
+  type: dword
+  data: 1
+- control_id: 2.3.9.4
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: SMBServerNameHardeningLevel
+  type: dword
+  data: 1
+- control_id: 2.3.10.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: RestrictAnonymousSAM
+  type: dword
+  data: 1
+- control_id: 2.3.10.3
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: RestrictAnonymous
+  type: dword
+  data: 1
+- control_id: 2.3.10.4
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: DisableDomainCreds
+  type: dword
+  data: 1
+- control_id: 2.3.10.5
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: EveryoneIncludesAnonymous
+  type: dword
+  data: 0
+- control_id: 2.3.10.6
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: NullSessionPipes
+  type: multistring
+  data: []
+- control_id: 2.3.10.7
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\SecurePipeServers\Winreg\AllowedExactPaths
+  name: Machine
+  type: multistring
+  data:
+  - System\CurrentControlSet\Control\ProductOptions
+  - System\CurrentControlSet\Control\Server Applications
+  - Software\Microsoft\Windows NT\CurrentVersion
+- control_id: 2.3.10.8
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\SecurePipeServers\Winreg\AllowedPaths
+  name: Machine
+  type: multistring
+  data:
+  - System\CurrentControlSet\Control\Print\Printers
+  - System\CurrentControlSet\Services\Eventlog
+  - Software\Microsoft\OLAP Server
+  - Software\Microsoft\Windows NT\CurrentVersion\Print
+  - Software\Microsoft\Windows NT\CurrentVersion\Windows
+  - System\CurrentControlSet\Control\ContentIndex
+  - System\CurrentControlSet\Control\Terminal Server
+  - System\CurrentControlSet\Control\Terminal Server\UserConfig
+  - System\CurrentControlSet\Control\Terminal Server\DefaultUserConfiguration
+  - Software\Microsoft\Windows NT\CurrentVersion\Perflib
+  - System\CurrentControlSet\Services\SysmonLog
+- control_id: 2.3.10.9
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: RestrictNullSessAccess
+  type: dword
+  data: 1
+- control_id: 2.3.10.10
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: RestrictRemoteSAM
+  type: string
+  data: O:BAG:BAD:(A;;RC;;;BA)
+- control_id: 2.3.10.11
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters
+  name: NullSessionShares
+  type: multistring
+  data: []
+- control_id: 2.3.10.12
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: ForceGuest
+  type: dword
+  data: 0
+- control_id: 2.3.11.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: UseMachineId
+  type: dword
+  data: 1
+- control_id: 2.3.11.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0
+  name: AllowNullSessionFallback
+  type: dword
+  data: 0
+- control_id: 2.3.11.3
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\pku2u
+  name: AllowOnlineID
+  type: dword
+  data: 0
+- control_id: 2.3.11.4
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Kerberos\Parameters
+  name: SupportedEncryptionTypes
+  type: dword
+  data: 2147483640
+- control_id: 2.3.11.6
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: LmCompatibilityLevel
+  type: dword
+  data: 5
+- control_id: 2.3.11.7
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LDAP
+  name: LDAPClientConfidentiality
+  type: dword
+  data: 1
+- control_id: 2.3.11.8
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: LDAPClientIntegrity
+  type: dword
+  data: 1
+- control_id: 2.3.11.9
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0
+  name: NTLMMinClientSec
+  type: dword
+  data: 537395200
+- control_id: 2.3.11.10
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0
+  name: NTLMMinServerSec
+  type: dword
+  data: 537395200
+- control_id: 2.3.11.11
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0
+  name: AuditReceivingNTLMTraffic
+  type: dword
+  data: 2
+- control_id: 2.3.11.12
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0
+  name: RestrictSendingNTLMTraffic
+  type: dword
+  data: 1
+- control_id: 2.3.14.1
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Cryptography
+  name: ForceKeyProtection
+  type: dword
+  data: 1
+- control_id: 2.3.15.1
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Kernel
+  name: ObCaseInsensitive
+  type: dword
+  data: 1
+- control_id: 2.3.15.2
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager
+  name: ProtectionMode
+  type: dword
+  data: 1
+- control_id: 2.3.17.1
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: FilterAdministratorToken
+  type: dword
+  data: 1
+- control_id: 2.3.17.2
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: ConsentPromptBehaviorAdmin
+  type: dword
+  data: 2
+- control_id: 2.3.17.3
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: ConsentPromptBehaviorUser
+  type: dword
+  data: 0
+- control_id: 2.3.17.4
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: EnableInstallerDetection
+  type: dword
+  data: 1
+- control_id: 2.3.17.5
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: EnableSecureUIAPaths
+  type: dword
+  data: 1
+- control_id: 2.3.17.6
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: EnableLUA
+  type: dword
+  data: 1
+- control_id: 2.3.17.7
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: PromptOnSecureDesktop
+  type: dword
+  data: 1
+- control_id: 2.3.17.8
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: EnableVirtualization
+  type: dword
+  data: 1

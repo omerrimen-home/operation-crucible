@@ -1,0 +1,116 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+#
+# Section 18 - Administrative Templates (Computer)
+# Section 19 - Administrative Templates (User)
+#
+# Registry backing is generated directly from the Audit
+# procedures in the source benchmark.
+#
+# Deferred to BD-F:
+#
+#   - BitLocker
+#   - former Next Generation / hardware-sensitive controls
+#   - LSASS UEFI-lock protection
+# ============================================================
+
+
+- name: Load Windows 11 CIS Administrative Template inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/administrative_templates.yml
+
+
+# ============================================================
+# Section 18 - Machine policy
+# ============================================================
+
+- name: Apply Windows 11 CIS machine Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_11_administrative_template_machine_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_administrative_template_machine_policies
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Section 19 - User policy
+#
+# Do not write these settings only to the WinRM account's
+# HKCU.
+#
+# The all-user registry engine applies them to:
+#
+#   - currently loaded normal user hives;
+#   - unloaded existing user NTUSER.DAT hives;
+#   - Default User for future profiles.
+# ============================================================
+
+- name: Apply Windows 11 CIS user Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_11_administrative_template_user_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_11_administrative_template_user_policies
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Protect Crucible management
+# ============================================================
+
+- name: Verify Crucible management after Administrative Templates
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_bd_e_management_ping
+
+
+- name: Assert Crucible management survived Administrative Templates
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_bd_e_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows 11 CIS Administrative Template enforcement
+      completed, but Crucible WinRM HTTPS / PSRP management
+      connectivity did not survive.

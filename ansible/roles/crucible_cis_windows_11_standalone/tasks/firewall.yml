@@ -1,0 +1,545 @@
+---
+
+# ============================================================
+# CIS Windows 11
+# Section 9 - Windows Defender Firewall
+#
+# Stand-alone benchmark:
+#
+#   9.1 Domain  -> no recommendation
+#   9.2 Private -> seven L1 recommendations
+#   9.3 Public  -> seven L1 recommendations
+#
+# The existing Operation Crucible WinRM rule is validated
+# BEFORE enforcing the Private/Public firewall defaults.
+# ============================================================
+
+
+- name: Validate Crucible WinRM firewall rule before CIS firewall hardening
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+      $Rule = Get-NetFirewallRule `
+          -Name "Crucible-WinRM-HTTPS" `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -eq $Rule) {
+
+          throw (
+              "Crucible-WinRM-HTTPS firewall rule " +
+              "does not exist. Refusing to apply CIS " +
+              "firewall defaults because management " +
+              "connectivity could be lost."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Enabled -ine "True"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS firewall rule " +
+              "is not enabled."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Direction -ine "Inbound"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS is not an " +
+              "inbound rule."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Action -ine "Allow"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS is not an " +
+              "allow rule."
+          )
+      }
+
+
+      $PortFilter = (
+          Get-NetFirewallPortFilter `
+              -AssociatedNetFirewallRule $Rule
+      )
+
+
+      $Protocol = (
+          [string]$PortFilter.Protocol
+      )
+
+
+      if (
+          $Protocol -notin @(
+              "TCP",
+              "6"
+          )
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS does not use TCP."
+          )
+      }
+
+
+      if (
+          [string]$PortFilter.LocalPort -ne "5986"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS does not permit " +
+              "the expected TCP/5986 listener."
+          )
+      }
+
+
+      $AddressFilter = (
+          Get-NetFirewallAddressFilter `
+              -AssociatedNetFirewallRule $Rule
+      )
+
+
+      $Ansible.Result = @{
+          name = $Rule.Name
+          enabled = [string]$Rule.Enabled
+          direction = [string]$Rule.Direction
+          action = [string]$Rule.Action
+          protocol = $Protocol
+          local_port = (
+              [string]$PortFilter.LocalPort
+          )
+          remote_address = @(
+              $AddressFilter.RemoteAddress
+          )
+      }
+
+
+- name: Ensure Windows firewall log directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      C:\Windows\System32\LogFiles\Firewall
+
+    state: directory
+
+
+- name: Define Windows CIS firewall settings
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_firewall_settings:
+
+
+      # ------------------------------------------------------
+      # Private
+      # ------------------------------------------------------
+
+      - control_id: "9.2.1"
+        profile: Private
+        setting: Enabled
+        value: "True"
+        value_type: boolean
+
+      - control_id: "9.2.2"
+        profile: Private
+        setting: DefaultInboundAction
+        value: Block
+        value_type: string
+
+      - control_id: "9.2.3"
+        profile: Private
+        setting: NotifyOnListen
+        value: "False"
+        value_type: boolean
+
+      - control_id: "9.2.4"
+        profile: Private
+        setting: LogFileName
+        value: >-
+          %SystemRoot%\System32\logfiles\firewall\privatefw.log
+        value_type: string
+
+      - control_id: "9.2.5"
+        profile: Private
+        setting: LogMaxSizeKilobytes
+        value: >-
+          {{
+            crucible_cis_windows_11_firewall_log_max_size_kb
+            | string
+          }}
+        value_type: integer
+
+      - control_id: "9.2.6"
+        profile: Private
+        setting: LogBlocked
+        value: "True"
+        value_type: boolean
+
+      - control_id: "9.2.7"
+        profile: Private
+        setting: LogAllowed
+        value: "True"
+        value_type: boolean
+
+
+      # ------------------------------------------------------
+      # Public
+      # ------------------------------------------------------
+
+      - control_id: "9.3.1"
+        profile: Public
+        setting: Enabled
+        value: "True"
+        value_type: boolean
+
+      - control_id: "9.3.2"
+        profile: Public
+        setting: DefaultInboundAction
+        value: Block
+        value_type: string
+
+      - control_id: "9.3.3"
+        profile: Public
+        setting: NotifyOnListen
+        value: "False"
+        value_type: boolean
+
+      - control_id: "9.3.4"
+        profile: Public
+        setting: LogFileName
+        value: >-
+          %SystemRoot%\System32\logfiles\firewall\publicfw.log
+        value_type: string
+
+      - control_id: "9.3.5"
+        profile: Public
+        setting: LogMaxSizeKilobytes
+        value: >-
+          {{
+            crucible_cis_windows_11_firewall_log_max_size_kb
+            | string
+          }}
+        value_type: integer
+
+      - control_id: "9.3.6"
+        profile: Public
+        setting: LogBlocked
+        value: "True"
+        value_type: boolean
+
+      - control_id: "9.3.7"
+        profile: Public
+        setting: LogAllowed
+        value: "True"
+        value_type: boolean
+
+
+- name: Apply Windows CIS firewall settings
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ProfileName: >-
+        {{
+          item.profile
+        }}
+
+      Setting: >-
+        {{
+          item.setting
+        }}
+
+      Value: >-
+        {{
+          item.value
+          | string
+        }}
+
+      ValueType: >-
+        {{
+          item.value_type
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $ProfileName,
+
+          [Parameter(Mandatory = $true)]
+          [string] $Setting,
+
+          [Parameter(Mandatory = $true)]
+          [string] $Value,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ValueType
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      function Convert-DesiredValue {
+
+          param (
+              [string] $RawValue,
+              [string] $Type
+          )
+
+
+          switch ($Type) {
+
+              # ------------------------------------------------
+              # Set-NetFirewallProfile does NOT use normal
+              # System.Boolean values for these settings.
+              #
+              # Enabled, NotifyOnListen, LogAllowed,
+              # LogBlocked, etc. use the NetSecurity
+              # GpoBoolean type, whose accepted textual values
+              # are:
+              #
+              #   True
+              #   False
+              #   NotConfigured
+              #
+              # Passing $true / $false through a splatted
+              # parameter table causes PowerShell to attempt:
+              #
+              #   System.Boolean -> GpoBoolean
+              #
+              # which fails on Windows 11.
+              #
+              # Preserve the canonical string instead and let
+              # Set-NetFirewallProfile's parameter binder
+              # convert it to GpoBoolean.
+              # ------------------------------------------------
+
+              "boolean" {
+
+                  if (
+                      $RawValue -notin @(
+                          "True",
+                          "False",
+                          "NotConfigured"
+                      )
+                  ) {
+
+                      throw (
+                          "Invalid firewall GpoBoolean value " +
+                          "'$RawValue'. Expected True, False, " +
+                          "or NotConfigured."
+                      )
+                  }
+
+
+                  return (
+                      [string]$RawValue
+                  )
+              }
+
+
+              "integer" {
+
+                  return (
+                      [uint64]$RawValue
+                  )
+              }
+
+
+              "string" {
+
+                  return (
+                      [string]$RawValue
+                  )
+              }
+
+
+              default {
+
+                  throw (
+                      "Unsupported firewall value type: " +
+                      $Type
+                  )
+              }
+          }
+      }
+
+
+      function Test-ValuesEqual {
+
+          param (
+              $Current,
+              $Desired,
+              [string] $Name
+          )
+
+
+          if (
+              $Name -eq "LogFileName"
+          ) {
+
+              $CurrentExpanded = (
+                  [Environment]::ExpandEnvironmentVariables(
+                      [string]$Current
+                  )
+              )
+
+              $DesiredExpanded = (
+                  [Environment]::ExpandEnvironmentVariables(
+                      [string]$Desired
+                  )
+              )
+
+              return (
+                  $CurrentExpanded -ieq $DesiredExpanded
+              )
+          }
+
+
+          return (
+              [string]$Current -ieq [string]$Desired
+          )
+      }
+
+
+      $DesiredValue = (
+          Convert-DesiredValue `
+              -RawValue $Value `
+              -Type $ValueType
+      )
+
+
+      $Profile = Get-NetFirewallProfile `
+          -Name $ProfileName `
+          -ErrorAction Stop
+
+
+      $CurrentValue = (
+          $Profile.$Setting
+      )
+
+
+      if (
+          -not (
+              Test-ValuesEqual `
+                  -Current $CurrentValue `
+                  -Desired $DesiredValue `
+                  -Name $Setting
+          )
+      ) {
+
+          $Parameters = @{
+              Name = $ProfileName
+          }
+
+          $Parameters[
+              $Setting
+          ] = $DesiredValue
+
+
+          Set-NetFirewallProfile `
+              @Parameters `
+              -ErrorAction Stop
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ------------------------------------------------------
+      # Verify effective setting
+      # ------------------------------------------------------
+
+      $Verified = Get-NetFirewallProfile `
+          -Name $ProfileName `
+          -ErrorAction Stop
+
+
+      $VerifiedValue = (
+          $Verified.$Setting
+      )
+
+
+      if (
+          -not (
+              Test-ValuesEqual `
+                  -Current $VerifiedValue `
+                  -Desired $DesiredValue `
+                  -Name $Setting
+          )
+      ) {
+
+          throw (
+              "Firewall profile '$ProfileName' " +
+              "setting '$Setting' did not converge. " +
+              "Expected '$DesiredValue', found " +
+              "'$VerifiedValue'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+          profile = $ProfileName
+          setting = $Setting
+          desired = [string]$DesiredValue
+          effective = [string]$VerifiedValue
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_firewall_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.profile }}
+      {{ item.setting }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+  register: >-
+    crucible_cis_windows_11_firewall_results
+
+
+- name: Verify WinRM survives firewall enforcement
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_11_firewall_management_ping
+
+
+- name: Assert WinRM survived firewall enforcement
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_11_firewall_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows Defender Firewall remediation completed,
+      but Crucible management connectivity did not survive.

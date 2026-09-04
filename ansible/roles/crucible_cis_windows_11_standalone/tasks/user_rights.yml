@@ -1,0 +1,243 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+# Section 2.2 - User Rights Assignment
+# ============================================================
+
+
+- name: Load Windows 11 CIS user-right inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/user_rights.yml
+
+
+# ============================================================
+# Normal declarative User Rights
+# ============================================================
+
+- name: Apply Windows 11 CIS user-right assignments
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_11_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+# ============================================================
+# 2.2.28 - Log on as a service
+#
+# Windows 11 v5 differs materially from Windows 10.
+#
+# CIS permits:
+#
+#   No One
+#
+# or, where actually required:
+#
+#   NT VIRTUAL MACHINE\Virtual Machines
+#
+# or:
+#
+#   WDAGUtilityAccount
+#
+# Do not blindly destroy feature-required principals.
+# ============================================================
+
+- name: Inspect Windows features affecting Log on as a service
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+      $Ansible.Changed = $false
+
+
+      function Test-OptionalFeatureEnabled {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $Name
+          )
+
+
+          try {
+
+              $Feature = Get-WindowsOptionalFeature `
+                  -Online `
+                  -FeatureName $Name `
+                  -ErrorAction Stop
+
+
+              return (
+                  [string]$Feature.State
+                  -eq
+                  'Enabled'
+              )
+          }
+
+          catch {
+
+              return $false
+          }
+      }
+
+
+      $Users = New-Object `
+          System.Collections.Generic.List[string]
+
+
+      $HyperVEnabled = (
+          Test-OptionalFeatureEnabled `
+              -Name 'Microsoft-Hyper-V-All'
+      )
+
+
+      $ApplicationGuardEnabled = (
+          Test-OptionalFeatureEnabled `
+              -Name 'Windows-Defender-ApplicationGuard'
+      )
+
+
+      if ($HyperVEnabled) {
+
+          try {
+
+              $Principal = New-Object `
+                  System.Security.Principal.NTAccount(
+                      'NT VIRTUAL MACHINE',
+                      'Virtual Machines'
+                  )
+
+
+              $null = $Principal.Translate(
+                  [System.Security.Principal.SecurityIdentifier]
+              )
+
+
+              $Users.Add(
+                  'NT VIRTUAL MACHINE\Virtual Machines'
+              )
+          }
+
+          catch {
+
+              throw (
+                  'Hyper-V is enabled but the benchmark-permitted ' +
+                  'NT VIRTUAL MACHINE\Virtual Machines principal ' +
+                  'could not be resolved.'
+              )
+          }
+      }
+
+
+      if ($ApplicationGuardEnabled) {
+
+          $WdagAccount = Get-LocalUser `
+              -Name 'WDAGUtilityAccount' `
+              -ErrorAction SilentlyContinue
+
+
+          if ($null -eq $WdagAccount) {
+
+              throw (
+                  'Windows Defender Application Guard is enabled ' +
+                  'but WDAGUtilityAccount could not be located.'
+              )
+          }
+
+
+          $Users.Add(
+              'WDAGUtilityAccount'
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          hyper_v_enabled = (
+              $HyperVEnabled
+          )
+
+          application_guard_enabled = (
+              $ApplicationGuardEnabled
+          )
+
+          required_service_logon_users = @(
+              $Users
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_11_service_logon_probe
+
+  when:
+
+    - >-
+      '2.2.28'
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+- name: Resolve Windows 11 service-logon assignment
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_11_service_logon_users: >-
+      {{
+        crucible_cis_windows_11_service_logon_probe
+        .result
+        .required_service_logon_users
+        | default([])
+        | list
+      }}
+
+  when:
+
+    - >-
+      '2.2.28'
+      in
+      crucible_cis_windows_11_execution_controls
+
+
+- name: CIS 2.2.28 | Configure Log on as a service
+  ansible.windows.win_user_right:
+
+    name: SeServiceLogonRight
+
+    users: >-
+      {{
+        crucible_cis_windows_11_service_logon_users
+      }}
+
+    action: set
+
+  when:
+
+    - >-
+      '2.2.28'
+      in
+      crucible_cis_windows_11_execution_controls
