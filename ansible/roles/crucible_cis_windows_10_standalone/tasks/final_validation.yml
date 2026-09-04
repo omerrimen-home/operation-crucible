@@ -377,13 +377,9 @@
     that:
 
       - >-
-        crucible_cis_windows_10_pre_reboot_state
-        .result
-        .last_boot_utc
+        crucible_cis_windows_10_pre_reboot_state.result.last_boot_utc
         !=
-        crucible_cis_windows_10_post_reboot_state
-        .result
-        .last_boot_utc
+        crucible_cis_windows_10_post_reboot_state.result.last_boot_utc
 
     fail_msg: >-
       BC-I requested a final reboot but Windows reports
@@ -1089,16 +1085,12 @@
 
         pre_boot_utc: >-
           {{
-            crucible_cis_windows_10_pre_reboot_state
-            .result
-            .last_boot_utc
+            crucible_cis_windows_10_pre_reboot_state.result.last_boot_utc
           }}
 
         post_boot_utc: >-
           {{
-            crucible_cis_windows_10_post_reboot_state
-            .result
-            .last_boot_utc
+            crucible_cis_windows_10_post_reboot_state.result.last_boot_utc
           }}
 
 

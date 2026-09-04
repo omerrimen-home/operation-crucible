@@ -94,9 +94,7 @@
 
 
       if (
-          [string]$Service.StartMode
-          -ine
-          "Disabled"
+          [string]$Service.StartMode -ine "Disabled"
       ) {
 
           throw (
@@ -108,9 +106,7 @@
 
 
       if (
-          $RuntimeService.Status
-          -ne
-          [System.ServiceProcess.ServiceControllerStatus]::Stopped
+          $RuntimeService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped
       ) {
 
           throw (
@@ -221,9 +217,7 @@
       # ------------------------------------------------------
 
       if (
-          $Setting
-          -eq
-          "LogFileName"
+          $Setting -eq "LogFileName"
       ) {
 
           $CurrentComparable = (
@@ -254,9 +248,7 @@
 
 
       if (
-          $CurrentComparable
-          -ine
-          $DesiredComparable
+          $CurrentComparable -ine $DesiredComparable
       ) {
 
           throw (
@@ -342,9 +334,7 @@
 
 
       if (
-          [string]$Rule.Enabled
-          -ine
-          "True"
+          [string]$Rule.Enabled -ine "True"
       ) {
 
           throw (
@@ -354,9 +344,7 @@
 
 
       if (
-          [string]$Rule.Direction
-          -ine
-          "Inbound"
+          [string]$Rule.Direction -ine "Inbound"
       ) {
 
           throw (
@@ -366,9 +354,7 @@
 
 
       if (
-          [string]$Rule.Action
-          -ine
-          "Allow"
+          [string]$Rule.Action -ine "Allow"
       ) {
 
           throw (
@@ -382,9 +368,7 @@
 
 
       if (
-          [string]$PortFilter.LocalPort
-          -ne
-          "5986"
+          [string]$PortFilter.LocalPort -ne "5986"
       ) {
 
           throw (
@@ -473,9 +457,7 @@
 
 
       if (
-          $LASTEXITCODE
-          -ne
-          0
+          $LASTEXITCODE -ne 0
       ) {
 
           throw (
@@ -493,9 +475,7 @@
 
 
       if (
-          $Rows.Count
-          -lt
-          1
+          $Rows.Count -lt 1
       ) {
 
           throw (
@@ -520,9 +500,7 @@
 
 
       if (
-          $null
-          -eq
-          $SettingProperty
+          $null -eq $SettingProperty
       ) {
 
           throw (
@@ -538,23 +516,17 @@
 
 
       $HasSuccess = (
-          $Setting
-          -match
-          "Success"
+          $Setting -match "Success"
       )
 
 
       $HasFailure = (
-          $Setting
-          -match
-          "Failure"
+          $Setting -match "Failure"
       )
 
 
       if (
-          $RequireSuccess
-          -and
-          -not $HasSuccess
+          $RequireSuccess -and -not $HasSuccess
       ) {
 
           throw (
@@ -565,9 +537,7 @@
 
 
       if (
-          $RequireFailure
-          -and
-          -not $HasFailure
+          $RequireFailure -and -not $HasFailure
       ) {
 
           throw (

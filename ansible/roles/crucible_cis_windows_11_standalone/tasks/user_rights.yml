@@ -94,9 +94,7 @@
 
 
               return (
-                  [string]$Feature.State
-                  -eq
-                  'Enabled'
+                  [string]$Feature.State -eq 'Enabled'
               )
           }
 

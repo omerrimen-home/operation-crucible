@@ -230,9 +230,7 @@
 
 
       if (
-          $Account.Name
-          -cne
-          $TargetName
+          $Account.Name -cne $TargetName
       ) {
 
           throw (

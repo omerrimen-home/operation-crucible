@@ -224,19 +224,8 @@
 
       $RuntimeLikelyCapable = (
 
-          $Is64Bit
-
-          -and
-
-          $SecureBootSupported
-
-          -and
-
-          $SecureBootEnabled
-
-          -and
-
-          $VirtualizationFirmwareEnabled
+          $Is64Bit -and $SecureBootSupported -and $SecureBootEnabled -and $VirtualizationFirmwareEnabled
+          
       )
 
 

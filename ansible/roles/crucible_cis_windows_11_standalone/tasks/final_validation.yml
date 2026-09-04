@@ -122,12 +122,14 @@
 
       try {
 
+          $RawDocument = Get-Content `
+              -LiteralPath $EvidencePath `
+              -Raw `
+              -ErrorAction Stop
+
+
           $Document = (
-              Get-Content `
-                  -LiteralPath $EvidencePath `
-                  -Raw `
-                  -ErrorAction Stop
-              |
+              $RawDocument |
               ConvertFrom-Json `
                   -ErrorAction Stop
           )
@@ -143,21 +145,21 @@
           )
 
 
+          $FingerprintMatches = (
+              [string]$Document.fingerprint -eq
+              [string]$ExpectedFingerprint
+          )
+
+
+          $ValidationPassed = (
+              [string]$Document.validation.status -eq
+              'implementation-validation-passed'
+          )
+
+
           $Result.valid = (
-
-              (
-                  [string]$Document.fingerprint
-                  -eq
-                  $ExpectedFingerprint
-              )
-
-              -and
-
-              (
-                  [string]$Document.validation.status
-                  -eq
-                  'implementation-validation-passed'
-              )
+              $FingerprintMatches -and
+              $ValidationPassed
           )
       }
 
@@ -194,9 +196,7 @@
         or
         not
         (
-          crucible_cis_windows_11_previous_final_state
-          .result
-          .valid
+          crucible_cis_windows_11_previous_final_state.result.valid
           | default(false)
           | bool
         )
@@ -220,9 +220,7 @@
       $Ansible.Result = @{
 
           last_boot_utc = (
-              $Os.LastBootUpTime
-              .ToUniversalTime()
-              .ToString('o')
+              $Os.LastBootUpTime.ToUniversalTime().ToString('o')
           )
 
           caption = (
@@ -311,9 +309,7 @@
       $Ansible.Result = @{
 
           last_boot_utc = (
-              $Os.LastBootUpTime
-              .ToUniversalTime()
-              .ToString('o')
+              $Os.LastBootUpTime.ToUniversalTime().ToString('o')
           )
 
           caption = (
@@ -339,13 +335,9 @@
     that:
 
       - >-
-        crucible_cis_windows_11_pre_reboot_state
-        .result
-        .last_boot_utc
+        crucible_cis_windows_11_pre_reboot_state.result.last_boot_utc
         !=
-        crucible_cis_windows_11_post_reboot_state
-        .result
-        .last_boot_utc
+        crucible_cis_windows_11_post_reboot_state.result.last_boot_utc
 
     fail_msg: >-
       Windows 11 CIS requested a final reboot but Windows
@@ -704,9 +696,7 @@
               )
 
               last_boot_utc = (
-                  $Os.LastBootUpTime
-                  .ToUniversalTime()
-                  .ToString('o')
+                  $Os.LastBootUpTime.ToUniversalTime().ToString('o')
               )
           }
 
@@ -967,9 +957,7 @@
                 'separate compliance consideration.'
               )
           }
-        }
-        |
-        to_nice_json
+        } | to_nice_json
       }}
 
 

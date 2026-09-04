@@ -119,14 +119,27 @@
           [string] $TargetName
       )
 
+
       $Ansible.Changed = $false
 
 
-      $BuiltinAccount = Get-LocalUser |
+      # ======================================================
+      # Locate the built-in account by invariant RID.
+      #
+      # RID 500 = built-in Administrator
+      # RID 501 = built-in Guest
+      #
+      # The account name itself may already have changed,
+      # which is why Crucible must not locate it by name.
+      # ======================================================
+
+      $BuiltinAccount = (
+          Get-LocalUser |
           Where-Object {
-              $_.SID.Value -match "-$Rid$"
+              $_.SID.Value -match ("-{0}$" -f $Rid)
           } |
           Select-Object -First 1
+      )
 
 
       if ($null -eq $BuiltinAccount) {
@@ -138,61 +151,106 @@
       }
 
 
-      $ExistingTarget = Get-LocalUser `
-          -Name $TargetName `
-          -ErrorAction SilentlyContinue
+      # ======================================================
+      # Refuse to overwrite an unrelated existing account.
+      # ======================================================
+
+      $ExistingTarget = (
+          Get-LocalUser `
+              -Name $TargetName `
+              -ErrorAction SilentlyContinue
+      )
 
 
       if (
-          $null -ne $ExistingTarget
-          -and
-          $ExistingTarget.SID.Value
-          -ne
-          $BuiltinAccount.SID.Value
+          ($null -ne $ExistingTarget) -and
+          (
+              [string]$ExistingTarget.SID.Value -ne
+              [string]$BuiltinAccount.SID.Value
+          )
       ) {
 
           throw (
-              "Cannot rename built-in account " +
+              "Cannot rename built-in account '" +
               $BuiltinAccount.Name +
-              " to '$TargetName': another local account " +
+              "' to '$TargetName': another local account " +
               "already uses that name."
           )
       }
 
 
+      # ======================================================
+      # Rename only when required.
+      #
+      # Use case-sensitive comparison so the requested final
+      # spelling/casing also converges.
+      # ======================================================
+
       if (
-          $BuiltinAccount.Name
-          -cne
-          $TargetName
+          [string]$BuiltinAccount.Name -cne
+          [string]$TargetName
       ) {
 
           Rename-LocalUser `
               -SID $BuiltinAccount.SID `
-              -NewName $TargetName
+              -NewName $TargetName `
+              -ErrorAction Stop
 
 
           $Ansible.Changed = $true
       }
 
 
-      $UpdatedAccount = Get-LocalUser |
+      # ======================================================
+      # Read back by RID and verify.
+      # ======================================================
+
+      $UpdatedAccount = (
+          Get-LocalUser |
           Where-Object {
-              $_.SID.Value -match "-$Rid$"
+              $_.SID.Value -match ("-{0}$" -f $Rid)
           } |
           Select-Object -First 1
+      )
+
+
+      if ($null -eq $UpdatedAccount) {
+
+          throw (
+              "Built-in account with RID $Rid could not " +
+              "be located after rename processing."
+          )
+      }
+
+
+      if (
+          [string]$UpdatedAccount.Name -cne
+          [string]$TargetName
+      ) {
+
+          throw (
+              "Built-in account with RID $Rid did not " +
+              "converge to expected name '$TargetName'. " +
+              "Current name is '$($UpdatedAccount.Name)'."
+          )
+      }
 
 
       $Ansible.Result = @{
 
-          rid = $Rid
+          rid = (
+              $Rid
+          )
 
           name = (
-              $UpdatedAccount.Name
+              [string]$UpdatedAccount.Name
           )
 
           sid = (
-              $UpdatedAccount.SID.Value
+              [string]$UpdatedAccount.SID.Value
           )
+
+          compliant = $true
       }
 
   loop: >-
