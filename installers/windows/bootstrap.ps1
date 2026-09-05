@@ -637,9 +637,7 @@ function Find-CrucibleGuestAdditionsMedia {
 function Install-CrucibleGuestAdditions {
 
     Write-CrucibleLog (
-        "Beginning VirtualBox Guest "
-        + "Additions installation."
-    )
+        "Beginning VirtualBox Guest Additions installation.")
 
     $MediaRoot = (
         Find-CrucibleGuestAdditionsMedia
@@ -677,8 +675,8 @@ function Install-CrucibleGuestAdditions {
     # ---------------------------------------------------------
 
     Write-CrucibleLog (
-        "Installing VirtualBox Guest "
-        + "Additions signing certificates."
+        "Installing VirtualBox Guest " +
+        "Additions signing certificates."
     )
 
     Push-Location `
@@ -732,9 +730,9 @@ function Install-CrucibleGuestAdditions {
         )
     ) {
         throw (
-            "Guest Additions installer "
-            + "not found: "
-            + $Installer
+            "Guest Additions installer " +
+            "not found: " +
+            $Installer
         )
     }
 
@@ -755,8 +753,7 @@ function Install-CrucibleGuestAdditions {
     )
 
     if (
-        $InstallerExitCode -ne 0
-        -and
+        $InstallerExitCode -ne 0 -and
         $InstallerExitCode -ne 3010
     ) {
 
@@ -768,10 +765,7 @@ function Install-CrucibleGuestAdditions {
     }
 
     Write-CrucibleLog (
-        "VirtualBox Guest Additions "
-        + "installation completed."
-    )
-}
+        "VirtualBox Guest Additions installation completed.")}
 
 
 function Confirm-CrucibleGuestAdditions {
@@ -813,8 +807,7 @@ function Confirm-CrucibleGuestAdditions {
         $VBoxService.Status -ne "Running"
     ) {
         throw (
-            "VBoxService did not enter "
-            + "the Running state."
+            "VBoxService did not enter the Running state."
         )
     }
 
@@ -993,32 +986,24 @@ try {
     $InstallGuestAdditions = $true
 
     $GuestAdditionsProperty = (
-        $Config.PSObject.Properties[
-            "guest_additions"
-        ]
+        $Config.PSObject.Properties["guest_additions"]
     )
 
     if (
-        $null -ne $GuestAdditionsProperty
+        $null -ne $GuestAdditionsProperty -and
+        $null -ne $Config.guest_additions
     ) {
 
         $EnabledProperty = (
-            $Config.guest_additions
-            .PSObject
-            .Properties[
-                "enabled"
-            ]
+            $Config.guest_additions.PSObject.Properties["enabled"]
         )
 
         if (
             $null -ne $EnabledProperty
         ) {
+
             $InstallGuestAdditions = (
-                [bool](
-                    $Config
-                    .guest_additions
-                    .enabled
-                )
+                [bool]$Config.guest_additions.enabled
             )
         }
     }

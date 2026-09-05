@@ -35,19 +35,13 @@
 
       InternetMac: >-
         {{
-          crucible_machine
-          .network
-          .internet
-          .mac_address
+          crucible_machine.network.internet.mac_address
           | default('')
         }}
 
       ManagementMac: >-
         {{
-          crucible_machine
-          .network
-          .management
-          .mac_address
+          crucible_machine.network.management.mac_address
           | default('')
         }}
 
@@ -194,8 +188,7 @@
               -ErrorAction Stop
 
           if (
-              $UtilityDnsClient
-              .RegisterThisConnectionsAddress
+              $UtilityDnsClient.RegisterThisConnectionsAddress
           ) {
 
               Set-DnsClient `
