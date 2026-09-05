@@ -1,0 +1,67 @@
+---
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Next Generation Windows Security - Member Server
+#
+# Generated/reviewed during BE-E.
+#
+# Contains:
+#
+#   18.9.5.1 - 18.9.5.6
+#       Device Guard / VBS
+#
+#   18.9.27.1
+#       LSASS protected process with UEFI lock
+#
+# Hardware-sensitive policy is configured declaratively.
+#
+# Runtime hardware/firmware activation is reported
+# separately from registry-policy compliance.
+#
+
+crucible_cis_windows_server_2022_advanced_security_machine_registry_policies:
+- control_id: 18.9.5.1
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: EnableVirtualizationBasedSecurity
+  type: dword
+  data: 1
+  source_value_text: '1'
+- control_id: 18.9.5.2
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: RequirePlatformSecurityFeatures
+  type: dword
+  data: 1
+  source_value_text: 1 or 3
+- control_id: 18.9.5.3
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: HypervisorEnforcedCodeIntegrity
+  type: dword
+  data: 1
+  source_value_text: '1'
+- control_id: 18.9.5.4
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: HVCIMATRequired
+  type: dword
+  data: 1
+  source_value_text: '1'
+- control_id: 18.9.5.5
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: LsaCfgFlags
+  type: dword
+  data: 1
+  source_value_text: '1'
+- control_id: 18.9.5.6
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard
+  name: ConfigureSystemGuardLaunch
+  type: dword
+  data: 1
+  source_value_text: '1'
+- control_id: 18.9.27.1
+  path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\System
+  name: RunAsPPL
+  type: dword
+  data: 1
+  source_value_text: '1'
+crucible_cis_windows_server_2022_advanced_security_user_registry_policies: []

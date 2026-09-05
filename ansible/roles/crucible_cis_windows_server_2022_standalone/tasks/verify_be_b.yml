@@ -1,0 +1,657 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# Windows Server 2022 CIS BE-B verification
+#
+# Second-pass convergence validation for:
+#
+#   Section 1
+#       Account Policies
+#
+#   Section 2.2
+#       User Rights Assignment
+#
+#   Section 2.3
+#       Security Options
+#
+# Any second-pass change means the first remediation pass
+# did not converge.
+# ============================================================
+
+
+# ============================================================
+# Account Policies - local security policy
+# ============================================================
+
+- name: Verify Server 2022 CIS Account Policies are converged
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_account_policy_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_account_policy
+
+
+# ============================================================
+# Section 1.2 - read-only account lockout verification
+#
+# Do not "verify" by applying the setting a second time.
+# Read the authoritative SecEdit state and compare it.
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS account lockout policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      LockoutThreshold: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_threshold
+          | int
+        }}
+
+      LockoutDuration: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_duration_minutes
+          | int
+        }}
+
+      LockoutResetMinutes: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_reset_minutes
+          | int
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutThreshold,
+
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutDuration,
+
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutResetMinutes
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $ExportPath = Join-Path `
+          $Ansible.Tmpdir `
+          (
+              'crucible-lockout-verify-{0}.inf' -f
+              [guid]::NewGuid().ToString('N')
+          )
+
+
+      try {
+
+          & secedit.exe `
+              /export `
+              /cfg $ExportPath `
+              /areas SECURITYPOLICY `
+              /quiet `
+              | Out-Null
+
+
+          if (
+              $LASTEXITCODE -ne 0
+          ) {
+
+              throw (
+                  "secedit export failed with exit code " +
+                  "$LASTEXITCODE."
+              )
+          }
+
+
+          $Lines = @(
+              Get-Content `
+                  -LiteralPath $ExportPath `
+                  -ErrorAction Stop
+          )
+
+
+          $Observed = @{
+
+              LockoutBadCount = $null
+
+              ResetLockoutCount = $null
+
+              LockoutDuration = $null
+          }
+
+
+          foreach (
+              $Name
+              in
+              @(
+                  'LockoutBadCount',
+                  'ResetLockoutCount',
+                  'LockoutDuration'
+              )
+          ) {
+
+              $Pattern = (
+                  '^\s*{0}\s*=\s*(-?\d+)\s*$' -f
+                  [regex]::Escape(
+                      $Name
+                  )
+              )
+
+
+              $Line = (
+                  $Lines |
+                  Where-Object {
+                      $_ -match $Pattern
+                  } |
+                  Select-Object -First 1
+              )
+
+
+              if (
+                  $null -eq $Line
+              ) {
+
+                  continue
+              }
+
+
+              if (
+                  $Line -match $Pattern
+              ) {
+
+                  $Observed[$Name] = (
+                      [int]$Matches[1]
+                  )
+              }
+          }
+
+
+          $ThresholdMatches = (
+              [int]$Observed.LockoutBadCount -eq
+              $LockoutThreshold
+          )
+
+
+          $ResetMatches = (
+              [int]$Observed.ResetLockoutCount -eq
+              $LockoutResetMinutes
+          )
+
+
+          $DurationMatches = (
+              [int]$Observed.LockoutDuration -eq
+              $LockoutDuration
+          )
+
+
+          $Compliant = (
+              $ThresholdMatches -and
+              $ResetMatches -and
+              $DurationMatches
+          )
+
+
+          $Ansible.Result = @{
+
+              observed = (
+                  $Observed
+              )
+
+              expected = @{
+
+                  LockoutBadCount = (
+                      $LockoutThreshold
+                  )
+
+                  ResetLockoutCount = (
+                      $LockoutResetMinutes
+                  )
+
+                  LockoutDuration = (
+                      $LockoutDuration
+                  )
+              }
+
+              compliant = (
+                  $Compliant
+              )
+          }
+      }
+
+      finally {
+
+          if (
+              Test-Path `
+                  -LiteralPath $ExportPath
+          ) {
+
+              Remove-Item `
+                  -LiteralPath $ExportPath `
+                  -Force `
+                  -ErrorAction SilentlyContinue
+          }
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_lockout_policy
+
+  when:
+
+    - >-
+      (
+        [
+          '1.2.1',
+          '1.2.2',
+          '1.2.4'
+        ]
+        |
+        intersect(
+          crucible_cis_windows_server_2022_execution_controls
+          | default([])
+        )
+        |
+        length
+      )
+      >
+      0
+
+
+# ============================================================
+# 1.1.6
+# ============================================================
+
+- name: Verify Server 2022 relaxed minimum password length policy
+  ansible.windows.win_regedit:
+
+    path: >-
+      HKLM:\SYSTEM\CurrentControlSet\Control\SAM
+
+    name: RelaxMinimumPasswordLengthLimits
+
+    type: dword
+
+    data: 1
+
+    state: present
+
+  when:
+
+    - >-
+      '1.1.6'
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_relax_password_length
+
+
+# ============================================================
+# Static User Rights
+# ============================================================
+
+- name: Verify Server 2022 static User Rights are converged
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_static_user_rights
+
+
+# ============================================================
+# Role-aware User Rights
+# ============================================================
+
+- name: Verify Server 2022 role-aware User Rights are converged
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_role_aware_user_rights
+
+
+# ============================================================
+# Security Options - security policy DB
+# ============================================================
+
+- name: Verify Server 2022 local-policy Security Options
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_security_policy_options
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_security_policy
+
+
+# ============================================================
+# Security Options - registry
+# ============================================================
+
+- name: Verify Server 2022 registry Security Options
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_security_option_registry_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_verify_security_registry
+
+
+# ============================================================
+# Built-in account rename verification
+# ============================================================
+
+- name: Verify Server 2022 built-in account names
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Rid: "{{ item.rid }}"
+
+      ExpectedName: "{{ item.target_name }}"
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $Rid,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ExpectedName
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $Account = (
+          Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match ("-{0}$" -f $Rid)
+          } |
+          Select-Object -First 1
+      )
+
+
+      if ($null -eq $Account) {
+
+          throw (
+              "Unable to locate built-in account " +
+              "with RID $Rid."
+          )
+      }
+
+
+      if (
+          [string]$Account.Name -cne
+          [string]$ExpectedName
+      ) {
+
+          throw (
+              "Built-in account RID $Rid is named '" +
+              $Account.Name +
+              "' rather than expected name '" +
+              $ExpectedName +
+              "'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          rid = (
+              $Rid
+          )
+
+          name = (
+              [string]$Account.Name
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_builtin_account_renames
+    }}
+
+  loop_control:
+
+    label: >-
+      RID {{ item.rid }}
+      -> {{ item.target_name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+
+- name: Resolve Server 2022 changed Account Policy controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_changed_account_policy_controls: >-
+      {{
+        crucible_cis_windows_server_2022_verify_account_policy
+        .results
+        | default([])
+        | rejectattr(
+            'skipped',
+            'defined'
+          )
+        | selectattr(
+            'changed',
+            'equalto',
+            true
+          )
+        | map(attribute='item.control_id')
+        | list
+      }}
+
+
+# ============================================================
+# Second-pass convergence assertion
+# ============================================================
+
+- name: Assert Server 2022 BE-B second-pass convergence
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_account_policy
+          .changed
+          | default(false)
+          | bool
+        )
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_relax_password_length
+          .changed
+          | default(false)
+          | bool
+        )
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_static_user_rights
+          .changed
+          | default(false)
+          | bool
+        )
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_role_aware_user_rights
+          .changed
+          | default(false)
+          | bool
+        )
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_security_policy
+          .changed
+          | default(false)
+          | bool
+        )
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_verify_security_registry
+          .changed
+          | default(false)
+          | bool
+        )
+
+    fail_msg: >-
+      Windows Server 2022 CIS BE-B required changes
+      during its verification pass. Initial remediation
+      did not fully converge.
+
+
+# ============================================================
+# Management
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 BE-B
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_be_b_management_ping
+
+
+- name: Assert Crucible management survived Server 2022 BE-B
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_be_b_management_ping.ping
+        ==
+        'pong'

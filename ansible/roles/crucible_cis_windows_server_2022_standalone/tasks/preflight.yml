@@ -1,0 +1,596 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# BE-A preflight
+#
+# The benchmark implemented by this role is the MEMBER SERVER
+# baseline.
+#
+# Domain Controllers must use a future Domain Controller-
+# specific benchmark and are explicitly rejected here.
+# ============================================================
+
+
+# ============================================================
+# Ansible platform
+# ============================================================
+
+- name: Verify Windows Server CIS guest family
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        ansible_facts.os_family
+        ==
+        'Windows'
+
+    fail_msg: >-
+      crucible_cis_windows_server_2022_standalone may
+      only run against Microsoft Windows guests.
+
+
+# ============================================================
+# Hardening runtime
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS hardening runtime
+  ansible.builtin.assert:
+
+    that:
+
+      - crucible_hardening is defined
+
+      - >-
+        crucible_hardening.benchmark.id
+        ==
+        'cis-microsoft-windows-server-2022-standalone'
+
+      - >-
+        crucible_hardening.benchmark.version
+        ==
+        '2.0.0'
+
+    fail_msg: >-
+      Windows Server 2022 CIS hardening runtime metadata
+      is missing or targets the wrong benchmark.
+
+
+# ============================================================
+# Benchmark profile
+# ============================================================
+
+- name: Verify supported Windows Server 2022 CIS profile
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_hardening.profile.id
+        in
+        [
+          'level1',
+          'level1-next-generation',
+          'level2',
+          'level2-next-generation',
+          'next-generation'
+        ]
+
+    fail_msg: >-
+      Unsupported Windows Server 2022 CIS profile:
+      {{ crucible_hardening.profile.id | default('undefined') }}.
+
+
+# ============================================================
+# BE-A implementation ceiling
+#
+# Only the role foundation exists at BE-A.
+# ============================================================
+
+- name: Verify BE-A Windows Server implementation wave
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_implementation_wave
+        in
+        [
+          '1',
+          '2',
+          '3'
+        ]
+
+    fail_msg: >-
+      Windows Server 2022 CIS supports only implementation waves 1, 2, and 3.
+
+
+# ============================================================
+# BE-B execution planning
+#
+# At BE-B all implemented Section 1 and Section 2 controls
+# carry wave:1.
+#
+# Profile applicability has already been resolved by the
+# hardening planner.
+# ============================================================
+
+- name: Initialize Windows Server 2022 CIS execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: []
+
+    crucible_cis_windows_server_2022_reboot_required: false
+
+
+- name: Resolve Windows Server 2022 Wave 1 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      ('wave:1' or 'wave:2' or 'wave:3')
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows Server 2022 Wave 1 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      ('wave:1' or 'wave:2' or 'wave:3')
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+# ============================================================
+# BE-C Wave 2 automated controls
+# ============================================================
+
+- name: Resolve Windows Server 2022 Wave 2 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      ('wave:2' or 'wave:3')
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows Server 2022 Wave 2 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_implementation_wave
+      in
+      [
+        '2',
+        '3'
+      ]
+
+    - >-
+      ('wave:2' or 'wave:3')
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# BE-E Wave 3 automated controls
+# ============================================================
+
+- name: Resolve Windows Server 2022 Wave 3 automated controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.automated
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+# ============================================================
+# Future-proof conditional Wave 3 resolver
+#
+# BE-E currently introduces no Wave 3 conditional controls,
+# but keeping cumulative planning symmetric prevents a later
+# control from silently being omitted.
+# ============================================================
+
+- name: Resolve Windows Server 2022 Wave 3 conditional controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_execution_controls: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_execution_controls
+          +
+          [
+            item
+          ]
+        )
+        | unique
+        | list
+      }}
+
+  loop: >-
+    {{
+      crucible_hardening.controls.conditional
+      | default([])
+    }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_implementation_wave
+      ==
+      '3'
+
+    - >-
+      'wave:3'
+      in
+      crucible_hardening.controls.metadata[item].tags
+
+
+- name: Resolve Windows Server 2022 implementation risk tier
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_risk_tier: >-
+      {{
+        {
+          '1': 'low',
+          '2': 'moderate',
+          '3': 'high'
+        }[
+          crucible_cis_windows_server_2022_implementation_wave
+        ]
+      }}
+
+
+- name: Display Windows Server 2022 BE-C execution plan
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Benchmark:
+        {{ crucible_hardening.benchmark.display_name }}
+        {{ crucible_hardening.benchmark.version }}
+
+      - >-
+        Profile:
+        {{ crucible_hardening.profile.display_name }}
+
+      - >-
+        Implementation wave:
+        {{ crucible_cis_windows_server_2022_implementation_wave }}
+
+      - >-
+        Execution controls:
+        {{
+          crucible_cis_windows_server_2022_execution_controls
+          | length
+        }}
+
+      - >-
+        Automated:
+        {{
+          crucible_hardening.counts.automated
+          | default(0)
+        }}
+
+      - >-
+        Conditional:
+        {{
+          crucible_hardening.counts.conditional
+          | default(0)
+        }}
+
+      - >-
+        Manual:
+        {{
+          crucible_hardening.counts.manual
+          | default(0)
+        }}
+
+      - >-
+        Not implemented:
+        {{
+          crucible_hardening.counts.not_implemented
+          | default(0)
+        }}
+
+
+# ============================================================
+# Inspect actual Windows Server identity.
+#
+# Do not rely exclusively on ansible_facts.distribution.
+# Windows product captions can differ between Standard,
+# Datacenter, Evaluation, Core, and Desktop Experience.
+# ============================================================
+
+- name: Inspect Windows Server 2022 operating system identity
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem `
+          -ErrorAction Stop
+
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem `
+          -ErrorAction Stop
+
+
+      $CurrentVersion = Get-ItemProperty `
+          -LiteralPath `
+            'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' `
+          -ErrorAction Stop
+
+
+      $DomainRole = (
+          [int]$ComputerSystem.DomainRole
+      )
+
+
+      $DomainRoleName = switch ($DomainRole) {
+
+          0 {
+              'StandaloneWorkstation'
+          }
+
+          1 {
+              'MemberWorkstation'
+          }
+
+          2 {
+              'StandaloneServer'
+          }
+
+          3 {
+              'MemberServer'
+          }
+
+          4 {
+              'BackupDomainController'
+          }
+
+          5 {
+              'PrimaryDomainController'
+          }
+
+          default {
+              'Unknown'
+          }
+      }
+
+
+      $IsDomainController = (
+          ($DomainRole -eq 4) -or
+          ($DomainRole -eq 5)
+      )
+
+
+      $Ansible.Result = @{
+
+          caption = (
+              [string]$Os.Caption
+          )
+
+          version = (
+              [string]$Os.Version
+          )
+
+          build_number = (
+              [string]$Os.BuildNumber
+          )
+
+          architecture = (
+              [string]$Os.OSArchitecture
+          )
+
+          edition_id = (
+              [string]$CurrentVersion.EditionID
+          )
+
+          installation_type = (
+              [string]$CurrentVersion.InstallationType
+          )
+
+          domain = (
+              [string]$ComputerSystem.Domain
+          )
+
+          part_of_domain = (
+              [bool]$ComputerSystem.PartOfDomain
+          )
+
+          domain_role = (
+              $DomainRole
+          )
+
+          domain_role_name = (
+              [string]$DomainRoleName
+          )
+
+          is_domain_controller = (
+              [bool]$IsDomainController
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_identity
+
+
+# ============================================================
+# Validate Server 2022 and reject Domain Controllers
+# ============================================================
+
+- name: Assert Windows Server 2022 Member Server target
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_identity
+        .result
+        .caption
+        is search('Windows Server 2022')
+
+      - >-
+        crucible_cis_windows_server_2022_identity
+        .result
+        .domain_role
+        | int
+        in
+        [
+          2,
+          3
+        ]
+
+      - >-
+        not
+        (
+          crucible_cis_windows_server_2022_identity
+          .result
+          .is_domain_controller
+          | bool
+        )
+
+    fail_msg: >-
+      CIS Windows Server 2022 Stand-alone Benchmark
+      v2.0.0 in Operation Crucible targets non-DC
+      Windows Server 2022 systems. Domain Controllers
+      require a Domain Controller-specific baseline.
+
+
+- name: Display Windows Server 2022 CIS target identity
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_server_2022_identity.result

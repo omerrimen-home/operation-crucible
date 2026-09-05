@@ -1,0 +1,13 @@
+---
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Section 5 - System Services
+#
+# Generated/reviewed by BE-C.
+#
+
+crucible_cis_windows_server_2022_service_policies:
+- control_id: '5.1'
+  service_name: Spooler

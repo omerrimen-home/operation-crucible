@@ -1,0 +1,1016 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Section 2.2 - User Rights Assignment
+#
+# Unlike the workstation baselines, several Server 2022
+# recommendations explicitly permit principals required by
+# installed server roles.
+#
+# Strategy:
+#
+#   1. Apply static CIS assignments normally.
+#
+#   2. For eight role-sensitive controls, calculate:
+#
+#        CIS baseline
+#          +
+#        explicitly required installed-role principals
+#          +
+#        existing SQL/IIS role-owned principals where CIS
+#        documents a workload exception.
+#
+#   3. Set the final whitelist exactly.
+# ============================================================
+
+
+- name: Load Windows Server 2022 CIS User Rights inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/user_rights.yml
+
+
+# ============================================================
+# Determine whether any role-aware control applies.
+# ============================================================
+
+- name: Resolve whether Server 2022 role-aware User Rights are active
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_role_aware_user_rights_active: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_role_aware_user_right_settings
+          | map(attribute='control_id')
+          | list
+          | intersect(
+              crucible_cis_windows_server_2022_execution_controls
+              | default([])
+            )
+          | length
+        )
+        >
+        0
+      }}
+
+
+# ============================================================
+# Role-aware exception discovery
+#
+# PowerShell 5.1 compatibility:
+#
+#   - no operator-leading continuation lines
+#   - no split .Property member access
+#   - no pipeline operator beginning a physical line
+# ============================================================
+
+- name: Discover permitted Server 2022 User Right role exceptions
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      HyperVInstalled: >-
+        {{
+          crucible_cis_windows_server_2022_roles.hyper_v
+          | default(false)
+          | bool
+        }}
+
+      RdsBrokerInstalled: >-
+        {{
+          crucible_cis_windows_server_2022_roles.rds_connection_broker
+          | default(false)
+          | bool
+        }}
+
+      WebServerInstalled: >-
+        {{
+          crucible_cis_windows_server_2022_roles.web_server
+          | default(false)
+          | bool
+        }}
+
+      AdfsInstalled: >-
+        {{
+          crucible_cis_windows_server_2022_roles.active_directory_federation_services
+          | default(false)
+          | bool
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [bool] $HyperVInstalled,
+          [bool] $RdsBrokerInstalled,
+          [bool] $WebServerInstalled,
+          [bool] $AdfsInstalled
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      # ======================================================
+      # Result structure
+      # ======================================================
+
+      $Exceptions = @{
+
+          '2.2.4' = @()
+
+          '2.2.6' = @()
+
+          '2.2.13' = @()
+
+          '2.2.22' = @()
+
+          '2.2.23' = @()
+
+          '2.2.26' = @()
+
+          '2.2.30' = @()
+
+          '2.2.33' = @()
+      }
+
+
+      # ======================================================
+      # Helper: add unique exception
+      # ======================================================
+
+      function Add-Exception {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $ControlId,
+
+              [Parameter(Mandatory = $true)]
+              [string] $Principal
+          )
+
+
+          if (
+              [string]::IsNullOrWhiteSpace(
+                  $Principal
+              )
+          ) {
+
+              return
+          }
+
+
+          if (
+              $Exceptions[$ControlId] -notcontains $Principal
+          ) {
+
+              $Exceptions[$ControlId] += (
+                  $Principal
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Helper: resolve a Windows principal
+      # ======================================================
+
+      function Test-PrincipalResolvable {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $Principal
+          )
+
+
+          try {
+
+              $Account = New-Object `
+                  -TypeName System.Security.Principal.NTAccount `
+                  -ArgumentList $Principal
+
+
+              $null = $Account.Translate(
+                  [System.Security.Principal.SecurityIdentifier]
+              )
+
+
+              return $true
+          }
+
+          catch {
+
+              return $false
+          }
+      }
+
+
+      function Add-ResolvableException {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $ControlId,
+
+              [Parameter(Mandatory = $true)]
+              [string] $Principal
+          )
+
+
+          if (
+              Test-PrincipalResolvable `
+                  -Principal $Principal
+          ) {
+
+              Add-Exception `
+                  -ControlId $ControlId `
+                  -Principal $Principal
+          }
+      }
+
+
+      # ======================================================
+      # Helper: normalize local account syntax
+      # ======================================================
+
+      function Normalize-Principal {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $Principal
+          )
+
+
+          $Value = (
+              $Principal.Trim()
+          )
+
+
+          if (
+              $Value.StartsWith(
+                  '.\'
+              )
+          ) {
+
+              $Value = (
+                  '{0}\{1}' -f
+                  $env:COMPUTERNAME,
+                  $Value.Substring(2)
+              )
+          }
+
+
+          return $Value
+      }
+
+
+      # ======================================================
+      # Export current User Rights before Crucible changes
+      # them.
+      #
+      # This lets Crucible preserve only workload-generated
+      # principals that CIS explicitly permits.
+      # ======================================================
+
+      $ExportPath = Join-Path `
+          $Ansible.Tmpdir `
+          'crucible-ws2022-user-rights.inf'
+
+
+      & secedit.exe `
+          /export `
+          /cfg $ExportPath `
+          /areas USER_RIGHTS `
+          /quiet `
+          | Out-Null
+
+
+      if (
+          $LASTEXITCODE -ne 0
+      ) {
+
+          throw (
+              "secedit USER_RIGHTS export failed with " +
+              "exit code $LASTEXITCODE."
+          )
+      }
+
+
+      $SecurityLines = @(
+          Get-Content `
+              -LiteralPath $ExportPath `
+              -ErrorAction Stop
+      )
+
+
+      # ======================================================
+      # Helper: retrieve principals assigned to a User Right
+      # ======================================================
+
+      function Get-CurrentRightPrincipals {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $RightName
+          )
+
+
+          $Pattern = (
+              '^\s*' +
+              [regex]::Escape(
+                  $RightName
+              ) +
+              '\s*=\s*(.*)$'
+          )
+
+
+          $Line = (
+              $SecurityLines |
+              Where-Object {
+                  $_ -match $Pattern
+              } |
+              Select-Object -First 1
+          )
+
+
+          if (
+              $null -eq $Line
+          ) {
+
+              return @()
+          }
+
+
+          if (
+              $Line -notmatch $Pattern
+          ) {
+
+              return @()
+          }
+
+
+          $Value = (
+              [string]$Matches[1]
+          )
+
+
+          if (
+              [string]::IsNullOrWhiteSpace(
+                  $Value
+              )
+          ) {
+
+              return @()
+          }
+
+
+          $Resolved = (
+              New-Object `
+                  'System.Collections.Generic.List[string]'
+          )
+
+
+          foreach (
+              $RawToken
+              in
+              $Value.Split(',')
+          ) {
+
+              $Token = (
+                  $RawToken.Trim()
+              )
+
+
+              if (
+                  [string]::IsNullOrWhiteSpace(
+                      $Token
+                  )
+              ) {
+
+                  continue
+              }
+
+
+              # ----------------------------------------------
+              # SecEdit represents SID entries as:
+              #
+              #   *S-1-5-...
+              # ----------------------------------------------
+
+              if (
+                  $Token.StartsWith(
+                      '*'
+                  )
+              ) {
+
+                  $SidText = (
+                      $Token.Substring(1)
+                  )
+
+
+                  try {
+
+                      $Sid = New-Object `
+                          -TypeName System.Security.Principal.SecurityIdentifier `
+                          -ArgumentList $SidText
+
+
+                      $Account = $Sid.Translate(
+                          [System.Security.Principal.NTAccount]
+                      )
+
+
+                      $Resolved.Add(
+                          (
+                              Normalize-Principal `
+                                  -Principal $Account.Value
+                          )
+                      )
+
+
+                      continue
+                  }
+
+                  catch {
+
+                      # Unresolvable deleted/stale SID.
+                      #
+                      # Do not preserve it as a workload
+                      # exception.
+
+                      continue
+                  }
+              }
+
+
+              $Resolved.Add(
+                  (
+                      Normalize-Principal `
+                          -Principal $Token
+                  )
+              )
+          }
+
+
+          return @(
+              $Resolved
+          )
+      }
+
+
+      # ======================================================
+      # Hyper-V
+      #
+      # CIS 2.2.13 permits:
+      #
+      #   NT VIRTUAL MACHINE\Virtual Machines
+      #
+      # when Hyper-V is installed.
+      # ======================================================
+
+      if ($HyperVInstalled) {
+
+          $HyperVPrincipal = (
+              'NT VIRTUAL MACHINE\Virtual Machines'
+          )
+
+
+          if (
+              -not (
+                  Test-PrincipalResolvable `
+                      -Principal $HyperVPrincipal
+              )
+          ) {
+
+              throw (
+                  "Hyper-V is installed but the CIS-permitted " +
+                  "NT VIRTUAL MACHINE\Virtual Machines " +
+                  "principal cannot be resolved."
+              )
+          }
+
+
+          Add-Exception `
+              -ControlId '2.2.13' `
+              -Principal $HyperVPrincipal
+      }
+
+
+      # ======================================================
+      # Remote Desktop Connection Broker
+      #
+      # CIS 2.2.6 permits Authenticated Users when the
+      # Connection Broker role is installed.
+      # ======================================================
+
+      if ($RdsBrokerInstalled) {
+
+          Add-Exception `
+              -ControlId '2.2.6' `
+              -Principal 'NT AUTHORITY\Authenticated Users'
+      }
+
+
+      # ======================================================
+      # IIS
+      #
+      # Preserve IIS-owned principals only for User Rights
+      # where CIS documents a web-server exception.
+      # ======================================================
+
+      if ($WebServerInstalled) {
+
+          Add-ResolvableException `
+              -ControlId '2.2.23' `
+              -Principal 'BUILTIN\IIS_IUSRS'
+
+
+          $IisRightMap = @{
+
+              '2.2.4' = 'SeIncreaseQuotaPrivilege'
+
+              '2.2.22' = 'SeAuditPrivilege'
+
+              '2.2.33' = 'SeAssignPrimaryTokenPrivilege'
+          }
+
+
+          foreach (
+              $Pair
+              in
+              $IisRightMap.GetEnumerator()
+          ) {
+
+              $CurrentPrincipals = @(
+                  Get-CurrentRightPrincipals `
+                      -RightName $Pair.Value
+              )
+
+
+              foreach (
+                  $Principal
+                  in
+                  $CurrentPrincipals
+              ) {
+
+                  $IsAppPool = (
+                      $Principal -like 'IIS APPPOOL\*'
+                  )
+
+
+                  $IsIisGroup = (
+                      $Principal -like '*\IIS_IUSRS'
+                  )
+
+
+                  if (
+                      $IsAppPool -or $IsIisGroup
+                  ) {
+
+                      Add-Exception `
+                          -ControlId $Pair.Key `
+                          -Principal $Principal
+                  }
+              }
+          }
+      }
+
+
+      # ======================================================
+      # Active Directory Federation Services
+      #
+      # CIS 2.2.22 permits ADFS/DRS service principals and
+      # the actual associated ADFS service account.
+      # ======================================================
+
+      if ($AdfsInstalled) {
+
+          foreach (
+              $ServiceName
+              in
+              @(
+                  'adfssrv',
+                  'DRS'
+              )
+          ) {
+
+              $Service = Get-CimInstance `
+                  -ClassName Win32_Service `
+                  -Filter (
+                      "Name='{0}'" -f
+                      $ServiceName
+                  ) `
+                  -ErrorAction SilentlyContinue
+
+
+              if (
+                  $null -eq $Service
+              ) {
+
+                  continue
+              }
+
+
+              $ServicePrincipal = (
+                  'NT SERVICE\{0}' -f
+                  $ServiceName
+              )
+
+
+              Add-ResolvableException `
+                  -ControlId '2.2.22' `
+                  -Principal $ServicePrincipal
+
+
+              $StartName = (
+                  Normalize-Principal `
+                      -Principal (
+                          [string]$Service.StartName
+                      )
+              )
+
+
+              $BuiltInServiceAccounts = @(
+
+                  'LocalSystem',
+
+                  'NT AUTHORITY\LocalService',
+
+                  'NT AUTHORITY\NetworkService'
+              )
+
+
+              if (
+                  $BuiltInServiceAccounts -notcontains $StartName
+              ) {
+
+                  Add-ResolvableException `
+                      -ControlId '2.2.22' `
+                      -Principal $StartName
+              }
+          }
+      }
+
+
+      # ======================================================
+      # SQL Server
+      #
+      # CIS documents SQL-generated exceptions for:
+      #
+      #   2.2.4
+      #   2.2.23
+      #   2.2.26
+      #   2.2.30
+      #   2.2.33
+      #
+      # Do not grant every SQL service every right.
+      #
+      # Preserve only SQL-owned principals that:
+      #
+      #   1. belong to an installed SQL service; AND
+      #   2. already hold that specific User Right.
+      # ======================================================
+
+      $SqlServices = @(
+          Get-CimInstance `
+              -ClassName Win32_Service `
+              -ErrorAction SilentlyContinue |
+          Where-Object {
+              ($_.Name -eq 'MSSQLSERVER') -or ($_.Name -like 'MSSQL$*') -or ($_.Name -eq 'SQLSERVERAGENT') -or ($_.Name -like 'SQLAgent$*') -or ($_.Name -like 'MsDtsServer*') -or ($_.Name -like 'ReportServer*')
+          }
+      )
+
+
+      $SqlPrincipals = (
+          New-Object `
+              'System.Collections.Generic.List[string]'
+      )
+
+
+      foreach (
+          $Service
+          in
+          $SqlServices
+      ) {
+
+          $ServiceSidPrincipal = (
+              'NT SERVICE\{0}' -f
+              [string]$Service.Name
+          )
+
+
+          if (
+              Test-PrincipalResolvable `
+                  -Principal $ServiceSidPrincipal
+          ) {
+
+              if (
+                  $SqlPrincipals -notcontains $ServiceSidPrincipal
+              ) {
+
+                  $SqlPrincipals.Add(
+                      $ServiceSidPrincipal
+                  )
+              }
+          }
+
+
+          $StartName = (
+              Normalize-Principal `
+                  -Principal (
+                      [string]$Service.StartName
+                  )
+          )
+
+
+          $BuiltInSqlAccounts = @(
+
+              'LocalSystem',
+
+              'NT AUTHORITY\LocalService',
+
+              'NT AUTHORITY\NetworkService'
+          )
+
+
+          if (
+              $BuiltInSqlAccounts -notcontains $StartName
+          ) {
+
+              if (
+                  $SqlPrincipals -notcontains $StartName
+              ) {
+
+                  $SqlPrincipals.Add(
+                      $StartName
+                  )
+              }
+          }
+      }
+
+
+      $SqlRightMap = @{
+
+          '2.2.4' = 'SeIncreaseQuotaPrivilege'
+
+          '2.2.23' = 'SeImpersonatePrivilege'
+
+          '2.2.26' = 'SeLockMemoryPrivilege'
+
+          '2.2.30' = 'SeManageVolumePrivilege'
+
+          '2.2.33' = 'SeAssignPrimaryTokenPrivilege'
+      }
+
+
+      foreach (
+          $Pair
+          in
+          $SqlRightMap.GetEnumerator()
+      ) {
+
+          $CurrentPrincipals = @(
+              Get-CurrentRightPrincipals `
+                  -RightName $Pair.Value
+          )
+
+
+          foreach (
+              $SqlPrincipal
+              in
+              $SqlPrincipals
+          ) {
+
+              if (
+                  $CurrentPrincipals -contains $SqlPrincipal
+              ) {
+
+                  Add-Exception `
+                      -ControlId $Pair.Key `
+                      -Principal $SqlPrincipal
+              }
+          }
+      }
+
+
+      # ======================================================
+      # Return evidence
+      # ======================================================
+
+      $Ansible.Result = @{
+
+          exceptions = (
+              $Exceptions
+          )
+
+          hyper_v_installed = (
+              $HyperVInstalled
+          )
+
+          rds_connection_broker_installed = (
+              $RdsBrokerInstalled
+          )
+
+          web_server_installed = (
+              $WebServerInstalled
+          )
+
+          adfs_installed = (
+              $AdfsInstalled
+          )
+
+          sql_services = @(
+              $SqlServices |
+              ForEach-Object {
+                  [string]$_.Name
+              }
+          )
+
+          sql_principals = @(
+              $SqlPrincipals
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_user_right_exception_probe
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_role_aware_user_rights_active
+      | bool
+
+
+# ============================================================
+# Normalize exception state
+# ============================================================
+
+- name: Initialize Windows Server 2022 role-aware User Right exceptions
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_user_right_exceptions: >-
+      {{
+        crucible_cis_windows_server_2022_user_right_exception_probe
+        .result
+        .exceptions
+        | default({})
+      }}
+
+
+# ============================================================
+# Build resolved role-aware policies
+# ============================================================
+
+- name: Initialize resolved Server 2022 role-aware User Rights
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings: []
+
+
+- name: Resolve Server 2022 role-aware User Right assignments
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings: >-
+      {{
+        crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+        +
+        [
+          item
+          |
+          combine(
+            {
+              'users':
+                (
+                  item.users
+                  +
+                  (
+                    crucible_cis_windows_server_2022_user_right_exceptions[
+                      item.control_id
+                    ]
+                    | default([])
+                  )
+                )
+                | unique
+                | list
+            }
+          )
+        ]
+      }}
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_role_aware_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+
+- name: Display resolved Server 2022 role-aware User Rights
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+      | length
+      >
+      0
+
+
+# ============================================================
+# Static User Rights
+# ============================================================
+
+- name: Apply Windows Server 2022 static CIS User Rights
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+
+# ============================================================
+# Role-aware User Rights
+# ============================================================
+
+- name: Apply Windows Server 2022 role-aware CIS User Rights
+  ansible.windows.win_user_right:
+
+    name: "{{ item.right }}"
+
+    users: "{{ item.users }}"
+
+    action: "{{ item.action }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.right }}
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 User Rights
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_user_right_management_ping
+
+
+- name: Assert Crucible management survived Server 2022 User Rights
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_user_right_management_ping.ping
+        ==
+        'pong'

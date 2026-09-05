@@ -1,0 +1,276 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# Windows Server 2022 installed-role discovery
+#
+# BE-A establishes runtime role awareness.
+#
+# BE-B will consume these facts when handling User Rights
+# recommendations that have legitimate CIS-documented role
+# exceptions.
+# ============================================================
+
+
+- name: Discover installed Windows Server 2022 roles and features
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      # ======================================================
+      # Server Manager feature inventory
+      # ======================================================
+
+      $GetWindowsFeatureCommand = Get-Command `
+          -Name Get-WindowsFeature `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -eq $GetWindowsFeatureCommand) {
+
+          throw (
+              "Get-WindowsFeature is unavailable on this " +
+              "Windows Server 2022 guest."
+          )
+      }
+
+
+      $InstalledFeatureObjects = @(
+          Get-WindowsFeature |
+          Where-Object {
+              $_.Installed
+          }
+      )
+
+
+      $FeatureNames = @(
+          $InstalledFeatureObjects |
+          ForEach-Object {
+              [string]$_.Name
+          } |
+          Sort-Object -Unique
+      )
+
+
+      function Test-FeatureInstalled {
+
+          param (
+              [Parameter(Mandatory = $true)]
+              [string] $Name
+          )
+
+
+          return (
+              [bool](
+                  $FeatureNames -contains $Name
+              )
+          )
+      }
+
+
+      # ======================================================
+      # RDS family
+      # ======================================================
+
+      $RdsFeatures = @(
+          $FeatureNames |
+          Where-Object {
+              ($_ -eq 'Remote-Desktop-Services') -or
+              ($_ -like 'RDS-*')
+          }
+      )
+
+
+      $RemoteDesktopServices = (
+          $RdsFeatures.Count -gt 0
+      )
+
+
+      # ======================================================
+      # SQL Server is not a Windows Server feature.
+      #
+      # Detect common SQL database-engine services so later
+      # User Rights processing can preserve SQL-generated
+      # principals where CIS explicitly allows an exception.
+      # ======================================================
+
+      $SqlServices = @(
+          Get-Service `
+              -ErrorAction SilentlyContinue |
+          Where-Object {
+              ($_.Name -eq 'MSSQLSERVER') -or
+              ($_.Name -like 'MSSQL$*')
+          }
+      )
+
+
+      $SqlServerDetected = (
+          $SqlServices.Count -gt 0
+      )
+
+
+      # ======================================================
+      # Role capability map
+      # ======================================================
+
+      $Roles = @{
+
+          active_directory_certificate_services = (
+              Test-FeatureInstalled `
+                  -Name 'AD-Certificate'
+          )
+
+          active_directory_domain_services_feature = (
+              Test-FeatureInstalled `
+                  -Name 'AD-Domain-Services'
+          )
+
+          active_directory_federation_services = (
+              Test-FeatureInstalled `
+                  -Name 'ADFS-Federation'
+          )
+
+          dhcp_server = (
+              Test-FeatureInstalled `
+                  -Name 'DHCP'
+          )
+
+          dns_server = (
+              Test-FeatureInstalled `
+                  -Name 'DNS'
+          )
+
+          file_server = (
+              Test-FeatureInstalled `
+                  -Name 'FS-FileServer'
+          )
+
+          hyper_v = (
+              Test-FeatureInstalled `
+                  -Name 'Hyper-V'
+          )
+
+          network_policy_access_services = (
+              Test-FeatureInstalled `
+                  -Name 'NPAS'
+          )
+
+          print_server = (
+              Test-FeatureInstalled `
+                  -Name 'Print-Server'
+          )
+
+          remote_access = (
+              Test-FeatureInstalled `
+                  -Name 'RemoteAccess'
+          )
+
+          remote_desktop_services = (
+              [bool]$RemoteDesktopServices
+          )
+
+          rds_connection_broker = (
+              Test-FeatureInstalled `
+                  -Name 'RDS-Connection-Broker'
+          )
+
+          rds_session_host = (
+              Test-FeatureInstalled `
+                  -Name 'RDS-RD-Server'
+          )
+
+          web_server = (
+              Test-FeatureInstalled `
+                  -Name 'Web-Server'
+          )
+
+          sql_server = (
+              [bool]$SqlServerDetected
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          installed_features = (
+              $FeatureNames
+          )
+
+          roles = (
+              $Roles
+          )
+
+          sql_services = @(
+              $SqlServices |
+              ForEach-Object {
+                  [string]$_.Name
+              }
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_role_discovery
+
+
+# ============================================================
+# Publish normalized facts
+# ============================================================
+
+- name: Publish Windows Server 2022 role facts
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_installed_features: >-
+      {{
+        crucible_cis_windows_server_2022_role_discovery
+        .result
+        .installed_features
+        | default([])
+      }}
+
+    crucible_cis_windows_server_2022_roles: >-
+      {{
+        crucible_cis_windows_server_2022_role_discovery
+        .result
+        .roles
+        | default({})
+      }}
+
+    crucible_cis_windows_server_2022_sql_services: >-
+      {{
+        crucible_cis_windows_server_2022_role_discovery
+        .result
+        .sql_services
+        | default([])
+      }}
+
+
+- name: Display Windows Server 2022 role inventory
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Installed Server features:
+        {{
+          crucible_cis_windows_server_2022_installed_features
+          | length
+        }}
+
+      - >-
+        Role capabilities:
+        {{
+          crucible_cis_windows_server_2022_roles
+        }}
+
+      - >-
+        SQL services:
+        {{
+          crucible_cis_windows_server_2022_sql_services
+        }}

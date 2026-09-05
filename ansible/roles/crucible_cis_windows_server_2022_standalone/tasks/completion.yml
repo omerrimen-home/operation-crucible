@@ -1,0 +1,262 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# Windows Server 2022 CIS milestone BE completion
+#
+# The completion marker is deliberately separate from final
+# validation.
+#
+# It can only be written after BE-F has:
+#
+#   - rebooted when required
+#   - reconnected through PSRP
+#   - re-run all validators
+#   - captured runtime evidence
+#   - written and reread the evidence artifact
+# ============================================================
+
+
+- name: Verify Windows Server 2022 CIS final validation passed
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_final_validation_passed
+        | default(false)
+        | bool
+
+      - >-
+        crucible_cis_windows_server_2022_persisted_evidence_validation
+        .result
+        .valid
+        | default(false)
+        | bool
+
+    fail_msg: >-
+      Refusing to write the Windows Server 2022 CIS
+      completion marker because BE-F final validation did
+      not fully pass.
+
+
+- name: Ensure Windows Server 2022 hardening state directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      {{
+        crucible_cis_windows_server_2022_state_directory
+      }}
+
+    state: directory
+
+
+- name: Write Windows Server 2022 CIS completion state
+  ansible.windows.win_copy:
+
+    dest: >-
+      {{
+        crucible_cis_windows_server_2022_completion_path
+      }}
+
+    content: >-
+      {{
+        {
+          'schema_version': 1,
+
+          'configuration':
+            'windows-server-2022-cis',
+
+          'milestone':
+            'BE',
+
+          'final_stage':
+            'BE-F',
+
+          'benchmark': {
+
+            'id':
+              crucible_hardening.benchmark.id,
+
+            'version':
+              crucible_hardening.benchmark.version
+          },
+
+          'profile': {
+
+            'id':
+              crucible_hardening.profile.id,
+
+            'display_name':
+              crucible_hardening.profile.display_name
+          },
+
+          'implementation': {
+
+            'wave':
+              crucible_cis_windows_server_2022_implementation_wave,
+
+            'benchmark_control_inventory_complete':
+              true,
+
+            'inventory_control_count':
+              342,
+
+            'source_automated_controls':
+              340,
+
+            'source_manual_controls':
+              2,
+
+            'not_implemented_controls':
+              0,
+
+            'implemented_areas': [
+
+              'account-policies',
+
+              'user-rights',
+
+              'role-aware-user-rights',
+
+              'security-options',
+
+              'system-services',
+
+              'server-role-aware-service-preservation',
+
+              'windows-defender-firewall',
+
+              'advanced-audit-policy',
+
+              'administrative-templates-computer',
+
+              'administrative-templates-user',
+
+              'virtualization-based-security',
+
+              'hypervisor-enforced-code-integrity',
+
+              'credential-guard',
+
+              'secure-launch',
+
+              'lsass-protection'
+            ],
+
+            'execution_controls':
+              (
+                crucible_cis_windows_server_2022_execution_controls
+                | default([])
+                | sort
+              ),
+
+            'execution_control_count':
+              (
+                crucible_cis_windows_server_2022_execution_controls
+                | default([])
+                | length
+              ),
+
+            'fingerprint':
+              crucible_cis_windows_server_2022_finalization_fingerprint
+          },
+
+          'server_context': {
+
+            'roles':
+              crucible_cis_windows_server_2022_final_role_state,
+
+            'runtime_exceptions':
+              crucible_cis_windows_server_2022_final_runtime_exception_state
+          },
+
+          'validation': {
+
+            'status':
+              'implementation-validation-passed',
+
+            'post_reboot_validation':
+              'passed',
+
+            'management_connectivity':
+              'passed',
+
+            'evidence':
+              crucible_cis_windows_server_2022_evidence_path
+          },
+
+          'compliance': {
+
+            'status':
+              'not-attested',
+
+            'manual_controls':
+              (
+                crucible_hardening.controls.manual
+                | default([])
+                | sort
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.controls.user_exceptions
+                | default([])
+                | sort
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.controls.derived_exceptions
+                | default([])
+                | sort
+              ),
+
+            'runtime_exceptions':
+              crucible_cis_windows_server_2022_final_runtime_exception_state
+          }
+        }
+        |
+        to_nice_yaml(
+          indent=2,
+          sort_keys=false
+        )
+      }}
+
+
+# ============================================================
+# Verify completion artifact
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS completion marker exists
+  ansible.windows.win_stat:
+
+    path: >-
+      {{
+        crucible_cis_windows_server_2022_completion_path
+      }}
+
+  register: >-
+    crucible_cis_windows_server_2022_completion_stat
+
+
+- name: Assert Windows Server 2022 CIS completion marker exists
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_completion_stat.stat.exists
+        | bool
+
+      - >-
+        crucible_cis_windows_server_2022_completion_stat.stat.size
+        | int
+        >
+        0
+
+    fail_msg: >-
+      Windows Server 2022 CIS BE-F validation passed,
+      but Crucible could not persist the milestone BE
+      completion marker.

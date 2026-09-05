@@ -1,0 +1,225 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# Windows Server 2022 CIS BE-E verification
+#
+# This phase verifies policy convergence only.
+#
+# Final runtime activation evidence is collected after the
+# controlled reboot in BE-F.
+# ============================================================
+
+
+- name: Load Server 2022 advanced-security inventory for verification
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Declarative second-pass registry verification
+# ============================================================
+
+- name: Verify Server 2022 advanced-security registry policies
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_advanced_security_machine_registry_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_be_e_registry_verification
+
+
+- name: Assert Server 2022 advanced-security policy converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_server_2022_be_e_registry_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows Server 2022 advanced-security
+      registry policies required changes during the BE-E
+      second-pass verification.
+
+
+# ============================================================
+# Read current Device Guard state.
+#
+# Do not fail because VBS has not activated yet. A reboot may
+# be required and BE-F owns post-reboot runtime validation.
+# ============================================================
+
+- name: Inspect Server 2022 pre-reboot Device Guard runtime
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Result = @{
+
+          available = $false
+
+          virtualization_based_security_status = $null
+
+          security_services_configured = @()
+
+          security_services_running = @()
+
+          available_security_properties = @()
+
+          required_security_properties = @()
+      }
+
+
+      try {
+
+          $Dg = Get-CimInstance `
+              -Namespace root\Microsoft\Windows\DeviceGuard `
+              -ClassName Win32_DeviceGuard `
+              -ErrorAction Stop
+
+
+          $Result.available = $true
+
+
+          $Result.virtualization_based_security_status = (
+              [int]$Dg.VirtualizationBasedSecurityStatus
+          )
+
+
+          $Result.security_services_configured = @(
+              $Dg.SecurityServicesConfigured
+          )
+
+
+          $Result.security_services_running = @(
+              $Dg.SecurityServicesRunning
+          )
+
+
+          $Result.available_security_properties = @(
+              $Dg.AvailableSecurityProperties
+          )
+
+
+          $Result.required_security_properties = @(
+              $Dg.RequiredSecurityProperties
+          )
+      }
+
+      catch {
+
+          $Result.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      $Ansible.Result = (
+          $Result
+      )
+
+  register: >-
+    crucible_cis_windows_server_2022_be_e_device_guard_state
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | default([])
+      | length
+      >
+      0
+
+
+- name: Display Server 2022 pre-reboot Device Guard state
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_server_2022_be_e_device_guard_state.result
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 BE-E
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_be_e_final_ping
+
+
+- name: Assert Crucible management survived Server 2022 BE-E
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_be_e_final_ping.ping
+        ==
+        'pong'

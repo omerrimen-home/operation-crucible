@@ -1,0 +1,11 @@
+---
+
+- name: Apply CIS Microsoft Windows Server 2022 Stand-alone hardening
+
+  hosts: all
+
+  gather_facts: true
+
+  roles:
+
+    - role: crucible_cis_windows_server_2022_standalone

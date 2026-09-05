@@ -1,17 +1,20 @@
 ---
 #
-# CIS Microsoft Windows 11 Stand-alone Benchmark v5.0.0
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
 # Section 2.3 - Security Options
 #
-# Generated during BD-C from the validated Windows 10 policy
-# backend plus the reviewed Windows 11 v5 deltas.
+# Generated/reviewed by:
 #
-# Do not mechanically substitute Windows 10 control IDs into
-# this file. Windows 11 removed and renumbered multiple
-# Security Options recommendations.
+#   tools/implement_windows_server_2022_cis_be_b.py
+#
+# Registry values are ported only where the reviewed
+# Windows 11 implementation is semantically identical,
+# with Server 2022-specific deltas explicitly applied.
 #
 
-crucible_cis_windows_11_security_option_registry_policies:
+crucible_cis_windows_server_2022_security_option_registry_policies:
 - control_id: 2.3.1.2
   path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
   name: LimitBlankPasswordUse
@@ -46,22 +49,22 @@ crucible_cis_windows_11_security_option_registry_policies:
   path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
   name: InactivityTimeoutSecs
   type: dword
-  data: "{{\n  crucible_cis_windows_11_inactivity_timeout_seconds\n  | int\n}}"
+  data: "{{\n  crucible_cis_windows_server_2022_inactivity_timeout_seconds\n  | int\n}}"
 - control_id: 2.3.7.4
   path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
   name: legalnoticetext
   type: string
-  data: "{{\n  crucible_cis_windows_11_legal_notice_text\n}}"
+  data: "{{\n  crucible_cis_windows_server_2022_legal_notice_text\n}}"
 - control_id: 2.3.7.5
   path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
   name: legalnoticecaption
   type: string
-  data: "{{\n  crucible_cis_windows_11_legal_notice_title\n}}"
+  data: "{{\n  crucible_cis_windows_server_2022_legal_notice_title\n}}"
 - control_id: 2.3.7.6
   path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
   name: PasswordExpiryWarning
   type: dword
-  data: "{{\n  crucible_cis_windows_11_password_expiry_warning_days\n  | int\n}}"
+  data: "{{\n  crucible_cis_windows_server_2022_password_expiry_warning_days\n  | int\n}}"
 - control_id: 2.3.7.7
   path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
   name: ScRemoveOption
@@ -186,18 +189,18 @@ crucible_cis_windows_11_security_option_registry_policies:
   name: SupportedEncryptionTypes
   type: dword
   data: 2147483640
-- control_id: 2.3.11.6
+- control_id: 2.3.11.5
+  path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+  name: NoLMHash
+  type: dword
+  data: 1
+- control_id: 2.3.11.7
   path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
   name: LmCompatibilityLevel
   type: dword
   data: 5
-- control_id: 2.3.11.7
-  path: HKLM:\SYSTEM\CurrentControlSet\Services\LDAP
-  name: LDAPClientConfidentiality
-  type: dword
-  data: 1
 - control_id: 2.3.11.8
-  path: HKLM:\SYSTEM\CurrentControlSet\Control\LDAP
+  path: HKLM:\SYSTEM\CurrentControlSet\Services\LDAP
   name: LDAPClientIntegrity
   type: dword
   data: 1
@@ -221,11 +224,11 @@ crucible_cis_windows_11_security_option_registry_policies:
   name: RestrictSendingNTLMTraffic
   type: dword
   data: 1
-- control_id: 2.3.14.1
-  path: HKLM:\SOFTWARE\Policies\Microsoft\Cryptography
-  name: ForceKeyProtection
+- control_id: 2.3.13.1
+  path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+  name: ShutdownWithoutLogon
   type: dword
-  data: 1
+  data: 0
 - control_id: 2.3.15.1
   path: HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Kernel
   name: ObCaseInsensitive

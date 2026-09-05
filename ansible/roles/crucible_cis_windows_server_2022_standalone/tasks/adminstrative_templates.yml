@@ -1,0 +1,164 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Section 18 - Administrative Templates (Computer)
+# Section 19 - Administrative Templates (User)
+#
+# BE-D implements all ordinary L1/L2 Administrative Template
+# controls.
+#
+# Deferred to BE-E:
+#
+#   18.9.5.1 - 18.9.5.6
+#   18.9.27.1
+#
+# These belong to the Next Generation Windows Security
+# profile and require separate hardware / persistence-aware
+# handling.
+# ============================================================
+
+
+- name: Load Windows Server 2022 CIS Administrative Template inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/administrative_templates.yml
+
+
+# ============================================================
+# Management safety
+#
+# The planner should convert both destructive WinRM controls
+# into derived exceptions whenever Crucible's management
+# capability is present.
+#
+# Keep an additional fail-closed guard here.
+# ============================================================
+
+- name: Protect Crucible WinRM from Administrative Template enforcement
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          [
+            '18.10.90.2.2',
+            '18.10.91.1'
+          ]
+          |
+          intersect(
+            crucible_cis_windows_server_2022_execution_controls
+            | default([])
+          )
+          |
+          length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      A Windows Server 2022 CIS Administrative Template
+      control that disables Crucible WinRM management is
+      still present in the execution plan. Refusing to
+      continue while preserve_crucible_winrm=true.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_preserve_crucible_winrm
+      | bool
+
+
+# ============================================================
+# Section 18 - Machine policies
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS machine Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_server_2022_administrative_template_machine_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_administrative_template_machine_policies
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Section 19 - User policies
+#
+# Do not apply only to the WinRM account HKCU.
+#
+# The all-user engine applies to:
+#
+#   - loaded normal user hives
+#   - unloaded existing NTUSER.DAT hives
+#   - Default User for future profiles
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS user Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_server_2022_administrative_template_user_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_administrative_template_user_policies
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 Administrative Templates
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_be_d_management_ping
+
+
+- name: Assert Crucible management survived Server 2022 Administrative Templates
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_be_d_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows Server 2022 CIS Administrative Template
+      enforcement completed, but Crucible WinRM HTTPS
+      management connectivity did not survive.

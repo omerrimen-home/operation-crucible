@@ -1,0 +1,642 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows Server 2022 Stand-alone Benchmark v5.0.0
+#
+# BE-C verification
+#
+# Revalidates:
+#
+#   Section 5  - System Services
+#   Section 9  - Windows Defender Firewall
+#   Section 17 - Advanced Audit Policy
+#
+# This is intentionally read-only. The remediation tasks
+# already perform convergence; this file verifies the final
+# effective state without changing it.
+# ============================================================
+
+
+# ============================================================
+# System Services
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS service state
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ServiceName: >-
+        {{
+          item.service_name
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $ServiceName
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $EscapedServiceName = (
+          $ServiceName.Replace(
+              "'",
+              "''"
+          )
+      )
+
+
+      $Service = Get-CimInstance `
+          -ClassName Win32_Service `
+          -Filter (
+              "Name='{0}'" -f
+              $EscapedServiceName
+          ) `
+          -ErrorAction SilentlyContinue
+
+
+      # ------------------------------------------------------
+      # Many CIS service recommendations are compliant when
+      # the service is absent.
+      # ------------------------------------------------------
+
+      if ($null -eq $Service) {
+
+          $Ansible.Result = @{
+
+              service = (
+                  $ServiceName
+              )
+
+              installed = $false
+
+              startup_type = $null
+
+              state = $null
+
+              compliant = $true
+          }
+
+
+          return
+      }
+
+
+      $RuntimeService = Get-Service `
+          -Name $ServiceName `
+          -ErrorAction Stop
+
+
+      if (
+          [string]$Service.StartMode -ine "Disabled"
+      ) {
+
+          throw (
+              "Service '$ServiceName' is installed but " +
+              "StartupType is '$($Service.StartMode)' " +
+              "instead of Disabled."
+          )
+      }
+
+
+      if (
+          $RuntimeService.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped
+      ) {
+
+          throw (
+              "Service '$ServiceName' is configured " +
+              "Disabled but remains in runtime state " +
+              "'$($RuntimeService.Status)'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          service = (
+              $ServiceName
+          )
+
+          installed = $true
+
+          startup_type = (
+              [string]$Service.StartMode
+          )
+
+          state = (
+              [string]$RuntimeService.Status
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_service_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.service_name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+    - >-
+      item.control_id
+      not in
+      (
+        crucible_cis_windows_server_2022_runtime_exception_control_ids
+        | default([])
+      )
+
+  register: >-
+    crucible_cis_windows_server_2022_bd_d_service_verification
+
+
+- name: Report Server 2022 CIS service runtime exceptions
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_server_2022_runtime_exceptions
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_runtime_exceptions
+      | default([])
+      | length
+      >
+      0
+
+
+# ============================================================
+# Firewall
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS firewall settings
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ProfileName: >-
+        {{
+          item.profile
+        }}
+
+      Setting: >-
+        {{
+          item.setting
+        }}
+
+      DesiredValue: >-
+        {{
+          item.value
+          | string
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $ProfileName,
+
+          [Parameter(Mandatory = $true)]
+          [string] $Setting,
+
+          [Parameter(Mandatory = $true)]
+          [string] $DesiredValue
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $Profile = Get-NetFirewallProfile `
+          -Name $ProfileName `
+          -ErrorAction Stop
+
+
+      $CurrentValue = (
+          $Profile.$Setting
+      )
+
+
+      # ------------------------------------------------------
+      # Windows may expose an expanded absolute path even
+      # though CIS policy uses %SystemRoot%.
+      # ------------------------------------------------------
+
+      if (
+          $Setting -eq "LogFileName"
+      ) {
+
+          $CurrentComparable = (
+              [Environment]::ExpandEnvironmentVariables(
+                  [string]$CurrentValue
+              )
+          )
+
+
+          $DesiredComparable = (
+              [Environment]::ExpandEnvironmentVariables(
+                  [string]$DesiredValue
+              )
+          )
+      }
+
+      else {
+
+          $CurrentComparable = (
+              [string]$CurrentValue
+          )
+
+
+          $DesiredComparable = (
+              [string]$DesiredValue
+          )
+      }
+
+
+      if (
+          $CurrentComparable -ine $DesiredComparable
+      ) {
+
+          throw (
+              "Firewall profile '$ProfileName' setting " +
+              "'$Setting' is '$CurrentValue'; expected " +
+              "'$DesiredValue'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          profile = (
+              $ProfileName
+          )
+
+          setting = (
+              $Setting
+          )
+
+          current = (
+              [string]$CurrentValue
+          )
+
+          expected = (
+              $DesiredValue
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_firewall_settings
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.profile }}
+      {{ item.setting }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_bd_d_firewall_verification
+
+
+# ============================================================
+# Protect the Crucible firewall exception
+# ============================================================
+
+- name: Verify Crucible WinRM firewall rule after CIS enforcement
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Rule = Get-NetFirewallRule `
+          -Name "Crucible-WinRM-HTTPS" `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -eq $Rule) {
+
+          throw (
+              "Required Crucible-WinRM-HTTPS firewall " +
+              "rule no longer exists."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Enabled -ine "True"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS is not enabled."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Direction -ine "Inbound"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS is not inbound."
+          )
+      }
+
+
+      if (
+          [string]$Rule.Action -ine "Allow"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS is not an Allow rule."
+          )
+      }
+
+
+      $PortFilter = Get-NetFirewallPortFilter `
+          -AssociatedNetFirewallRule $Rule
+
+
+      if (
+          [string]$PortFilter.LocalPort -ne "5986"
+      ) {
+
+          throw (
+              "Crucible-WinRM-HTTPS does not protect " +
+              "the expected HTTPS management port 5986."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          present = $true
+
+          enabled = (
+              [string]$Rule.Enabled
+          )
+
+          direction = (
+              [string]$Rule.Direction
+          )
+
+          action = (
+              [string]$Rule.Action
+          )
+
+          local_port = (
+              [string]$PortFilter.LocalPort
+          )
+
+          compliant = $true
+      }
+
+
+# ============================================================
+# Advanced Audit Policy
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS Advanced Audit Policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      AuditGuid: >-
+        {{
+          item.guid
+        }}
+
+      RequireSuccess: >-
+        {{
+          item.require_success
+        }}
+
+      RequireFailure: >-
+        {{
+          item.require_failure
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $AuditGuid,
+
+          [Parameter(Mandatory = $true)]
+          [bool] $RequireSuccess,
+
+          [Parameter(Mandatory = $true)]
+          [bool] $RequireFailure
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $AuditPol = Join-Path `
+          $env:SystemRoot `
+          "System32\auditpol.exe"
+
+
+      $RawOutput = @(
+          & $AuditPol `
+              /get `
+              "/subcategory:$AuditGuid" `
+              /r
+      )
+
+
+      if (
+          $LASTEXITCODE -ne 0
+      ) {
+
+          throw (
+              "auditpol /get failed for " +
+              "$AuditGuid with exit code " +
+              "$LASTEXITCODE."
+          )
+      }
+
+
+      $Rows = @(
+          $RawOutput |
+          ConvertFrom-Csv
+      )
+
+
+      if (
+          $Rows.Count -lt 1
+      ) {
+
+          throw (
+              "auditpol returned no row for $AuditGuid."
+          )
+      }
+
+
+      $Row = (
+          $Rows |
+          Select-Object -First 1
+      )
+
+
+      $SettingProperty = (
+          $Row.PSObject.Properties |
+          Where-Object {
+              $_.Name -eq "Inclusion Setting"
+          } |
+          Select-Object -First 1
+      )
+
+
+      if (
+          $null -eq $SettingProperty
+      ) {
+
+          throw (
+              "auditpol output did not contain the " +
+              "'Inclusion Setting' column."
+          )
+      }
+
+
+      $Setting = (
+          [string]$SettingProperty.Value
+      )
+
+
+      $HasSuccess = (
+          $Setting -match "Success"
+      )
+
+
+      $HasFailure = (
+          $Setting -match "Failure"
+      )
+
+
+      if (
+          $RequireSuccess -and -not $HasSuccess
+      ) {
+
+          throw (
+              "Audit policy $AuditGuid requires Success " +
+              "but current state is '$Setting'."
+          )
+      }
+
+
+      if (
+          $RequireFailure -and -not $HasFailure
+      ) {
+
+          throw (
+              "Audit policy $AuditGuid requires Failure " +
+              "but current state is '$Setting'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          guid = (
+              $AuditGuid
+          )
+
+          inclusion_setting = (
+              $Setting
+          )
+
+          requires_success = (
+              $RequireSuccess
+          )
+
+          requires_failure = (
+              $RequireFailure
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_advanced_audit_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.guid }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_bd_d_audit_verification
+
+
+# ============================================================
+# Persistent management check
+# ============================================================
+
+- name: Verify Crucible management after BE-C validation
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_bd_d_management_ping
+
+
+- name: Assert Crucible management survived BE-C validation
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_bd_d_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows Server 2022 BE-C validation succeeded at the policy
+      level but Crucible WinRM management connectivity
+      is no longer available.

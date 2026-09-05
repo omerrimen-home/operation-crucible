@@ -1,0 +1,601 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# BE-E
+#
+# Next Generation Windows Security - Member Server
+#
+#   18.9.5.1 - 18.9.5.6
+#       Device Guard / VBS
+#
+#   18.9.27.1
+#       LSASS protected process with UEFI lock
+#
+# Registry-policy compliance and hardware-dependent runtime
+# activation are intentionally treated separately.
+# ============================================================
+
+
+- name: Load Windows Server 2022 CIS advanced-security inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/advanced_profiles.yml
+
+
+# ============================================================
+# Determine which advanced controls execute
+# ============================================================
+
+- name: Resolve Server 2022 advanced-security execution controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_advanced_security_execution_ids: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_advanced_security_machine_registry_policies
+          | default([])
+          | map(attribute='control_id')
+          | unique
+          | list
+        )
+        |
+        intersect(
+          crucible_cis_windows_server_2022_execution_controls
+          | default([])
+        )
+      }}
+
+
+# ============================================================
+# Persistent UEFI-lock controls
+# ============================================================
+
+- name: Resolve Server 2022 persistent UEFI-lock controls
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_persistent_uefi_lock_execution_ids: >-
+      {{
+        [
+          '18.9.5.3',
+          '18.9.5.5',
+          '18.9.27.1'
+        ]
+        |
+        intersect(
+          crucible_cis_windows_server_2022_advanced_security_execution_ids
+        )
+      }}
+
+
+# ============================================================
+# Hardware / firmware capability probe
+#
+# This is informational.
+#
+# A machine can be registry-policy compliant while hardware
+# prevents the corresponding VBS feature from activating.
+#
+# BE-F will capture post-reboot runtime evidence.
+# ============================================================
+
+- name: Inspect Windows Server 2022 advanced-security prerequisites
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      # ======================================================
+      # Operating system
+      # ======================================================
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem `
+          -ErrorAction Stop
+
+
+      $Is64Bit = (
+          [string]$Os.OSArchitecture -match '64'
+      )
+
+
+      # ======================================================
+      # Firmware type
+      # ======================================================
+
+      $FirmwareType = $null
+
+      $FirmwareQuerySucceeded = $false
+
+      $FirmwareError = $null
+
+
+      $GetComputerInfoCommand = Get-Command `
+          -Name Get-ComputerInfo `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -ne $GetComputerInfoCommand) {
+
+          try {
+
+              $ComputerInfo = Get-ComputerInfo `
+                  -Property BiosFirmwareType `
+                  -ErrorAction Stop
+
+
+              $FirmwareType = (
+                  [string]$ComputerInfo.BiosFirmwareType
+              )
+
+
+              $FirmwareQuerySucceeded = $true
+          }
+
+          catch {
+
+              $FirmwareError = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      $IsUefi = (
+          [string]$FirmwareType -match '^Uefi$'
+      )
+
+
+      # ======================================================
+      # Secure Boot
+      # ======================================================
+
+      $SecureBootCmdletPresent = $false
+
+      $SecureBootSupported = $false
+
+      $SecureBootEnabled = $false
+
+      $SecureBootError = $null
+
+
+      $SecureBootCommand = Get-Command `
+          -Name Confirm-SecureBootUEFI `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -ne $SecureBootCommand) {
+
+          $SecureBootCmdletPresent = $true
+
+
+          try {
+
+              $SecureBootEnabled = (
+                  [bool](
+                      Confirm-SecureBootUEFI `
+                          -ErrorAction Stop
+                  )
+              )
+
+
+              $SecureBootSupported = $true
+          }
+
+          catch {
+
+              $SecureBootError = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Processor virtualization support
+      # ======================================================
+
+      $Processors = @(
+          Get-CimInstance `
+              -ClassName Win32_Processor `
+              -ErrorAction Stop
+      )
+
+
+      $Processor = (
+          $Processors |
+          Select-Object -First 1
+      )
+
+
+      $VirtualizationFirmwareEnabled = $false
+
+      $Slat = $false
+
+      $VmMonitor = $false
+
+
+      if ($null -ne $Processor) {
+
+          $VirtualizationFirmwareEnabled = (
+              [bool]$Processor.VirtualizationFirmwareEnabled
+          )
+
+
+          $Slat = (
+              [bool]$Processor.SecondLevelAddressTranslationExtensions
+          )
+
+
+          $VmMonitor = (
+              [bool]$Processor.VMMonitorModeExtensions
+          )
+      }
+
+
+      # ======================================================
+      # Hypervisor state
+      # ======================================================
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem `
+          -ErrorAction Stop
+
+
+      $HypervisorPresent = (
+          [bool]$ComputerSystem.HypervisorPresent
+      )
+
+
+      # ======================================================
+      # Device Guard runtime
+      # ======================================================
+
+      $DeviceGuard = @{
+
+          available = $false
+
+          virtualization_based_security_status = $null
+
+          security_services_configured = @()
+
+          security_services_running = @()
+
+          available_security_properties = @()
+
+          required_security_properties = @()
+      }
+
+
+      try {
+
+          $Dg = Get-CimInstance `
+              -Namespace root\Microsoft\Windows\DeviceGuard `
+              -ClassName Win32_DeviceGuard `
+              -ErrorAction Stop
+
+
+          $DeviceGuard.available = $true
+
+
+          $DeviceGuard.virtualization_based_security_status = (
+              [int]$Dg.VirtualizationBasedSecurityStatus
+          )
+
+
+          $DeviceGuard.security_services_configured = @(
+              $Dg.SecurityServicesConfigured
+          )
+
+
+          $DeviceGuard.security_services_running = @(
+              $Dg.SecurityServicesRunning
+          )
+
+
+          $DeviceGuard.available_security_properties = @(
+              $Dg.AvailableSecurityProperties
+          )
+
+
+          $DeviceGuard.required_security_properties = @(
+              $Dg.RequiredSecurityProperties
+          )
+      }
+
+      catch {
+
+          $DeviceGuard.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ======================================================
+      # Advisory readiness
+      #
+      # Do not use this as a compliance decision.
+      # ======================================================
+
+      $VirtualizationAvailable = (
+
+          $VirtualizationFirmwareEnabled -or
+          $HypervisorPresent
+      )
+
+
+      $RuntimeLikelyCapable = (
+
+          $Is64Bit -and
+          $IsUefi -and
+          $SecureBootSupported -and
+          $SecureBootEnabled -and
+          $VirtualizationAvailable
+      )
+
+
+      $Ansible.Result = @{
+
+          os_64_bit = (
+              $Is64Bit
+          )
+
+          firmware_query_succeeded = (
+              $FirmwareQuerySucceeded
+          )
+
+          firmware_type = (
+              $FirmwareType
+          )
+
+          firmware_error = (
+              $FirmwareError
+          )
+
+          uefi = (
+              $IsUefi
+          )
+
+          secure_boot_cmdlet_present = (
+              $SecureBootCmdletPresent
+          )
+
+          secure_boot_supported = (
+              $SecureBootSupported
+          )
+
+          secure_boot_enabled = (
+              $SecureBootEnabled
+          )
+
+          secure_boot_error = (
+              $SecureBootError
+          )
+
+          virtualization_firmware_enabled = (
+              $VirtualizationFirmwareEnabled
+          )
+
+          second_level_address_translation = (
+              $Slat
+          )
+
+          vm_monitor_mode_extensions = (
+              $VmMonitor
+          )
+
+          hypervisor_present = (
+              $HypervisorPresent
+          )
+
+          virtualization_available = (
+              $VirtualizationAvailable
+          )
+
+          device_guard = (
+              $DeviceGuard
+          )
+
+          runtime_likely_capable = (
+              $RuntimeLikelyCapable
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_advanced_security_runtime
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+- name: Display Windows Server 2022 advanced-security capability
+  ansible.builtin.debug:
+
+    var: >-
+      crucible_cis_windows_server_2022_advanced_security_runtime.result
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+# ============================================================
+# Capability warning
+#
+# CIS requires UEFI/Secure Boot and virtualisation support for
+# actual VBS activation. Policy is still configured so
+# policy compliance is not confused with runtime capability.
+# ============================================================
+
+- name: Report limited Server 2022 advanced-security capability
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Windows Server 2022 CIS Wave 3 advanced-security
+        policy is being configured, but the guest does
+        not currently appear to satisfy all prerequisites
+        for hardware-backed VBS activation.
+
+      - >-
+        Registry-policy compliance and runtime activation
+        are intentionally recorded separately.
+
+      - >-
+        BE-F will capture the post-reboot VBS / Device Guard
+        runtime state as final evidence.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0
+
+    - >-
+      not
+      (
+        crucible_cis_windows_server_2022_advanced_security_runtime
+        .result
+        .runtime_likely_capable
+        | default(false)
+        | bool
+      )
+
+
+# ============================================================
+# Persistent firmware state warning
+#
+# 18.9.5.3
+#     HVCI with UEFI lock
+#
+# 18.9.5.5
+#     Credential Guard with UEFI lock
+#
+# 18.9.27.1
+#     LSASS protected process with UEFI lock
+# ============================================================
+
+- name: Report persistent UEFI-lock enforcement
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Windows Server 2022 CIS is applying one or more
+        policies that persist security state in UEFI.
+
+      - >-
+        Executing persistent controls:
+        {{
+          crucible_cis_windows_server_2022_persistent_uefi_lock_execution_ids
+        }}
+
+      - >-
+        Removing the registry policy later is not
+        sufficient to reverse these settings. Explicit
+        local/firmware-aware reversal may be required.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_persistent_uefi_lock_execution_ids
+      | length
+      >
+      0
+
+
+# ============================================================
+# Apply policy
+#
+# The generic registry engine also sets:
+#
+#   crucible_cis_windows_server_2022_reboot_required
+#
+# when any desired value changes.
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS advanced-security policies
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_server_2022_advanced_security_machine_registry_policies
+        | default([])
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 advanced-security policy
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_be_e_management_ping
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0
+
+
+- name: Assert Crucible management survived Server 2022 advanced-security policy
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_be_e_management_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows Server 2022 advanced CIS policy enforcement
+      completed but Crucible management connectivity did
+      not survive.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_advanced_security_execution_ids
+      | length
+      >
+      0

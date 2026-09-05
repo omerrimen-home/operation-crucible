@@ -75,15 +75,6 @@
       # 1.2 Account Lockout Policy
       # --------------------------------------------------------
 
-      - control_id: "1.2.1"
-        section: System Access
-        key: LockoutDuration
-        value: >-
-          {{
-            crucible_cis_windows_11_lockout_duration_minutes
-            | string
-          }}
-
       - control_id: "1.2.2"
         section: System Access
         key: LockoutBadCount
@@ -99,6 +90,15 @@
         value: >-
           {{
             crucible_cis_windows_11_lockout_reset_minutes
+            | string
+          }}
+
+      - control_id: "1.2.1"
+        section: System Access
+        key: LockoutDuration
+        value: >-
+          {{
+            crucible_cis_windows_11_lockout_duration_minutes
             | string
           }}
 

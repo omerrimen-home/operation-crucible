@@ -1,0 +1,1837 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Milestone BE-F
+#
+# Final implementation validation
+#
+# Sequence:
+#
+#   1. Verify the full benchmark has a Crucible disposition.
+#   2. Build a stable implementation fingerprint.
+#   3. Inspect prior final evidence.
+#   4. Decide whether a controlled reboot is required.
+#   5. Capture boot identity.
+#   6. Reboot when required.
+#   7. Reconnect through PSRP / WinRM HTTPS.
+#   8. Re-run every accumulated validator.
+#   9. Capture final management + security runtime evidence.
+#  10. Persist final evidence.
+#
+# This validates the Operation Crucible implementation.
+#
+# It is NOT an external CIS compliance attestation.
+#
+# Source-Manual recommendations and explicit/derived/runtime
+# exceptions remain separate compliance considerations.
+# ============================================================
+
+
+# ============================================================
+# Initialize final state
+#
+# Never allow a stale in-memory value from some unusual
+# include/re-entry path to authorize completion.yml.
+# ============================================================
+
+- name: Initialize Windows Server 2022 CIS final validation state
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_final_validation_passed: false
+
+
+# ============================================================
+# Final implementation invariants
+# ============================================================
+
+- name: Assert Windows Server 2022 CIS implementation is complete
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_hardening.benchmark.id
+        ==
+        'cis-microsoft-windows-server-2022-standalone'
+
+      - >-
+        crucible_hardening.benchmark.version
+        ==
+        '2.0.0'
+
+      - >-
+        (
+          crucible_hardening.counts.not_implemented
+          | default(0)
+          | int
+        )
+        ==
+        0
+
+    fail_msg: >-
+      Refusing Windows Server 2022 CIS BE-F finalization
+      because the selected benchmark/profile still contains
+      recommendations without a Crucible implementation
+      disposition.
+
+
+# ============================================================
+# State directory
+# ============================================================
+
+- name: Ensure Windows Server 2022 CIS state directory exists
+  ansible.windows.win_file:
+
+    path: >-
+      {{
+        crucible_cis_windows_server_2022_state_directory
+      }}
+
+    state: directory
+
+
+# ============================================================
+# Resolve stable Server-specific state used by fingerprint
+#
+# Server 2022 differs from workstation Windows:
+#
+#   - installed roles can change User Rights
+#   - SQL/IIS/ADFS principals can create valid exceptions
+#   - Print Server can create a runtime exception for 5.1
+#
+# An evidence document produced before one of those changes
+# must not be accepted as current evidence.
+# ============================================================
+
+- name: Normalize Windows Server 2022 final role state
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_final_role_state: >-
+      {{
+        crucible_cis_windows_server_2022_roles
+        | default({})
+      }}
+
+    crucible_cis_windows_server_2022_final_user_right_exception_state: >-
+      {{
+        crucible_cis_windows_server_2022_user_right_exceptions
+        | default({})
+      }}
+
+    crucible_cis_windows_server_2022_final_resolved_user_right_state: >-
+      {{
+        crucible_cis_windows_server_2022_resolved_role_aware_user_right_settings
+        | default([])
+      }}
+
+    crucible_cis_windows_server_2022_final_runtime_exception_state: >-
+      {{
+        crucible_cis_windows_server_2022_runtime_exceptions
+        | default([])
+      }}
+
+
+# ============================================================
+# Fingerprint
+#
+# Fingerprint ties final evidence to:
+#
+#   benchmark
+#   benchmark version
+#   profile
+#   implementation wave
+#   configuration parameters
+#   actual execution control set
+#   discovered Server roles
+#   resolved role-aware User Rights
+#   runtime exceptions
+#
+# Therefore installing/removing a Server role or changing a
+# role-generated service principal invalidates old evidence.
+# ============================================================
+
+- name: Calculate Windows Server 2022 CIS finalization fingerprint
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_finalization_fingerprint: >-
+      {{
+        (
+          crucible_hardening.benchmark.id
+          ~ '|'
+          ~ crucible_hardening.benchmark.version
+          ~ '|'
+          ~ crucible_hardening.profile.id
+          ~ '|'
+          ~ crucible_cis_windows_server_2022_implementation_wave
+          ~ '|'
+          ~ (
+              crucible_current_configuration.parameters
+              | default({})
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_server_2022_execution_controls
+              | default([])
+              | sort
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_server_2022_final_role_state
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_server_2022_final_user_right_exception_state
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_server_2022_final_resolved_user_right_state
+              | to_json
+            )
+          ~ '|'
+          ~ (
+              crucible_cis_windows_server_2022_final_runtime_exception_state
+              | to_json
+            )
+        )
+        | hash('sha256')
+      }}
+
+
+# ============================================================
+# Existing evidence
+#
+# PowerShell 5.1 safety:
+#
+#   - no line-leading binary operators
+#   - no line-leading pipe operators
+#   - no split member-access chains
+# ============================================================
+
+- name: Inspect existing Windows Server 2022 CIS final evidence
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      EvidencePath: >-
+        {{
+          crucible_cis_windows_server_2022_evidence_path
+        }}
+
+      ExpectedFingerprint: >-
+        {{
+          crucible_cis_windows_server_2022_finalization_fingerprint
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $EvidencePath,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ExpectedFingerprint
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $Result = @{
+
+          exists = $false
+
+          valid = $false
+
+          fingerprint = $null
+
+          validation_status = $null
+
+          benchmark_id = $null
+
+          benchmark_version = $null
+
+          final_stage = $null
+
+          error = $null
+      }
+
+
+      if (
+          -not (
+              Test-Path `
+                  -LiteralPath $EvidencePath
+          )
+      ) {
+
+          $Ansible.Result = $Result
+
+          return
+      }
+
+
+      $Result.exists = $true
+
+
+      try {
+
+          $RawDocument = Get-Content `
+              -LiteralPath $EvidencePath `
+              -Raw `
+              -ErrorAction Stop
+
+
+          $Document = (
+              $RawDocument |
+              ConvertFrom-Json `
+                  -ErrorAction Stop
+          )
+
+
+          $Result.fingerprint = (
+              [string]$Document.fingerprint
+          )
+
+
+          $Result.validation_status = (
+              [string]$Document.validation.status
+          )
+
+
+          $Result.benchmark_id = (
+              [string]$Document.benchmark.id
+          )
+
+
+          $Result.benchmark_version = (
+              [string]$Document.benchmark.version
+          )
+
+
+          $Result.final_stage = (
+              [string]$Document.final_stage
+          )
+
+
+          $FingerprintMatches = (
+              [string]$Document.fingerprint -eq
+              [string]$ExpectedFingerprint
+          )
+
+
+          $ValidationPassed = (
+              [string]$Document.validation.status -eq
+              'implementation-validation-passed'
+          )
+
+
+          $BenchmarkMatches = (
+              [string]$Document.benchmark.id -eq
+              'cis-microsoft-windows-server-2022-standalone'
+          )
+
+
+          $VersionMatches = (
+              [string]$Document.benchmark.version -eq
+              '2.0.0'
+          )
+
+
+          $StageMatches = (
+              [string]$Document.final_stage -eq
+              'BE-F'
+          )
+
+
+          $Result.valid = (
+              $FingerprintMatches -and
+              $ValidationPassed -and
+              $BenchmarkMatches -and
+              $VersionMatches -and
+              $StageMatches
+          )
+      }
+
+      catch {
+
+          $Result.error = (
+              $_.Exception.Message
+          )
+
+
+          $Result.valid = $false
+      }
+
+
+      $Ansible.Result = $Result
+
+  register: >-
+    crucible_cis_windows_server_2022_previous_final_state
+
+
+# ============================================================
+# Final reboot decision
+#
+# A reboot occurs when:
+#
+#   - any reboot-sensitive registry policy changed; OR
+#
+#   - no valid final evidence exists for this exact
+#     implementation fingerprint.
+#
+# The second rule guarantees that the first successful BE-F
+# execution always validates persistence across a reboot.
+# ============================================================
+
+- name: Resolve Windows Server 2022 CIS final reboot requirement
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_final_reboot_required: >-
+      {{
+        (
+          crucible_cis_windows_server_2022_reboot_required
+          | default(false)
+          | bool
+        )
+        or
+        not
+        (
+          crucible_cis_windows_server_2022_previous_final_state
+          .result
+          .valid
+          | default(false)
+          | bool
+        )
+      }}
+
+
+- name: Display Windows Server 2022 final reboot decision
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Existing evidence valid:
+        {{
+          crucible_cis_windows_server_2022_previous_final_state
+          .result
+          .valid
+          | default(false)
+        }}
+
+      - >-
+        Remediation requested reboot:
+        {{
+          crucible_cis_windows_server_2022_reboot_required
+          | default(false)
+        }}
+
+      - >-
+        Final controlled reboot required:
+        {{
+          crucible_cis_windows_server_2022_final_reboot_required
+        }}
+
+
+# ============================================================
+# Pre-reboot boot identity
+# ============================================================
+
+- name: Capture Windows Server 2022 pre-finalization boot identity
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem `
+          -ErrorAction Stop
+
+
+      $Ansible.Result = @{
+
+          last_boot_utc = (
+              $Os.LastBootUpTime.ToUniversalTime().ToString('o')
+          )
+
+          caption = (
+              [string]$Os.Caption
+          )
+
+          version = (
+              [string]$Os.Version
+          )
+
+          build_number = (
+              [string]$Os.BuildNumber
+          )
+
+          product_type = (
+              [int]$Os.ProductType
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_pre_reboot_state
+
+
+# ============================================================
+# Controlled reboot
+# ============================================================
+
+- name: Perform final Windows Server 2022 CIS controlled reboot
+  ansible.windows.win_reboot:
+
+    reboot_timeout: >-
+      {{
+        crucible_cis_windows_server_2022_final_reboot_timeout_seconds
+        | int
+      }}
+
+    connect_timeout: 30
+
+    pre_reboot_delay: 5
+
+    post_reboot_delay: 30
+
+    test_command: >-
+      powershell.exe -NoProfile -NonInteractive
+      -Command "Write-Output CrucibleReady"
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_final_reboot_required
+      | bool
+
+
+# ============================================================
+# Reconnect
+# ============================================================
+
+- name: Verify Crucible PSRP connectivity after Server 2022 final reboot
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_post_reboot_ping
+
+
+- name: Assert Crucible reconnected after Server 2022 final reboot
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_post_reboot_ping.ping
+        ==
+        'pong'
+
+    fail_msg: >-
+      Windows Server 2022 CIS BE-F could not
+      re-establish Crucible PSRP connectivity after
+      finalization/reboot.
+
+
+# ============================================================
+# Post-reboot boot identity
+# ============================================================
+
+- name: Capture Windows Server 2022 post-finalization boot identity
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem `
+          -ErrorAction Stop
+
+
+      $Ansible.Result = @{
+
+          last_boot_utc = (
+              $Os.LastBootUpTime.ToUniversalTime().ToString('o')
+          )
+
+          caption = (
+              [string]$Os.Caption
+          )
+
+          version = (
+              [string]$Os.Version
+          )
+
+          build_number = (
+              [string]$Os.BuildNumber
+          )
+
+          product_type = (
+              [int]$Os.ProductType
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_post_reboot_state
+
+
+- name: Assert requested Server 2022 reboot changed boot identity
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_pre_reboot_state
+        .result
+        .last_boot_utc
+        !=
+        crucible_cis_windows_server_2022_post_reboot_state
+        .result
+        .last_boot_utc
+
+    fail_msg: >-
+      Windows Server 2022 CIS requested a final reboot,
+      but Windows reports the same boot identity afterward.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_final_reboot_required
+      | bool
+
+
+# ============================================================
+# POST-REBOOT IMPLEMENTATION VALIDATION
+#
+# Re-run every accumulated verifier.
+#
+# This is what transforms:
+#
+#     "the tasks ran successfully"
+#
+# into:
+#
+#     "the configured state survived a real reboot and
+#      still converges against the Crucible implementation."
+# ============================================================
+
+
+# ------------------------------------------------------------
+# BE-B
+# ------------------------------------------------------------
+
+- name: Revalidate Server 2022 account and local policies
+  ansible.builtin.include_tasks:
+
+    file: verify_be_b.yml
+
+
+# ------------------------------------------------------------
+# BE-C
+# ------------------------------------------------------------
+
+- name: Revalidate Server 2022 services firewall and audit
+  ansible.builtin.include_tasks:
+
+    file: verify_be_c.yml
+
+
+# ------------------------------------------------------------
+# BE-D
+# ------------------------------------------------------------
+
+- name: Revalidate Server 2022 Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: verify_be_d.yml
+
+
+# ------------------------------------------------------------
+# BE-E
+#
+# Safe to invoke for every profile:
+#
+# registry items execute only when the corresponding controls
+# are actually in execution_controls.
+# ------------------------------------------------------------
+
+- name: Revalidate Server 2022 advanced-security policy
+  ansible.builtin.include_tasks:
+
+    file: verify_be_e.yml
+
+
+# ============================================================
+# Final runtime evidence
+#
+# This is intentionally broader than the CIS registry audit:
+#
+#   management channel
+#   management firewall rule
+#   firmware
+#   Secure Boot
+#   processor virtualization
+#   TPM
+#   Device Guard / VBS
+#   advanced policy values
+#
+# Runtime evidence is informational for hardware-dependent
+# VBS activation. Registry policy validation remains the CIS
+# implementation criterion.
+# ============================================================
+
+- name: Capture final Windows Server 2022 CIS runtime evidence
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      AdvancedSecuritySelected: >-
+        {{
+          (
+            [
+              '18.9.5.1',
+              '18.9.5.2',
+              '18.9.5.3',
+              '18.9.5.4',
+              '18.9.5.5',
+              '18.9.5.6',
+              '18.9.27.1'
+            ]
+            |
+            intersect(
+              crucible_cis_windows_server_2022_execution_controls
+              | default([])
+            )
+            |
+            length
+          )
+          >
+          0
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [bool] $AdvancedSecuritySelected
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $Os = Get-CimInstance `
+          -ClassName Win32_OperatingSystem `
+          -ErrorAction Stop
+
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem `
+          -ErrorAction Stop
+
+
+      $Processor = (
+          Get-CimInstance `
+              -ClassName Win32_Processor `
+              -ErrorAction Stop |
+          Select-Object -First 1
+      )
+
+
+      # ======================================================
+      # WinRM
+      # ======================================================
+
+      $WinRm = Get-Service `
+          -Name WinRM `
+          -ErrorAction Stop
+
+
+      $WinRmListener = (
+          Get-NetTCPConnection `
+              -LocalPort 5986 `
+              -State Listen `
+              -ErrorAction SilentlyContinue |
+          Select-Object -First 1
+      )
+
+
+      # ======================================================
+      # Crucible management firewall
+      # ======================================================
+
+      $Rule = (
+          Get-NetFirewallRule `
+              -Name 'Crucible-WinRM-HTTPS' `
+              -ErrorAction SilentlyContinue |
+          Select-Object -First 1
+      )
+
+
+      $Firewall = @{
+
+          present = (
+              $null -ne $Rule
+          )
+
+          enabled = $null
+
+          direction = $null
+
+          action = $null
+
+          protocol = $null
+
+          local_port = $null
+      }
+
+
+      if ($null -ne $Rule) {
+
+          $Firewall.enabled = (
+              [string]$Rule.Enabled
+          )
+
+
+          $Firewall.direction = (
+              [string]$Rule.Direction
+          )
+
+
+          $Firewall.action = (
+              [string]$Rule.Action
+          )
+
+
+          $PortFilter = (
+              Get-NetFirewallPortFilter `
+                  -AssociatedNetFirewallRule $Rule `
+                  -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          )
+
+
+          if ($null -ne $PortFilter) {
+
+              $Firewall.protocol = (
+                  [string]$PortFilter.Protocol
+              )
+
+
+              $Firewall.local_port = (
+                  [string]$PortFilter.LocalPort
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Firmware
+      # ======================================================
+
+      $Firmware = @{
+
+          query_succeeded = $false
+
+          type = $null
+
+          uefi = $false
+      }
+
+
+      $GetComputerInfoCommand = Get-Command `
+          -Name Get-ComputerInfo `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -ne $GetComputerInfoCommand) {
+
+          try {
+
+              $ComputerInfo = Get-ComputerInfo `
+                  -Property BiosFirmwareType `
+                  -ErrorAction Stop
+
+
+              $Firmware.query_succeeded = $true
+
+
+              $Firmware.type = (
+                  [string]$ComputerInfo.BiosFirmwareType
+              )
+
+
+              $Firmware.uefi = (
+                  [string]$ComputerInfo.BiosFirmwareType -match '^Uefi$'
+              )
+          }
+
+          catch {
+
+              $Firmware.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Secure Boot
+      # ======================================================
+
+      $SecureBoot = @{
+
+          cmdlet_present = $false
+
+          supported = $false
+
+          enabled = $false
+      }
+
+
+      $SecureBootCommand = Get-Command `
+          -Name Confirm-SecureBootUEFI `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -ne $SecureBootCommand) {
+
+          $SecureBoot.cmdlet_present = $true
+
+
+          try {
+
+              $SecureBoot.enabled = (
+                  [bool](
+                      Confirm-SecureBootUEFI `
+                          -ErrorAction Stop
+                  )
+              )
+
+
+              $SecureBoot.supported = $true
+          }
+
+          catch {
+
+              $SecureBoot.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Processor / virtualization
+      # ======================================================
+
+      $ProcessorEvidence = @{
+
+          virtualization_firmware_enabled = $false
+
+          second_level_address_translation = $false
+
+          vm_monitor_mode_extensions = $false
+
+          hypervisor_present = (
+              [bool]$ComputerSystem.HypervisorPresent
+          )
+      }
+
+
+      if ($null -ne $Processor) {
+
+          $ProcessorEvidence.virtualization_firmware_enabled = (
+              [bool]$Processor.VirtualizationFirmwareEnabled
+          )
+
+
+          $ProcessorEvidence.second_level_address_translation = (
+              [bool]$Processor.SecondLevelAddressTranslationExtensions
+          )
+
+
+          $ProcessorEvidence.vm_monitor_mode_extensions = (
+              [bool]$Processor.VMMonitorModeExtensions
+          )
+      }
+
+
+      # ======================================================
+      # TPM
+      # ======================================================
+
+      $TpmResult = @{
+
+          cmdlet_present = $false
+      }
+
+
+      $GetTpmCommand = Get-Command `
+          -Name Get-Tpm `
+          -ErrorAction SilentlyContinue
+
+
+      if ($null -ne $GetTpmCommand) {
+
+          $TpmResult.cmdlet_present = $true
+
+
+          try {
+
+              $Tpm = Get-Tpm `
+                  -ErrorAction Stop
+
+
+              $TpmResult.present = (
+                  [bool]$Tpm.TpmPresent
+              )
+
+
+              $TpmResult.ready = (
+                  [bool]$Tpm.TpmReady
+              )
+
+
+              $TpmResult.enabled = (
+                  [bool]$Tpm.TpmEnabled
+              )
+          }
+
+          catch {
+
+              $TpmResult.error = (
+                  $_.Exception.Message
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Device Guard / VBS
+      # ======================================================
+
+      $DeviceGuard = @{
+
+          available = $false
+
+          virtualization_based_security_status = $null
+
+          security_services_configured = @()
+
+          security_services_running = @()
+
+          available_security_properties = @()
+
+          required_security_properties = @()
+      }
+
+
+      try {
+
+          $Dg = Get-CimInstance `
+              -Namespace root\Microsoft\Windows\DeviceGuard `
+              -ClassName Win32_DeviceGuard `
+              -ErrorAction Stop
+
+
+          $DeviceGuard.available = $true
+
+
+          $DeviceGuard.virtualization_based_security_status = (
+              [int]$Dg.VirtualizationBasedSecurityStatus
+          )
+
+
+          $DeviceGuard.security_services_configured = @(
+              $Dg.SecurityServicesConfigured
+          )
+
+
+          $DeviceGuard.security_services_running = @(
+              $Dg.SecurityServicesRunning
+          )
+
+
+          $DeviceGuard.available_security_properties = @(
+              $Dg.AvailableSecurityProperties
+          )
+
+
+          $DeviceGuard.required_security_properties = @(
+              $Dg.RequiredSecurityProperties
+          )
+      }
+
+      catch {
+
+          $DeviceGuard.error = (
+              $_.Exception.Message
+          )
+      }
+
+
+      # ======================================================
+      # Advanced registry policy state
+      #
+      # This does not replace verify_be_e.yml.
+      #
+      # It records the final policy values alongside runtime
+      # Device Guard state in the evidence artifact.
+      # ======================================================
+
+      $DeviceGuardPolicyPath = (
+          'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard'
+      )
+
+
+      $WindowsSystemPolicyPath = (
+          'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
+      )
+
+
+      $AdvancedPolicy = @{
+
+          selected = (
+              $AdvancedSecuritySelected
+          )
+
+          enable_virtualization_based_security = $null
+
+          require_platform_security_features = $null
+
+          hypervisor_enforced_code_integrity = $null
+
+          hvci_mat_required = $null
+
+          credential_guard = $null
+
+          secure_launch = $null
+
+          run_as_ppl = $null
+      }
+
+
+      if (
+          Test-Path `
+              -LiteralPath $DeviceGuardPolicyPath
+      ) {
+
+          $DgPolicy = Get-ItemProperty `
+              -LiteralPath $DeviceGuardPolicyPath `
+              -ErrorAction SilentlyContinue
+
+
+          if ($null -ne $DgPolicy) {
+
+              $AdvancedPolicy.enable_virtualization_based_security = (
+                  $DgPolicy.EnableVirtualizationBasedSecurity
+              )
+
+
+              $AdvancedPolicy.require_platform_security_features = (
+                  $DgPolicy.RequirePlatformSecurityFeatures
+              )
+
+
+              $AdvancedPolicy.hypervisor_enforced_code_integrity = (
+                  $DgPolicy.HypervisorEnforcedCodeIntegrity
+              )
+
+
+              $AdvancedPolicy.hvci_mat_required = (
+                  $DgPolicy.HVCIMATRequired
+              )
+
+
+              $AdvancedPolicy.credential_guard = (
+                  $DgPolicy.LsaCfgFlags
+              )
+
+
+              $AdvancedPolicy.secure_launch = (
+                  $DgPolicy.ConfigureSystemGuardLaunch
+              )
+          }
+      }
+
+
+      if (
+          Test-Path `
+              -LiteralPath $WindowsSystemPolicyPath
+      ) {
+
+          $SystemPolicy = Get-ItemProperty `
+              -LiteralPath $WindowsSystemPolicyPath `
+              -ErrorAction SilentlyContinue
+
+
+          if ($null -ne $SystemPolicy) {
+
+              $AdvancedPolicy.run_as_ppl = (
+                  $SystemPolicy.RunAsPPL
+              )
+          }
+      }
+
+
+      # ======================================================
+      # Runtime capability assessment
+      #
+      # Informational only.
+      #
+      # HypervisorPresent is accepted alongside
+      # VirtualizationFirmwareEnabled because virtualized
+      # guests can expose virtualization in different ways.
+      # ======================================================
+
+      $VirtualizationAvailable = (
+
+          $ProcessorEvidence.virtualization_firmware_enabled -or
+          $ProcessorEvidence.hypervisor_present
+      )
+
+
+      $RuntimeLikelyCapable = (
+
+          (
+              [string]$Os.OSArchitecture -match '64'
+          ) -and
+          $Firmware.uefi -and
+          $SecureBoot.supported -and
+          $SecureBoot.enabled -and
+          $VirtualizationAvailable
+      )
+
+
+      $VbsActivationObserved = (
+
+          $DeviceGuard.available -and
+          (
+              [int]$DeviceGuard.virtualization_based_security_status -eq 2
+          )
+      )
+
+
+      # ======================================================
+      # Result
+      # ======================================================
+
+      $Ansible.Result = @{
+
+          timestamp_utc = (
+              [DateTime]::UtcNow.ToString('o')
+          )
+
+          operating_system = @{
+
+              caption = (
+                  [string]$Os.Caption
+              )
+
+              version = (
+                  [string]$Os.Version
+              )
+
+              build_number = (
+                  [string]$Os.BuildNumber
+              )
+
+              architecture = (
+                  [string]$Os.OSArchitecture
+              )
+
+              product_type = (
+                  [int]$Os.ProductType
+              )
+
+              last_boot_utc = (
+                  $Os.LastBootUpTime.ToUniversalTime().ToString('o')
+              )
+          }
+
+          management = @{
+
+              winrm_service_status = (
+                  [string]$WinRm.Status
+              )
+
+              https_5986_listening = (
+                  $null -ne $WinRmListener
+              )
+
+              firewall = (
+                  $Firewall
+              )
+          }
+
+          firmware = (
+              $Firmware
+          )
+
+          secure_boot = (
+              $SecureBoot
+          )
+
+          processor_security = (
+              $ProcessorEvidence
+          )
+
+          tpm = (
+              $TpmResult
+          )
+
+          advanced_security = @{
+
+              policy = (
+                  $AdvancedPolicy
+              )
+
+              device_guard = (
+                  $DeviceGuard
+              )
+
+              runtime_likely_capable = (
+                  $RuntimeLikelyCapable
+              )
+
+              vbs_activation_observed = (
+                  $VbsActivationObserved
+              )
+          }
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_final_runtime
+
+
+# ============================================================
+# Final management invariants
+#
+# BE-F must never write success evidence if the management
+# channel required to maintain the forged host is broken.
+# ============================================================
+
+- name: Assert final Windows Server 2022 management infrastructure
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_final_runtime
+        .result
+        .management
+        .winrm_service_status
+        ==
+        'Running'
+
+      - >-
+        crucible_cis_windows_server_2022_final_runtime
+        .result
+        .management
+        .https_5986_listening
+        | bool
+
+      - >-
+        crucible_cis_windows_server_2022_final_runtime
+        .result
+        .management
+        .firewall
+        .present
+        | bool
+
+      - >-
+        crucible_cis_windows_server_2022_final_runtime
+        .result
+        .management
+        .firewall
+        .direction
+        ==
+        'Inbound'
+
+      - >-
+        crucible_cis_windows_server_2022_final_runtime
+        .result
+        .management
+        .firewall
+        .action
+        ==
+        'Allow'
+
+      - >-
+        (
+          crucible_cis_windows_server_2022_final_runtime
+          .result
+          .management
+          .firewall
+          .local_port
+          | string
+        )
+        ==
+        '5986'
+
+    fail_msg: >-
+      Final Windows Server 2022 CIS validation detected
+      damaged Crucible WinRM HTTPS management
+      infrastructure.
+
+
+# ============================================================
+# Advanced-security runtime report
+#
+# Do NOT fail the CIS implementation solely because the
+# hypervisor/firmware cannot activate VBS.
+#
+# The CIS audit for these recommendations is policy-backed,
+# and BE-E already revalidated those registry values.
+#
+# We preserve the distinction in final evidence.
+# ============================================================
+
+- name: Report final Server 2022 VBS runtime state
+  ansible.builtin.debug:
+
+    msg:
+
+      - >-
+        Advanced security selected:
+        {{
+          crucible_cis_windows_server_2022_final_runtime
+          .result
+          .advanced_security
+          .policy
+          .selected
+        }}
+
+      - >-
+        Runtime likely capable:
+        {{
+          crucible_cis_windows_server_2022_final_runtime
+          .result
+          .advanced_security
+          .runtime_likely_capable
+        }}
+
+      - >-
+        VBS activation observed:
+        {{
+          crucible_cis_windows_server_2022_final_runtime
+          .result
+          .advanced_security
+          .vbs_activation_observed
+        }}
+
+      - >-
+        Device Guard VBS status:
+        {{
+          crucible_cis_windows_server_2022_final_runtime
+          .result
+          .advanced_security
+          .device_guard
+          .virtualization_based_security_status
+        }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_final_runtime
+      .result
+      .advanced_security
+      .policy
+      .selected
+      | bool
+
+
+# ============================================================
+# Final evidence
+# ============================================================
+
+- name: Write Windows Server 2022 CIS final evidence
+  ansible.windows.win_copy:
+
+    dest: >-
+      {{
+        crucible_cis_windows_server_2022_evidence_path
+      }}
+
+    content: >-
+      {{
+        {
+          'schema_version': 1,
+
+          'configuration':
+            'windows-server-2022-cis',
+
+          'milestone':
+            'BE',
+
+          'final_stage':
+            'BE-F',
+
+          'fingerprint':
+            crucible_cis_windows_server_2022_finalization_fingerprint,
+
+          'benchmark': {
+
+            'id':
+              crucible_hardening.benchmark.id,
+
+            'version':
+              crucible_hardening.benchmark.version
+          },
+
+          'profile': {
+
+            'id':
+              crucible_hardening.profile.id,
+
+            'display_name':
+              crucible_hardening.profile.display_name
+          },
+
+          'implementation': {
+
+            'wave':
+              crucible_cis_windows_server_2022_implementation_wave,
+
+            'inventory_control_count':
+              342,
+
+            'source_automated_controls':
+              340,
+
+            'source_manual_controls':
+              2,
+
+            'benchmark_control_inventory_complete':
+              true,
+
+            'not_implemented_controls':
+              0,
+
+            'execution_controls':
+              (
+                crucible_cis_windows_server_2022_execution_controls
+                | default([])
+                | sort
+              ),
+
+            'execution_control_count':
+              (
+                crucible_cis_windows_server_2022_execution_controls
+                | default([])
+                | length
+              )
+          },
+
+          'classification': {
+
+            'applicable':
+              (
+                crucible_hardening.counts.applicable
+                | default(0)
+              ),
+
+            'automated':
+              (
+                crucible_hardening.counts.automated
+                | default(0)
+              ),
+
+            'conditional':
+              (
+                crucible_hardening.counts.conditional
+                | default(0)
+              ),
+
+            'manual':
+              (
+                crucible_hardening.counts.manual
+                | default(0)
+              ),
+
+            'not_implemented':
+              (
+                crucible_hardening.counts.not_implemented
+                | default(0)
+              ),
+
+            'user_exceptions':
+              (
+                crucible_hardening.counts.user_exceptions
+                | default(0)
+              ),
+
+            'derived_exceptions':
+              (
+                crucible_hardening.counts.derived_exceptions
+                | default(0)
+              )
+          },
+
+          'server_context': {
+
+            'roles':
+              crucible_cis_windows_server_2022_final_role_state,
+
+            'user_right_exceptions':
+              crucible_cis_windows_server_2022_final_user_right_exception_state,
+
+            'resolved_role_aware_user_rights':
+              crucible_cis_windows_server_2022_final_resolved_user_right_state
+          },
+
+          'exceptions': {
+
+            'user':
+              (
+                crucible_hardening.controls.user_exceptions
+                | default([])
+                | sort
+              ),
+
+            'derived':
+              (
+                crucible_hardening.controls.derived_exceptions
+                | default([])
+                | sort
+              ),
+
+            'derived_reasons':
+              (
+                crucible_hardening.controls
+                .derived_exception_reasons
+                | default({})
+              ),
+
+            'runtime':
+              crucible_cis_windows_server_2022_final_runtime_exception_state
+          },
+
+          'manual_controls':
+            (
+              crucible_hardening.controls.manual
+              | default([])
+              | sort
+            ),
+
+          'validation': {
+
+            'status':
+              'implementation-validation-passed',
+
+            'post_reboot_validation':
+              'passed',
+
+            'management_connectivity':
+              'passed',
+
+            'runtime_security_evidence':
+              'captured'
+          },
+
+          'runtime':
+            crucible_cis_windows_server_2022_final_runtime.result,
+
+          'compliance': {
+
+            'status':
+              'not-attested',
+
+            'note':
+              (
+                'Operation Crucible validated the implemented '
+                'CIS Microsoft Windows Server 2022 Stand-alone '
+                'policy state across a finalization boundary. '
+                'Source-Manual controls plus user, derived, '
+                'server-role, and runtime exceptions require '
+                'separate compliance consideration.'
+              )
+          }
+        }
+        |
+        to_nice_json
+      }}
+
+
+# ============================================================
+# Verify evidence persisted
+# ============================================================
+
+- name: Verify Windows Server 2022 CIS evidence exists
+  ansible.windows.win_stat:
+
+    path: >-
+      {{
+        crucible_cis_windows_server_2022_evidence_path
+      }}
+
+  register: >-
+    crucible_cis_windows_server_2022_evidence_stat
+
+
+- name: Assert Windows Server 2022 CIS evidence was persisted
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_evidence_stat.stat.exists
+        | bool
+
+      - >-
+        crucible_cis_windows_server_2022_evidence_stat.stat.size
+        | int
+        >
+        0
+
+    fail_msg: >-
+      Windows Server 2022 CIS implementation validation
+      passed, but final evidence could not be persisted.
+
+
+# ============================================================
+# Parse persisted evidence back from disk
+#
+# This proves we did not merely ask win_copy to write a file;
+# the artifact itself must be readable and contain the exact
+# fingerprint/status we just validated.
+# ============================================================
+
+- name: Validate persisted Windows Server 2022 CIS evidence
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      EvidencePath: >-
+        {{
+          crucible_cis_windows_server_2022_evidence_path
+        }}
+
+      ExpectedFingerprint: >-
+        {{
+          crucible_cis_windows_server_2022_finalization_fingerprint
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $EvidencePath,
+
+          [Parameter(Mandatory = $true)]
+          [string] $ExpectedFingerprint
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $RawDocument = Get-Content `
+          -LiteralPath $EvidencePath `
+          -Raw `
+          -ErrorAction Stop
+
+
+      $Document = (
+          $RawDocument |
+          ConvertFrom-Json `
+              -ErrorAction Stop
+      )
+
+
+      $FingerprintMatches = (
+          [string]$Document.fingerprint -eq
+          [string]$ExpectedFingerprint
+      )
+
+
+      $ValidationPassed = (
+          [string]$Document.validation.status -eq
+          'implementation-validation-passed'
+      )
+
+
+      $StageMatches = (
+          [string]$Document.final_stage -eq
+          'BE-F'
+      )
+
+
+      $InventoryComplete = (
+          [bool]$Document.implementation.benchmark_control_inventory_complete
+      )
+
+
+      $NoMissingControls = (
+          [int]$Document.implementation.not_implemented_controls -eq 0
+      )
+
+
+      if (
+          -not (
+              $FingerprintMatches -and
+              $ValidationPassed -and
+              $StageMatches -and
+              $InventoryComplete -and
+              $NoMissingControls
+          )
+      ) {
+
+          throw (
+              "Persisted Windows Server 2022 CIS evidence " +
+              "does not match the completed BE-F state."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          fingerprint = (
+              [string]$Document.fingerprint
+          )
+
+          validation_status = (
+              [string]$Document.validation.status
+          )
+
+          final_stage = (
+              [string]$Document.final_stage
+          )
+
+          inventory_control_count = (
+              [int]$Document.implementation.inventory_control_count
+          )
+
+          valid = $true
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_persisted_evidence_validation
+
+
+# ============================================================
+# Final gate
+# ============================================================
+
+- name: Mark Windows Server 2022 CIS final validation passed
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_final_validation_passed: true

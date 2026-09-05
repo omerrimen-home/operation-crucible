@@ -1,0 +1,213 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# Windows Server 2022 CIS BE-D verification
+#
+# Administrative Template policy is declarative.
+#
+# A second pass must make no changes.
+# ============================================================
+
+
+- name: Load Server 2022 Administrative Template inventory for verification
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/administrative_templates.yml
+
+
+# ============================================================
+# Machine policies
+# ============================================================
+
+- name: Verify Server 2022 machine Administrative Templates
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_administrative_template_machine_policies
+      | default([])
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_be_d_machine_verification
+
+
+- name: Assert Server 2022 machine Administrative Templates converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_cis_windows_server_2022_be_d_machine_verification
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows Server 2022 CIS machine
+      Administrative Template policies required changes
+      during the BE-D verification pass.
+
+
+# ============================================================
+# User policies
+# ============================================================
+
+- name: Verify Server 2022 user Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: user_registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_user_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_server_2022_administrative_template_user_policies
+        | default([])
+      }}
+
+
+- name: Assert Server 2022 user Administrative Templates converged
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        (
+          crucible_windows_user_registry_policy_results
+          .results
+          | default([])
+          | rejectattr(
+              'skipped',
+              'defined'
+            )
+          | selectattr(
+              'changed',
+              'equalto',
+              true
+            )
+          | list
+          | length
+        )
+        ==
+        0
+
+    fail_msg: >-
+      One or more Windows Server 2022 CIS user
+      Administrative Template policies required changes
+      during the BE-D verification pass.
+
+
+# ============================================================
+# WinRM infrastructure
+# ============================================================
+
+- name: Inspect Crucible WinRM infrastructure after BE-D
+  ansible.windows.win_powershell:
+
+    script: |
+      [CmdletBinding()]
+      param ()
+
+
+      $Ansible.Changed = $false
+
+
+      $Service = Get-Service `
+          -Name WinRM `
+          -ErrorAction Stop
+
+
+      $Connections = @(
+          Get-NetTCPConnection `
+              -State Listen `
+              -LocalPort 5986 `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      $Listener = (
+          $Connections |
+          Select-Object -First 1
+      )
+
+
+      $Ansible.Result = @{
+
+          winrm_status = (
+              [string]$Service.Status
+          )
+
+          https_5986_listening = (
+              $null -ne $Listener
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_be_d_management_state
+
+
+- name: Assert Crucible management infrastructure survived BE-D
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_be_d_management_state
+        .result
+        .winrm_status
+        ==
+        'Running'
+
+      - >-
+        crucible_cis_windows_server_2022_be_d_management_state
+        .result
+        .https_5986_listening
+        | bool
+
+    fail_msg: >-
+      Windows Server 2022 Administrative Template
+      hardening damaged Crucible's persistent WinRM
+      HTTPS management channel.

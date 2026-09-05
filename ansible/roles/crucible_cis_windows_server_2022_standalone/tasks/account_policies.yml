@@ -1,0 +1,488 @@
+---
+
+
+# ============================================================
+# Account Lockout Policy dependency validation
+# ============================================================
+
+- name: Validate Windows Server 2022 account lockout policy relationships
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_lockout_threshold
+        | int
+        >
+        0
+
+      - >-
+        crucible_cis_windows_server_2022_lockout_reset_minutes
+        | int
+        >
+        0
+
+      - >-
+        crucible_cis_windows_server_2022_lockout_duration_minutes
+        | int
+        >=
+        crucible_cis_windows_server_2022_lockout_reset_minutes
+        | int
+
+    fail_msg: >-
+      Windows Server 2022 CIS account lockout policy is
+      internally inconsistent. LockoutBadCount must be
+      greater than zero, ResetLockoutCount must be greater
+      than zero, and LockoutDuration must be greater than
+      or equal to ResetLockoutCount.
+
+
+# ============================================================
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Section 1 - Account Policies
+#
+# The majority of these settings are backed by the
+# Windows local security policy database and are applied
+# through community.windows.win_security_policy.
+#
+# 1.1.6 is registry-backed and is therefore handled
+# separately.
+#
+# 1.2.3 remains Manual exactly as classified by CIS.
+# ============================================================
+
+- name: Define Windows CIS account-policy settings
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_account_policy_settings:
+
+      # --------------------------------------------------------
+      # 1.1 Password Policy
+      # --------------------------------------------------------
+
+      - control_id: "1.1.1"
+        section: System Access
+        key: PasswordHistorySize
+        value: >-
+          {{
+            crucible_cis_windows_server_2022_password_history
+            | string
+          }}
+
+      - control_id: "1.1.2"
+        section: System Access
+        key: MaximumPasswordAge
+        value: >-
+          {{
+            crucible_cis_windows_server_2022_password_max_age_days
+            | string
+          }}
+
+      - control_id: "1.1.3"
+        section: System Access
+        key: MinimumPasswordAge
+        value: >-
+          {{
+            crucible_cis_windows_server_2022_password_min_age_days
+            | string
+          }}
+
+      - control_id: "1.1.4"
+        section: System Access
+        key: MinimumPasswordLength
+        value: >-
+          {{
+            crucible_cis_windows_server_2022_password_min_length
+            | string
+          }}
+
+      - control_id: "1.1.5"
+        section: System Access
+        key: PasswordComplexity
+        value: "1"
+
+      - control_id: "1.1.7"
+        section: System Access
+        key: ClearTextPassword
+        value: "0"
+
+
+# ============================================================
+# 1.1.6 Relax minimum password length limits
+# ============================================================
+
+- name: CIS 1.1.6 | Enable relaxed minimum password length limits
+  ansible.windows.win_regedit:
+
+    path: >-
+      HKLM:\SYSTEM\CurrentControlSet\Control\SAM
+
+    name: RelaxMinimumPasswordLengthLimits
+
+    data: 1
+
+    type: dword
+
+    state: present
+
+  when:
+    - >-
+      '1.1.6'
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+
+# ============================================================
+# Section 1.2 - Account Lockout Policy
+#
+# These three values are interdependent:
+#
+#   1.2.1 LockoutDuration
+#   1.2.2 LockoutBadCount
+#   1.2.4 ResetLockoutCount
+#
+# Applying them independently through SecEdit can cause
+# Windows to normalize one value while another is being
+# changed.
+#
+# Use one native "net accounts" transaction, then verify
+# against SecEdit's authoritative System Access state.
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS account lockout policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      LockoutThreshold: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_threshold
+          | int
+        }}
+
+      LockoutDuration: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_duration_minutes
+          | int
+        }}
+
+      LockoutResetMinutes: >-
+        {{
+          crucible_cis_windows_server_2022_lockout_reset_minutes
+          | int
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutThreshold,
+
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutDuration,
+
+          [Parameter(Mandatory = $true)]
+          [int] $LockoutResetMinutes
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      # ======================================================
+      # Export authoritative local security policy
+      # ======================================================
+
+      function Get-LockoutPolicy {
+
+          $ExportPath = Join-Path `
+              $Ansible.Tmpdir `
+              (
+                  'crucible-lockout-{0}.inf' -f
+                  [guid]::NewGuid().ToString('N')
+              )
+
+
+          try {
+
+              & secedit.exe `
+                  /export `
+                  /cfg $ExportPath `
+                  /areas SECURITYPOLICY `
+                  /quiet `
+                  | Out-Null
+
+
+              if (
+                  $LASTEXITCODE -ne 0
+              ) {
+
+                  throw (
+                      "secedit export failed with exit code " +
+                      "$LASTEXITCODE."
+                  )
+              }
+
+
+              $Lines = @(
+                  Get-Content `
+                      -LiteralPath $ExportPath `
+                      -ErrorAction Stop
+              )
+
+
+              $Policy = @{
+
+                  LockoutBadCount = $null
+
+                  ResetLockoutCount = $null
+
+                  LockoutDuration = $null
+              }
+
+
+              foreach (
+                  $Name
+                  in
+                  @(
+                      'LockoutBadCount',
+                      'ResetLockoutCount',
+                      'LockoutDuration'
+                  )
+              ) {
+
+                  $Pattern = (
+                      '^\s*{0}\s*=\s*(-?\d+)\s*$' -f
+                      [regex]::Escape(
+                          $Name
+                      )
+                  )
+
+
+                  $Line = (
+                      $Lines |
+                      Where-Object {
+                          $_ -match $Pattern
+                      } |
+                      Select-Object -First 1
+                  )
+
+
+                  if (
+                      $null -eq $Line
+                  ) {
+
+                      continue
+                  }
+
+
+                  if (
+                      $Line -match $Pattern
+                  ) {
+
+                      $Policy[$Name] = (
+                          [int]$Matches[1]
+                      )
+                  }
+              }
+
+
+              return $Policy
+          }
+
+          finally {
+
+              if (
+                  Test-Path `
+                      -LiteralPath $ExportPath
+              ) {
+
+                  Remove-Item `
+                      -LiteralPath $ExportPath `
+                      -Force `
+                      -ErrorAction SilentlyContinue
+              }
+          }
+      }
+
+
+      # ======================================================
+      # Current state
+      # ======================================================
+
+      $Before = (
+          Get-LockoutPolicy
+      )
+
+
+      $ThresholdMatches = (
+          [int]$Before.LockoutBadCount -eq
+          $LockoutThreshold
+      )
+
+
+      $ResetMatches = (
+          [int]$Before.ResetLockoutCount -eq
+          $LockoutResetMinutes
+      )
+
+
+      $DurationMatches = (
+          [int]$Before.LockoutDuration -eq
+          $LockoutDuration
+      )
+
+
+      $AlreadyCompliant = (
+          $ThresholdMatches -and
+          $ResetMatches -and
+          $DurationMatches
+      )
+
+
+      # ======================================================
+      # Apply all three coupled settings together.
+      # ======================================================
+
+      if (
+          -not $AlreadyCompliant
+      ) {
+
+          $NetArguments = @(
+
+              'accounts',
+
+              (
+                  '/lockoutthreshold:{0}' -f
+                  $LockoutThreshold
+              ),
+
+              (
+                  '/lockoutwindow:{0}' -f
+                  $LockoutResetMinutes
+              ),
+
+              (
+                  '/lockoutduration:{0}' -f
+                  $LockoutDuration
+              )
+          )
+
+
+          $NetOutput = @(
+              & net.exe @NetArguments 2>&1
+          )
+
+
+          $NetExitCode = (
+              $LASTEXITCODE
+          )
+
+
+          if (
+              $NetExitCode -ne 0
+          ) {
+
+              throw (
+                  "net accounts failed with exit code " +
+                  "$NetExitCode. Output: " +
+                  (
+                      $NetOutput -join
+                      ' '
+                  )
+              )
+          }
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ======================================================
+      # Verify final SecEdit state
+      # ======================================================
+
+      $After = (
+          Get-LockoutPolicy
+      )
+
+
+      $ThresholdVerified = (
+          [int]$After.LockoutBadCount -eq
+          $LockoutThreshold
+      )
+
+
+      $ResetVerified = (
+          [int]$After.ResetLockoutCount -eq
+          $LockoutResetMinutes
+      )
+
+
+      $DurationVerified = (
+          [int]$After.LockoutDuration -eq
+          $LockoutDuration
+      )
+
+
+      $Compliant = (
+          $ThresholdVerified -and
+          $ResetVerified -and
+          $DurationVerified
+      )
+
+
+      if (
+          -not $Compliant
+      ) {
+
+          throw (
+              "Windows Server 2022 account lockout policy " +
+              "did not converge. Expected threshold=" +
+              "$LockoutThreshold reset=" +
+              "$LockoutResetMinutes duration=" +
+              "$LockoutDuration; observed threshold=" +
+              "$($After.LockoutBadCount) reset=" +
+              "$($After.ResetLockoutCount) duration=" +
+              "$($After.LockoutDuration)."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          before = (
+              $Before
+          )
+
+          after = (
+              $After
+          )
+
+          compliant = (
+              $Compliant
+          )
+      }
+
+  register: >-
+    crucible_cis_windows_server_2022_lockout_policy_result
+
+  when:
+
+    - >-
+      (
+        [
+          '1.2.1',
+          '1.2.2',
+          '1.2.4'
+        ]
+        |
+        intersect(
+          crucible_cis_windows_server_2022_execution_controls
+          | default([])
+        )
+        |
+        length
+      )
+      >
+      0

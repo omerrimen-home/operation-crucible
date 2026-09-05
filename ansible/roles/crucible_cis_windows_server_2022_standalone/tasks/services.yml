@@ -1,0 +1,341 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Section 5 - System Services
+#
+# 5.1 Print Spooler
+#
+# CIS Level 2 requires Disabled.
+#
+# Operation Crucible preserves an actually installed Print
+# Server role by default and records an explicit runtime
+# exception rather than silently destroying that role.
+# ============================================================
+
+
+- name: Load Windows Server 2022 CIS service inventory
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/services.yml
+
+
+# ============================================================
+# Initialize runtime exception evidence
+# ============================================================
+
+- name: Initialize Windows Server 2022 runtime exceptions
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_runtime_exceptions: >-
+      {{
+        crucible_cis_windows_server_2022_runtime_exceptions
+        | default([])
+      }}
+
+
+# ============================================================
+# Determine whether Print Server must be preserved
+# ============================================================
+
+- name: Resolve Windows Server 2022 Print Spooler role exception
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_print_spooler_exception_active: >-
+      {{
+        (
+          '5.1'
+          in
+          crucible_cis_windows_server_2022_execution_controls
+        )
+        and
+        (
+          crucible_cis_windows_server_2022_roles.print_server
+          | default(false)
+          | bool
+        )
+        and
+        (
+          crucible_cis_windows_server_2022_preserve_print_server_role
+          | bool
+        )
+      }}
+
+
+- name: Record Windows Server 2022 Print Server runtime exception
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_runtime_exceptions: >-
+      {{
+        crucible_cis_windows_server_2022_runtime_exceptions
+        +
+        [
+          {
+            'control_id': '5.1',
+            'reason':
+              (
+                'Print Server role is installed; '
+                ~
+                'Crucible preserved Print Spooler because '
+                ~
+                'preserve_print_server_role=true.'
+              ),
+            'capability': 'role:print-server',
+            'source': 'runtime-role-discovery'
+          }
+        ]
+      }}
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_print_spooler_exception_active
+      | bool
+
+    - >-
+      '5.1'
+      not in
+      (
+        crucible_cis_windows_server_2022_runtime_exceptions
+        | map(attribute='control_id')
+        | list
+      )
+
+
+- name: Resolve Windows Server 2022 runtime exception control IDs
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_runtime_exception_control_ids: >-
+      {{
+        crucible_cis_windows_server_2022_runtime_exceptions
+        | map(attribute='control_id')
+        | list
+      }}
+
+
+- name: Report preserved Print Server role
+  ansible.builtin.debug:
+
+    msg: >-
+      CIS 5.1 requires Print Spooler to be Disabled.
+      The Windows Print Server role is installed, so
+      Operation Crucible has preserved the service and
+      recorded control 5.1 as a runtime exception.
+
+  when:
+
+    - >-
+      crucible_cis_windows_server_2022_print_spooler_exception_active
+      | bool
+
+
+# ============================================================
+# Apply service policy
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS service policy
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ServiceName: >-
+        {{
+          item.service_name
+        }}
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [string] $ServiceName
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      $EscapedServiceName = (
+          $ServiceName.Replace(
+              "'",
+              "''"
+          )
+      )
+
+
+      $Service = Get-CimInstance `
+          -ClassName Win32_Service `
+          -Filter (
+              "Name='{0}'" -f
+              $EscapedServiceName
+          ) `
+          -ErrorAction SilentlyContinue
+
+
+      # Service absence is compliant.
+
+      if ($null -eq $Service) {
+
+          $Ansible.Result = @{
+
+              service = (
+                  $ServiceName
+              )
+
+              installed = $false
+
+              startup_type = $null
+
+              state = $null
+
+              compliant = $true
+          }
+
+
+          return
+      }
+
+
+      if (
+          [string]$Service.StartMode -ine
+          "Disabled"
+      ) {
+
+          Set-Service `
+              -Name $ServiceName `
+              -StartupType Disabled `
+              -ErrorAction Stop
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      $RuntimeService = Get-Service `
+          -Name $ServiceName `
+          -ErrorAction Stop
+
+
+      if (
+          $RuntimeService.Status -ne
+          [System.ServiceProcess.ServiceControllerStatus]::Stopped
+      ) {
+
+          Stop-Service `
+              -Name $ServiceName `
+              -Force `
+              -ErrorAction Stop
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      $VerifiedService = Get-CimInstance `
+          -ClassName Win32_Service `
+          -Filter (
+              "Name='{0}'" -f
+              $EscapedServiceName
+          ) `
+          -ErrorAction Stop
+
+
+      $VerifiedRuntime = Get-Service `
+          -Name $ServiceName `
+          -ErrorAction Stop
+
+
+      if (
+          [string]$VerifiedService.StartMode -ine
+          "Disabled"
+      ) {
+
+          throw (
+              "Service '$ServiceName' did not converge " +
+              "to StartupType Disabled."
+          )
+      }
+
+
+      if (
+          $VerifiedRuntime.Status -ne
+          [System.ServiceProcess.ServiceControllerStatus]::Stopped
+      ) {
+
+          throw (
+              "Service '$ServiceName' remained active " +
+              "after CIS remediation."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          service = (
+              $ServiceName
+          )
+
+          installed = $true
+
+          startup_type = (
+              [string]$VerifiedService.StartMode
+          )
+
+          state = (
+              [string]$VerifiedRuntime.Status
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_service_policies
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.service_name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+    - >-
+      item.control_id
+      not in
+      crucible_cis_windows_server_2022_runtime_exception_control_ids
+
+  register: >-
+    crucible_cis_windows_server_2022_service_results
+
+
+# ============================================================
+# Management survival
+# ============================================================
+
+- name: Verify Crucible management after Server 2022 service hardening
+  ansible.windows.win_ping:
+
+  register: >-
+    crucible_cis_windows_server_2022_service_management_ping
+
+
+- name: Assert Crucible management survived Server 2022 service hardening
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_cis_windows_server_2022_service_management_ping.ping
+        ==
+        'pong'

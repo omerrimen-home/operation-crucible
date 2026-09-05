@@ -1,0 +1,77 @@
+---
+
+# ============================================================
+# Crucible Windows declarative registry-policy engine
+#
+# Expected input:
+#
+#   crucible_windows_registry_policy_batch
+#
+# Each element:
+#
+#   control_id
+#   path
+#   name
+#   type
+#   data
+#
+# This file intentionally contains no benchmark-specific
+# registry values. The data belongs in vars files.
+# ============================================================
+
+
+- name: Apply declarative Windows registry policy
+  ansible.windows.win_regedit:
+
+    path: "{{ item.path }}"
+
+    name: "{{ item.name }}"
+
+    type: "{{ item.type }}"
+
+    data: "{{ item.data }}"
+
+    state: present
+
+  loop: >-
+    {{
+      crucible_windows_registry_policy_batch
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.name }}
+
+  when:
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_windows_registry_policy_results
+
+
+- name: Mark Windows reboot required after registry policy changes
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_reboot_required: true
+
+  when:
+
+    - >-
+      (
+        crucible_windows_registry_policy_results.results
+        | default([])
+        | selectattr(
+            'changed',
+            'equalto',
+            true
+          )
+        | list
+        | length
+      )
+      >
+      0

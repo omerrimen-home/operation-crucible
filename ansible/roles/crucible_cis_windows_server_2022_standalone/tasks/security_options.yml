@@ -1,0 +1,318 @@
+---
+
+# ============================================================
+# CIS Microsoft Windows Server 2022 Stand-alone Benchmark v2.0.0
+# Section 2.3 - Security Options
+#
+# BE-B completes the Windows Server 2022 Security Options inventory.
+#
+# Manual:
+#
+#   2.3.11.6
+#
+# remains Manual exactly as classified by CIS.
+# ============================================================
+
+
+- name: Load Windows Server 2022 CIS Security Options registry map
+  ansible.builtin.include_vars:
+
+    file: >-
+      {{
+        role_path
+      }}/vars/security_options.yml
+
+
+# ============================================================
+# Security-policy-database controls
+# ============================================================
+
+- name: Define Windows Server 2022 local-security-policy Security Options
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_security_policy_options:
+
+      - control_id: "2.3.1.1"
+        section: System Access
+        key: EnableGuestAccount
+        value: "0"
+
+      - control_id: "2.3.10.1"
+        section: System Access
+        key: LSAAnonymousNameLookup
+        value: "0"
+
+
+- name: Apply Windows Server 2022 local-security-policy Security Options
+  community.windows.win_security_policy:
+
+    section: "{{ item.section }}"
+
+    key: "{{ item.key }}"
+
+    value: "{{ item.value }}"
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_security_policy_options
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      {{ item.key }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+
+# ============================================================
+# 2.3.1.3 / 2.3.1.4
+#
+# Rename built-in accounts by RID.
+#
+# RID 500 = Administrator
+# RID 501 = Guest
+# ============================================================
+
+- name: Define Windows Server 2022 built-in account rename policies
+  ansible.builtin.set_fact:
+
+    crucible_cis_windows_server_2022_builtin_account_renames:
+
+      - control_id: "2.3.1.3"
+        rid: 500
+        target_name: >-
+          {{
+            crucible_cis_windows_server_2022_builtin_administrator_name
+          }}
+
+      - control_id: "2.3.1.4"
+        rid: 501
+        target_name: >-
+          {{
+            crucible_cis_windows_server_2022_builtin_guest_name
+          }}
+
+
+- name: Apply Windows Server 2022 CIS built-in account renames
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      Rid: "{{ item.rid }}"
+
+      TargetName: "{{ item.target_name }}"
+
+    script: |
+      [CmdletBinding()]
+      param (
+          [Parameter(Mandatory = $true)]
+          [int] $Rid,
+
+          [Parameter(Mandatory = $true)]
+          [string] $TargetName
+      )
+
+
+      $Ansible.Changed = $false
+
+
+      # ======================================================
+      # Locate the built-in account by invariant RID.
+      #
+      # RID 500 = built-in Administrator
+      # RID 501 = built-in Guest
+      #
+      # The account name itself may already have changed,
+      # which is why Crucible must not locate it by name.
+      # ======================================================
+
+      $BuiltinAccount = (
+          Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match ("-{0}$" -f $Rid)
+          } |
+          Select-Object -First 1
+      )
+
+
+      if ($null -eq $BuiltinAccount) {
+
+          throw (
+              "Could not locate built-in local account " +
+              "with RID $Rid."
+          )
+      }
+
+
+      # ======================================================
+      # Refuse to overwrite an unrelated existing account.
+      # ======================================================
+
+      $ExistingTarget = (
+          Get-LocalUser `
+              -Name $TargetName `
+              -ErrorAction SilentlyContinue
+      )
+
+
+      if (
+          ($null -ne $ExistingTarget) -and
+          (
+              [string]$ExistingTarget.SID.Value -ne
+              [string]$BuiltinAccount.SID.Value
+          )
+      ) {
+
+          throw (
+              "Cannot rename built-in account '" +
+              $BuiltinAccount.Name +
+              "' to '$TargetName': another local account " +
+              "already uses that name."
+          )
+      }
+
+
+      # ======================================================
+      # Rename only when required.
+      #
+      # Use case-sensitive comparison so the requested final
+      # spelling/casing also converges.
+      # ======================================================
+
+      if (
+          [string]$BuiltinAccount.Name -cne
+          [string]$TargetName
+      ) {
+
+          Rename-LocalUser `
+              -SID $BuiltinAccount.SID `
+              -NewName $TargetName `
+              -ErrorAction Stop
+
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ======================================================
+      # Read back by RID and verify.
+      # ======================================================
+
+      $UpdatedAccount = (
+          Get-LocalUser |
+          Where-Object {
+              $_.SID.Value -match ("-{0}$" -f $Rid)
+          } |
+          Select-Object -First 1
+      )
+
+
+      if ($null -eq $UpdatedAccount) {
+
+          throw (
+              "Built-in account with RID $Rid could not " +
+              "be located after rename processing."
+          )
+      }
+
+
+      if (
+          [string]$UpdatedAccount.Name -cne
+          [string]$TargetName
+      ) {
+
+          throw (
+              "Built-in account with RID $Rid did not " +
+              "converge to expected name '$TargetName'. " +
+              "Current name is '$($UpdatedAccount.Name)'."
+          )
+      }
+
+
+      $Ansible.Result = @{
+
+          rid = (
+              $Rid
+          )
+
+          name = (
+              [string]$UpdatedAccount.Name
+          )
+
+          sid = (
+              [string]$UpdatedAccount.SID.Value
+          )
+
+          compliant = $true
+      }
+
+  loop: >-
+    {{
+      crucible_cis_windows_server_2022_builtin_account_renames
+    }}
+
+  loop_control:
+
+    label: >-
+      {{ item.control_id }}
+      RID {{ item.rid }}
+      ->
+      {{ item.target_name }}
+
+  when:
+
+    - >-
+      item.control_id
+      in
+      crucible_cis_windows_server_2022_execution_controls
+
+  register: >-
+    crucible_cis_windows_server_2022_account_rename_results
+
+
+# ============================================================
+# Registry-backed Security Options
+# ============================================================
+
+- name: Apply Windows Server 2022 CIS registry-backed Security Options
+  ansible.builtin.include_tasks:
+
+    file: registry_policy_engine.yml
+
+  vars:
+
+    crucible_windows_registry_policy_batch: >-
+      {{
+        crucible_cis_windows_server_2022_security_option_registry_policies
+      }}
+
+
+# ============================================================
+# Manual recommendation
+# ============================================================
+
+- name: Report Windows Server 2022 CIS Manual Security Option
+  ansible.builtin.debug:
+
+    msg: >-
+      CIS 2.3.11.6 - Network security: Force logoff when
+      logon hours expire remains Manual in the source
+      Windows Server 2022 v2.0.0 benchmark and is therefore not
+      silently promoted to automated remediation.
+
+  when:
+
+    - >-
+      '2.3.11.6'
+      in
+      (
+        crucible_hardening.controls.manual
+        | default([])
+      )

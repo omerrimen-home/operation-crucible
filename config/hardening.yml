@@ -418,3 +418,152 @@ benchmarks:
 
     controls_file: >
       hardening/benchmarks/cis-microsoft-windows-11-standalone.yml
+
+  
+  cis-microsoft-windows-server-2022-standalone:
+
+    display_name: >-
+      CIS Microsoft Windows Server 2022 Stand-alone
+
+    description: >
+      Operation Crucible implementation of the CIS
+      Microsoft Windows Server 2022 Stand-alone
+      Benchmark for Member Servers.
+
+    authority: CIS
+
+    benchmark_version: "2.0.0"
+
+
+    # ========================================================
+    # BE-A
+    #
+    # Complete source inventory exists, but remediation has
+    # not yet been promoted.
+    #
+    # Switch to `implemented` during BE-B when the first
+    # complete remediation wave becomes available.
+    # ========================================================
+
+    status: implemented
+
+
+    target:
+
+      type: os
+
+      supported_profiles:
+
+        - windows-server-2022
+
+
+    profiles:
+
+
+      # ------------------------------------------------------
+      # Level 1 - Member Server
+      # ------------------------------------------------------
+
+      level1:
+
+        display_name: >-
+          Level 1 - Member Server
+
+        description: >
+          Practical and prudent CIS baseline for
+          Windows Server 2022 Member Servers.
+
+        applies_to_profiles:
+
+          - windows-server-2022
+
+        default_for_profiles:
+
+          - windows-server-2022
+
+
+      # ------------------------------------------------------
+      # Level 1 + Next Generation
+      # ------------------------------------------------------
+
+      level1-next-generation:
+
+        display_name: >-
+          Level 1 - Member Server + Next Generation
+
+        description: >
+          Level 1 Member Server baseline plus advanced
+          Next Generation Windows Security controls.
+
+        applies_to_profiles:
+
+          - windows-server-2022
+
+        default_for_profiles: []
+
+
+      # ------------------------------------------------------
+      # Level 2 - Member Server
+      # ------------------------------------------------------
+
+      level2:
+
+        display_name: >-
+          Level 2 - Member Server
+
+        description: >
+          High-security Windows Server 2022 Member
+          Server baseline extending Level 1 with
+          additional defense-in-depth recommendations.
+
+        applies_to_profiles:
+
+          - windows-server-2022
+
+        default_for_profiles: []
+
+
+      # ------------------------------------------------------
+      # Level 2 + Next Generation
+      # ------------------------------------------------------
+
+      level2-next-generation:
+
+        display_name: >-
+          Level 2 - Member Server + Next Generation
+
+        description: >
+          Complete Level 2 Member Server baseline plus
+          advanced Next Generation Windows Security
+          controls.
+
+        applies_to_profiles:
+
+          - windows-server-2022
+
+        default_for_profiles: []
+
+
+      # ------------------------------------------------------
+      # Next Generation add-on only
+      # ------------------------------------------------------
+
+      next-generation:
+
+        display_name: >-
+          Next Generation Windows Security - Member Server
+
+        description: >
+          Advanced Windows security recommendation
+          add-on requiring hardware, firmware, and
+          compatibility validation.
+
+        applies_to_profiles:
+
+          - windows-server-2022
+
+        default_for_profiles: []
+
+
+    controls_file: >
+      hardening/benchmarks/cis-microsoft-windows-server-2022-standalone.yml

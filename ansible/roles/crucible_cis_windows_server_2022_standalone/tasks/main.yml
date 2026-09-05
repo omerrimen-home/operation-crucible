@@ -1,0 +1,129 @@
+---
+
+# ============================================================
+# Operation Crucible
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Milestone BE-D
+# ============================================================
+
+
+- name: CIS Windows Server 2022 | Preflight
+  ansible.builtin.include_tasks:
+
+    file: preflight.yml
+
+
+- name: CIS Windows Server 2022 | Discover server roles
+  ansible.builtin.include_tasks:
+
+    file: discover_server_roles.yml
+
+
+# ============================================================
+# BE-B
+# ============================================================
+
+- name: CIS Windows Server 2022 | Account Policies
+  ansible.builtin.include_tasks:
+
+    file: account_policies.yml
+
+
+- name: CIS Windows Server 2022 | User Rights Assignment
+  ansible.builtin.include_tasks:
+
+    file: user_rights.yml
+
+
+- name: CIS Windows Server 2022 | Security Options
+  ansible.builtin.include_tasks:
+
+    file: security_options.yml
+
+
+- name: CIS Windows Server 2022 | Verify BE-B
+  ansible.builtin.include_tasks:
+
+    file: verify_be_b.yml
+
+
+# ============================================================
+# BE-C
+# ============================================================
+
+- name: CIS Windows Server 2022 | System Services
+  ansible.builtin.include_tasks:
+
+    file: services.yml
+
+
+- name: CIS Windows Server 2022 | Windows Defender Firewall
+  ansible.builtin.include_tasks:
+
+    file: firewall.yml
+
+
+- name: CIS Windows Server 2022 | Advanced Audit Policy
+  ansible.builtin.include_tasks:
+
+    file: advanced_audit.yml
+
+
+- name: CIS Windows Server 2022 | Verify BE-C
+  ansible.builtin.include_tasks:
+
+    file: verify_be_c.yml
+
+
+# ============================================================
+# BE-D
+# ============================================================
+
+- name: CIS Windows Server 2022 | Administrative Templates
+  ansible.builtin.include_tasks:
+
+    file: administrative_templates.yml
+
+
+- name: CIS Windows Server 2022 | Verify BE-D
+  ansible.builtin.include_tasks:
+
+    file: verify_be_d.yml
+
+
+# ============================================================
+# BE-E
+# ============================================================
+
+- name: CIS Windows Server 2022 | Advanced Security
+  ansible.builtin.include_tasks:
+
+    file: advanced_security.yml
+
+
+- name: CIS Windows Server 2022 | Verify BE-E
+  ansible.builtin.include_tasks:
+
+    file: verify_be_e.yml
+
+
+# ============================================================
+# BE-F
+#
+# Final controlled reboot, accumulated validation,
+# runtime evidence, evidence persistence, and completion.
+# ============================================================
+
+- name: CIS Windows Server 2022 | Final validation
+  ansible.builtin.include_tasks:
+
+    file: final_validation.yml
+
+
+- name: CIS Windows Server 2022 | Completion
+  ansible.builtin.include_tasks:
+
+    file: completion.yml

@@ -1,0 +1,205 @@
+---
+#
+# CIS Microsoft Windows Server 2022 Stand-alone
+# Benchmark v2.0.0
+#
+# Section 2.2 - User Rights Assignment
+#
+# Generated/reviewed by:
+#
+#   tools/implement_windows_server_2022_cis_be_b.py
+#
+# Eight controls are resolved at runtime against installed
+# Server roles and existing role-owned principals.
+#
+
+crucible_cis_windows_server_2022_user_right_settings:
+- control_id: 2.2.1
+  right: SeTrustedCredManAccessPrivilege
+  action: set
+  users: []
+- control_id: 2.2.2
+  right: SeNetworkLogonRight
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT AUTHORITY\Authenticated Users
+- control_id: 2.2.3
+  right: SeTcbPrivilege
+  action: set
+  users: []
+- control_id: 2.2.5
+  right: SeInteractiveLogonRight
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.7
+  right: SeBackupPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.8
+  right: SeSystemtimePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT AUTHORITY\LOCAL SERVICE
+- control_id: 2.2.9
+  right: SeCreatePagefilePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.10
+  right: SeCreateTokenPrivilege
+  action: set
+  users: []
+- control_id: 2.2.11
+  right: SeCreateGlobalPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT AUTHORITY\LOCAL SERVICE
+  - NT AUTHORITY\NETWORK SERVICE
+  - NT AUTHORITY\SERVICE
+- control_id: 2.2.12
+  right: SeCreatePermanentPrivilege
+  action: set
+  users: []
+- control_id: 2.2.14
+  right: SeDebugPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.15
+  right: SeDenyNetworkLogonRight
+  action: add
+  users:
+  - BUILTIN\Guests
+- control_id: 2.2.16
+  right: SeDenyBatchLogonRight
+  action: add
+  users:
+  - BUILTIN\Guests
+- control_id: 2.2.17
+  right: SeDenyServiceLogonRight
+  action: add
+  users:
+  - BUILTIN\Guests
+- control_id: 2.2.18
+  right: SeDenyInteractiveLogonRight
+  action: add
+  users:
+  - BUILTIN\Guests
+- control_id: 2.2.19
+  right: SeDenyRemoteInteractiveLogonRight
+  action: set
+  users:
+  - BUILTIN\Guests
+- control_id: 2.2.20
+  right: SeEnableDelegationPrivilege
+  action: set
+  users: []
+- control_id: 2.2.21
+  right: SeRemoteShutdownPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.24
+  right: SeIncreaseBasePriorityPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - Window Manager\Window Manager Group
+- control_id: 2.2.25
+  right: SeLoadDriverPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.27
+  right: SeSecurityPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.28
+  right: SeRelabelPrivilege
+  action: set
+  users: []
+- control_id: 2.2.29
+  right: SeSystemEnvironmentPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.31
+  right: SeProfileSingleProcessPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.32
+  right: SeSystemProfilePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT SERVICE\WdiServiceHost
+- control_id: 2.2.34
+  right: SeRestorePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.35
+  right: SeShutdownPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.36
+  right: SeTakeOwnershipPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+crucible_cis_windows_server_2022_role_aware_user_right_settings:
+- control_id: 2.2.4
+  right: SeIncreaseQuotaPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT AUTHORITY\LOCAL SERVICE
+  - NT AUTHORITY\NETWORK SERVICE
+- control_id: 2.2.6
+  right: SeRemoteInteractiveLogonRight
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - BUILTIN\Remote Desktop Users
+- control_id: 2.2.13
+  right: SeCreateSymbolicLinkPrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.22
+  right: SeAuditPrivilege
+  action: set
+  users:
+  - NT AUTHORITY\LOCAL SERVICE
+  - NT AUTHORITY\NETWORK SERVICE
+- control_id: 2.2.23
+  right: SeImpersonatePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+  - NT AUTHORITY\LOCAL SERVICE
+  - NT AUTHORITY\NETWORK SERVICE
+  - NT AUTHORITY\SERVICE
+- control_id: 2.2.26
+  right: SeLockMemoryPrivilege
+  action: set
+  users: []
+- control_id: 2.2.30
+  right: SeManageVolumePrivilege
+  action: set
+  users:
+  - BUILTIN\Administrators
+- control_id: 2.2.33
+  right: SeAssignPrimaryTokenPrivilege
+  action: set
+  users:
+  - NT AUTHORITY\LOCAL SERVICE
+  - NT AUTHORITY\NETWORK SERVICE
