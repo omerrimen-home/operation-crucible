@@ -1,0 +1,11 @@
+---
+
+- name: Configure Windows Server 2022 Active Directory forest root DC
+
+  hosts: all
+
+  gather_facts: true
+
+  roles:
+
+    - role: crucible_windows_server_2022_ad_ds

@@ -1,0 +1,87 @@
+---
+
+crucible_ad_ds_parameters: >-
+  {{
+    crucible_current_configuration.parameters
+    | default({})
+  }}
+
+
+crucible_ad_ds_deployment_mode: >-
+  {{
+    crucible_ad_ds_parameters.deployment_mode
+    | default('new_forest')
+  }}
+
+
+crucible_ad_ds_dns_domain_name: >-
+  {{
+    crucible_ad_ds_parameters.dns_domain_name
+    | default('lab.test')
+  }}
+
+
+crucible_ad_ds_domain_netbios_name: >-
+  {{
+    crucible_ad_ds_parameters.domain_netbios_name
+    | default('LAB')
+  }}
+
+
+crucible_ad_ds_service_interface_label: >-
+  {{
+    crucible_ad_ds_parameters.service_interface_label
+    | default('')
+  }}
+
+
+crucible_ad_ds_install_dns: >-
+  {{
+    crucible_ad_ds_parameters.install_dns
+    | default(true)
+  }}
+
+
+crucible_ad_ds_create_dns_delegation: >-
+  {{
+    crucible_ad_ds_parameters.create_dns_delegation
+    | default(false)
+  }}
+
+
+crucible_ad_ds_safe_mode_password: >-
+  {{
+    crucible_ad_ds_parameters.safe_mode_password
+    | default('')
+  }}
+
+
+crucible_ad_ds_database_path: >-
+  {{
+    crucible_ad_ds_parameters.database_path
+    | default('C:\Windows\NTDS')
+  }}
+
+
+crucible_ad_ds_log_path: >-
+  {{
+    crucible_ad_ds_parameters.log_path
+    | default('C:\Windows\NTDS')
+  }}
+
+
+crucible_ad_ds_sysvol_path: >-
+  {{
+    crucible_ad_ds_parameters.sysvol_path
+    | default('C:\Windows\SYSVOL')
+  }}
+
+
+crucible_ad_ds_promote_crucible_account: >-
+  {{
+    crucible_ad_ds_parameters.promote_crucible_account
+    | default(true)
+  }}
+
+
+crucible_ad_ds_reboot_timeout: 1800

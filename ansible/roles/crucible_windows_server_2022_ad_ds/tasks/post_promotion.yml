@@ -1,0 +1,333 @@
+---
+
+# ============================================================
+# Establish fresh post-promotion PSRP session
+# ============================================================
+
+- name: Reset PSRP connection after domain promotion
+  ansible.builtin.meta:
+    reset_connection
+
+
+# ============================================================
+# Make the domain-facing NIC the DC's DNS client
+# ============================================================
+
+- name: Normalize domain controller DNS networking
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ServiceMac: >-
+        {{
+          crucible_ad_ds_service_mac
+        }}
+
+      ServiceIp: >-
+        {{
+          crucible_ad_ds_service_ipv4
+        }}
+
+      DomainName: >-
+        {{
+          crucible_ad_ds_dns_domain_name
+        }}
+
+      InternetMac: >-
+        {{
+          crucible_machine
+          .network
+          .internet
+          .mac_address
+          | default('')
+        }}
+
+      ManagementMac: >-
+        {{
+          crucible_machine
+          .network
+          .management
+          .mac_address
+          | default('')
+        }}
+
+    script: |
+
+      param(
+          [string]$ServiceMac,
+          [string]$ServiceIp,
+          [string]$DomainName,
+          [string]$InternetMac,
+          [string]$ManagementMac
+      )
+
+      $ErrorActionPreference = "Stop"
+      $Ansible.Changed = $false
+
+      function Normalize-MacAddress {
+          param(
+              [string]$MacAddress
+          )
+
+          if ([string]::IsNullOrWhiteSpace($MacAddress)) {
+              return ""
+          }
+
+          return (
+              $MacAddress `
+              -replace '[:-]', ''
+          ).ToUpperInvariant()
+      }
+
+      function Find-AdapterByMac {
+          param(
+              [string]$MacAddress
+          )
+
+          $Wanted = Normalize-MacAddress `
+              -MacAddress $MacAddress
+
+          if (-not $Wanted) {
+              return $null
+          }
+
+          return @(
+              Get-NetAdapter `
+                  -IncludeHidden `
+                  -ErrorAction SilentlyContinue |
+              Where-Object {
+                  (
+                      Normalize-MacAddress `
+                          -MacAddress $_.MacAddress
+                  ) -eq $Wanted
+              }
+          ) |
+          Select-Object -First 1
+      }
+
+
+      # ------------------------------------------------------
+      # Domain-facing NIC
+      # ------------------------------------------------------
+
+      $ServiceAdapter = Find-AdapterByMac `
+          -MacAddress $ServiceMac
+
+      if ($null -eq $ServiceAdapter) {
+          throw (
+              "Could not locate Active Directory " +
+              "service adapter $ServiceMac"
+          )
+      }
+
+      $CurrentServers = @(
+          (
+              Get-DnsClientServerAddress `
+                  -InterfaceIndex $ServiceAdapter.ifIndex `
+                  -AddressFamily IPv4 `
+                  -ErrorAction Stop
+          ).ServerAddresses
+      )
+
+      if (
+          $CurrentServers.Count -ne 1 `
+          -or
+          $CurrentServers[0] -ne $ServiceIp
+      ) {
+
+          Set-DnsClientServerAddress `
+              -InterfaceIndex $ServiceAdapter.ifIndex `
+              -ServerAddresses @(
+                  $ServiceIp
+              ) `
+              -ErrorAction Stop
+
+          $Ansible.Changed = $true
+      }
+
+      $ServiceDnsClient = Get-DnsClient `
+          -InterfaceIndex $ServiceAdapter.ifIndex `
+          -ErrorAction Stop
+
+      if (
+          -not
+          $ServiceDnsClient.RegisterThisConnectionsAddress
+      ) {
+
+          Set-DnsClient `
+              -InterfaceIndex $ServiceAdapter.ifIndex `
+              -RegisterThisConnectionsAddress $true `
+              -ErrorAction Stop
+
+          $Ansible.Changed = $true
+      }
+
+
+      # ------------------------------------------------------
+      # Crucible utility overlays
+      # ------------------------------------------------------
+
+      foreach (
+          $UtilityMac in @(
+              $InternetMac,
+              $ManagementMac
+          )
+      ) {
+
+          if (
+              [string]::IsNullOrWhiteSpace(
+                  $UtilityMac
+              )
+          ) {
+              continue
+          }
+
+          $UtilityAdapter = Find-AdapterByMac `
+              -MacAddress $UtilityMac
+
+          if ($null -eq $UtilityAdapter) {
+              continue
+          }
+
+          $UtilityDnsClient = Get-DnsClient `
+              -InterfaceIndex $UtilityAdapter.ifIndex `
+              -ErrorAction Stop
+
+          if (
+              $UtilityDnsClient
+              .RegisterThisConnectionsAddress
+          ) {
+
+              Set-DnsClient `
+                  -InterfaceIndex $UtilityAdapter.ifIndex `
+                  -RegisterThisConnectionsAddress $false `
+                  -ErrorAction Stop
+
+              $Ansible.Changed = $true
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Remove stale A records produced during promotion
+      # ------------------------------------------------------
+
+      Import-Module DnsServer `
+          -ErrorAction Stop
+
+      $Records = @(
+          Get-DnsServerResourceRecord `
+              -ZoneName $DomainName `
+              -Name $env:COMPUTERNAME `
+              -RRType A `
+              -ErrorAction SilentlyContinue
+      )
+
+      foreach ($Record in $Records) {
+
+          $Address = (
+              $Record
+              .RecordData
+              .IPv4Address
+              .IPAddressToString
+          )
+
+          if ($Address -ne $ServiceIp) {
+
+              Remove-DnsServerResourceRecord `
+                  -ZoneName $DomainName `
+                  -InputObject $Record `
+                  -Force `
+                  -ErrorAction Stop
+
+              $Ansible.Changed = $true
+          }
+      }
+
+      # Registration is now safe because the utility
+      # adapters have DNS registration disabled.
+
+      ipconfig.exe /registerdns |
+          Out-Null
+
+
+# ============================================================
+# Upgrade Crucible's converted domain identity
+# ============================================================
+
+- name: Grant Crucible management identity Domain Admin membership
+  ansible.windows.win_powershell:
+
+    script: |
+
+      $ErrorActionPreference = "Stop"
+      $Ansible.Changed = $false
+
+      Import-Module ActiveDirectory `
+          -ErrorAction Stop
+
+      $Domain = Get-ADDomain `
+          -ErrorAction Stop
+
+      $CurrentSamAccountName = (
+          $env:USERNAME
+      )
+
+      $CurrentUser = Get-ADUser `
+          -Identity $CurrentSamAccountName `
+          -Properties MemberOf `
+          -ErrorAction Stop
+
+      # Domain Admins always uses RID 512. Using the SID
+      # avoids depending on the English group name.
+
+      $DomainAdminsSid = (
+          "$($Domain.DomainSID.Value)-512"
+      )
+
+      $DomainAdmins = Get-ADGroup `
+          -Identity $DomainAdminsSid `
+          -ErrorAction Stop
+
+      if (
+          $CurrentUser.MemberOf `
+          -notcontains `
+          $DomainAdmins.DistinguishedName
+      ) {
+
+          Add-ADGroupMember `
+              -Identity $DomainAdmins `
+              -Members $CurrentUser `
+              -ErrorAction Stop
+
+          $Ansible.Changed = $true
+      }
+
+      [pscustomobject]@{
+          Account = (
+              "$($Domain.NetBIOSName)\" +
+              $CurrentUser.SamAccountName
+          )
+
+          DomainAdmins = $true
+      }
+
+  when:
+    crucible_ad_ds_promote_crucible_account
+    | bool
+
+  register:
+    crucible_ad_ds_management_account
+
+
+# Microsoft explicitly notes that a fresh logon is needed
+# for newly-added administrative group membership to appear
+# in the security token.
+
+- name: Reset PSRP connection after domain privilege transition
+  ansible.builtin.meta:
+    reset_connection
+
+  when:
+    crucible_ad_ds_promote_crucible_account
+    | bool

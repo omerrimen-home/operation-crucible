@@ -592,6 +592,29 @@ def build_unattend_iso(
         / "crucible-bootstrap.json"
     )
 
+    guest_additions = (
+        autoinstall.get(
+            "guest_additions",
+            {},
+        )
+    )
+
+    if not isinstance(
+        guest_additions,
+        dict,
+    ):
+        raise WindowsUnattendError(
+            "autoinstall.guest_additions "
+            "must be a mapping."
+        )
+
+    guest_additions_enabled = bool(
+        guest_additions.get(
+            "enabled",
+            True,
+        )
+    )
+
     bootstrap_config_data = {
         "schema_version": 2,
 
@@ -658,6 +681,12 @@ def build_unattend_iso(
             ),
             "topology_metric": (
                 TOPOLOGY_ROUTE_METRIC
+            ),
+        },
+
+        "guest_additions": {
+            "enabled": (
+                guest_additions_enabled
             ),
         },
     }

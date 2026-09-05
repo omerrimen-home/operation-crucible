@@ -1,0 +1,25 @@
+---
+
+- name: Run Active Directory preflight
+  ansible.builtin.import_tasks:
+    preflight.yml
+
+
+- name: Prepare Active Directory networking
+  ansible.builtin.import_tasks:
+    network.yml
+
+
+- name: Install and promote Active Directory
+  ansible.builtin.import_tasks:
+    promote.yml
+
+
+- name: Normalize post-promotion domain controller state
+  ansible.builtin.import_tasks:
+    post_promotion.yml
+
+
+- name: Verify Active Directory domain controller
+  ansible.builtin.import_tasks:
+    verify.yml

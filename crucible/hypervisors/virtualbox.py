@@ -1471,9 +1471,15 @@ class VirtualBoxProvider:
         *,
         vendor_iso: str | Path,
         seed_iso: str | Path | None = None,
-        controller_name: str = DEFAULT_STORAGE_CONTROLLER,
+        guest_additions_iso: (
+            str | Path | None
+        ) = None,
+        controller_name: str = (
+            DEFAULT_STORAGE_CONTROLLER
+        ),
         vendor_port: int = 1,
         seed_port: int = 2,
+        guest_additions_port: int = 3,
     ) -> None:
 
         self.attach_iso(
@@ -1489,6 +1495,18 @@ class VirtualBoxProvider:
                 seed_iso,
                 controller_name=controller_name,
                 port=seed_port,
+            )
+
+        if guest_additions_iso is not None:
+            self.attach_iso(
+                vm_name,
+                guest_additions_iso,
+                controller_name=(
+                    controller_name
+                ),
+                port=(
+                    guest_additions_port
+                ),
             )
 
     def detach_iso(
@@ -1523,6 +1541,75 @@ class VirtualBoxProvider:
                 "none",
             ]
         )
+
+
+    def default_guest_additions_iso(
+        self,
+    ) -> Path:
+        """
+        Return the Guest Additions ISO configured by the
+        installed VirtualBox host.
+
+        VBoxManage reports this through:
+
+            VBoxManage list systemproperties
+        """
+
+        result = self._run(
+            [
+                "list",
+                "systemproperties",
+            ]
+        )
+
+        match = re.search(
+            (
+                r"^Default Guest Additions ISO:"
+                r"\s*(?P<path>.*?)\s*$"
+            ),
+            result.stdout,
+            flags=re.MULTILINE,
+        )
+
+        if not match:
+            raise VirtualBoxConfigurationError(
+                "VirtualBox did not report a "
+                "Default Guest Additions ISO."
+            )
+
+        raw_path = (
+            match.group("path")
+            .strip()
+        )
+
+        if (
+            not raw_path
+            or raw_path.lower()
+            in {
+                "none",
+                "<none>",
+            }
+        ):
+            raise VirtualBoxConfigurationError(
+                "VirtualBox has no default "
+                "Guest Additions ISO configured."
+            )
+
+        iso_path = (
+            Path(raw_path)
+            .expanduser()
+            .resolve()
+        )
+
+        if not iso_path.is_file():
+            raise VirtualBoxConfigurationError(
+                "VirtualBox reported a Guest "
+                "Additions ISO that does not exist: "
+                f"{iso_path}"
+            )
+
+        return iso_path
+
 
     # ------------------------------------------------------------------
     # Boot configuration

@@ -1,0 +1,140 @@
+---
+
+- name: Configure pre-promotion DNS registration behavior
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ServiceMac: >-
+        {{
+          crucible_ad_ds_service_mac
+        }}
+
+      InternetMac: >-
+        {{
+          crucible_machine
+          .network
+          .internet
+          .mac_address
+          | default('')
+        }}
+
+      ManagementMac: >-
+        {{
+          crucible_machine
+          .network
+          .management
+          .mac_address
+          | default('')
+        }}
+
+    script: |
+
+      param(
+          [string]$ServiceMac,
+          [string]$InternetMac,
+          [string]$ManagementMac
+      )
+
+      $ErrorActionPreference = "Stop"
+      $Ansible.Changed = $false
+
+      function Normalize-MacAddress {
+          param(
+              [string]$MacAddress
+          )
+
+          if ([string]::IsNullOrWhiteSpace($MacAddress)) {
+              return ""
+          }
+
+          return (
+              $MacAddress `
+              -replace '[:-]', ''
+          ).ToUpperInvariant()
+      }
+
+      function Find-AdapterByMac {
+          param(
+              [string]$MacAddress
+          )
+
+          $Wanted = Normalize-MacAddress `
+              -MacAddress $MacAddress
+
+          if (-not $Wanted) {
+              return $null
+          }
+
+          return @(
+              Get-NetAdapter `
+                  -IncludeHidden `
+                  -ErrorAction SilentlyContinue |
+              Where-Object {
+                  (
+                      Normalize-MacAddress `
+                          -MacAddress $_.MacAddress
+                  ) -eq $Wanted
+              }
+          ) |
+          Select-Object -First 1
+      }
+
+      function Set-RegistrationState {
+          param(
+              [string]$MacAddress,
+              [bool]$Enabled,
+              [bool]$Required
+          )
+
+          $Adapter = Find-AdapterByMac `
+              -MacAddress $MacAddress
+
+          if ($null -eq $Adapter) {
+
+              if ($Required) {
+                  throw (
+                      "Could not locate required adapter " +
+                      "with MAC $MacAddress"
+                  )
+              }
+
+              return
+          }
+
+          $DnsClient = Get-DnsClient `
+              -InterfaceIndex $Adapter.ifIndex `
+              -ErrorAction Stop
+
+          if (
+              [bool]$DnsClient.RegisterThisConnectionsAddress `
+              -ne
+              $Enabled
+          ) {
+
+              Set-DnsClient `
+                  -InterfaceIndex $Adapter.ifIndex `
+                  -RegisterThisConnectionsAddress $Enabled `
+                  -ErrorAction Stop
+
+              $Ansible.Changed = $true
+          }
+      }
+
+      # The actual lab-facing AD NIC is the only interface
+      # allowed to register an address in domain DNS.
+
+      Set-RegistrationState `
+          -MacAddress $ServiceMac `
+          -Enabled $true `
+          -Required $true
+
+      Set-RegistrationState `
+          -MacAddress $InternetMac `
+          -Enabled $false `
+          -Required $false
+
+      Set-RegistrationState `
+          -MacAddress $ManagementMac `
+          -Enabled $false `
+          -Required $false

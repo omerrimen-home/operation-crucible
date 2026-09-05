@@ -727,7 +727,8 @@ configurations:
 
       requires: []
 
-      conflicts: []
+      conflicts:
+        - windows-server-2022-ad-ds
 
 
     implementation:
@@ -865,34 +866,140 @@ configurations:
     capabilities: []
 
 
-  active-directory-domain-controller:
-    display_name: Active Directory Domain Controller
+  windows-server-2022-ad-ds:
+
+    display_name: >-
+      Active Directory Domain Services - New Forest / Root DC
 
     description: >
-      Promotes Windows Server 2022 into an Active Directory
-      Domain Services domain controller.
+      Promotes Windows Server 2022 into the first writable
+      domain controller of a new Active Directory forest.
+      Active Directory-integrated DNS is installed and the
+      domain service is bound to a persistent static
+      VirtualBox Internal Network interface.
 
-    selectable: false
+    selectable: true
+
 
     supported_os:
+
       - family: windows
         distribution: windows-server
         version: "2022"
 
+
     requirements:
+
       network:
+
         min_topology_interfaces: 1
+
         min_static_ipv4_interfaces: 1
+
         min_internal_network_interfaces: 1
+
         min_static_internal_interfaces: 1
 
+
     relationships:
+
       requires: []
-      conflicts: []
 
-    implementation: null
+      conflicts:
+        - windows-server-2022-cis
 
-    parameters: {}
+
+    implementation:
+
+      backend: ansible
+
+      playbook: >-
+        ansible/playbooks/configurations/windows_server_2022_ad_ds.yml
+
+      order: 700
+
+
+    parameters:
+
+      # ------------------------------------------------------
+      # Deployment model
+      #
+      # v0.3 implements only the first forest/root DC.
+      # v0.4 can extend this contract with additional_dc.
+      # ------------------------------------------------------
+
+      deployment_mode: new_forest
+
+
+      # ------------------------------------------------------
+      # Active Directory identity
+      #
+      # Forge overrides these after interactive prompting.
+      # ------------------------------------------------------
+
+      dns_domain_name: lab.test
+
+      domain_netbios_name: LAB
+
+      service_interface_label: ""
+
+
+      # ------------------------------------------------------
+      # DNS
+      # ------------------------------------------------------
+
+      install_dns: true
+
+      create_dns_delegation: false
+
+
+      # ------------------------------------------------------
+      # Directory Services Restore Mode
+      #
+      # Forge MUST override this with a generated or
+      # user-provided secret. The generated machine manifest
+      # lives under .crucible/ and is not committed.
+      # ------------------------------------------------------
+
+      safe_mode_password: ""
+
+
+      # ------------------------------------------------------
+      # AD DS paths
+      # ------------------------------------------------------
+
+      database_path: 'C:\Windows\NTDS'
+
+      log_path: 'C:\Windows\NTDS'
+
+      sysvol_path: 'C:\Windows\SYSVOL'
+
+
+      # ------------------------------------------------------
+      # Crucible management
+      #
+      # The custom local administrator used during promotion
+      # becomes a domain principal but is not automatically
+      # placed in Domain Admins.
+      # ------------------------------------------------------
+
+      promote_crucible_account: true
+
+
+    firewall:
+
+      inbound: []
+
+      forward: []
+
+
+    capabilities:
+
+      - service:active-directory
+
+      - service:dns-server
+
+      - identity:domain-controller
 
 
   authoritative-dns:

@@ -1,0 +1,92 @@
+---
+
+# ============================================================
+# Install AD DS binaries
+# ============================================================
+
+- name: Install Active Directory Domain Services
+  ansible.windows.win_feature:
+
+    name:
+      - AD-Domain-Services
+
+    state: present
+
+    include_management_tools: true
+
+  register:
+    crucible_ad_ds_feature_install
+
+
+- name: Reboot after AD DS feature installation when required
+  ansible.windows.win_reboot:
+
+    reboot_timeout: >-
+      {{
+        crucible_ad_ds_reboot_timeout
+      }}
+
+  when:
+    crucible_ad_ds_feature_install.reboot_required
+    | default(false)
+    | bool
+
+
+# ============================================================
+# Create forest and promote first domain controller
+# ============================================================
+
+- name: Create Active Directory forest root domain
+  microsoft.ad.domain:
+
+    dns_domain_name: >-
+      {{
+        crucible_ad_ds_dns_domain_name
+      }}
+
+    domain_netbios_name: >-
+      {{
+        crucible_ad_ds_domain_netbios_name
+      }}
+
+    safe_mode_password: >-
+      {{
+        crucible_ad_ds_safe_mode_password
+      }}
+
+    install_dns: >-
+      {{
+        crucible_ad_ds_install_dns
+        | bool
+      }}
+
+    create_dns_delegation: >-
+      {{
+        crucible_ad_ds_create_dns_delegation
+        | bool
+      }}
+
+    database_path: >-
+      {{
+        crucible_ad_ds_database_path
+      }}
+
+    log_path: >-
+      {{
+        crucible_ad_ds_log_path
+      }}
+
+    sysvol_path: >-
+      {{
+        crucible_ad_ds_sysvol_path
+      }}
+
+    reboot: true
+
+    reboot_timeout: >-
+      {{
+        crucible_ad_ds_reboot_timeout
+      }}
+
+  register:
+    crucible_ad_ds_domain_install

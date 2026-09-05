@@ -1,0 +1,367 @@
+---
+
+- name: Validate Active Directory domain controller health
+  ansible.windows.win_powershell:
+
+    parameters:
+
+      ExpectedDomain: >-
+        {{
+          crucible_ad_ds_dns_domain_name
+        }}
+
+      ExpectedNetbios: >-
+        {{
+          crucible_ad_ds_domain_netbios_name
+        }}
+
+      ExpectedIp: >-
+        {{
+          crucible_ad_ds_service_ipv4
+        }}
+
+      ExpectDns: >-
+        {{
+          crucible_ad_ds_install_dns
+          | bool
+        }}
+
+      ExpectDomainAdmin: >-
+        {{
+          crucible_ad_ds_promote_crucible_account
+          | bool
+        }}
+
+    script: |
+
+      param(
+          [string]$ExpectedDomain,
+          [string]$ExpectedNetbios,
+          [string]$ExpectedIp,
+          [bool]$ExpectDns,
+          [bool]$ExpectDomainAdmin
+      )
+
+      $ErrorActionPreference = "Stop"
+      $Ansible.Changed = $false
+
+      Import-Module ActiveDirectory `
+          -ErrorAction Stop
+
+
+      # ------------------------------------------------------
+      # Active Directory identity
+      # ------------------------------------------------------
+
+      $Domain = Get-ADDomain `
+          -ErrorAction Stop
+
+      $Forest = Get-ADForest `
+          -ErrorAction Stop
+
+      if (
+          $Domain.DNSRoot `
+          -ine
+          $ExpectedDomain
+      ) {
+          throw (
+              "Expected domain $ExpectedDomain, " +
+              "found $($Domain.DNSRoot)"
+          )
+      }
+
+      if (
+          $Forest.RootDomain `
+          -ine
+          $ExpectedDomain
+      ) {
+          throw (
+              "Expected forest root $ExpectedDomain, " +
+              "found $($Forest.RootDomain)"
+          )
+      }
+
+      if (
+          $Domain.NetBIOSName `
+          -ine
+          $ExpectedNetbios
+      ) {
+          throw (
+              "Expected NetBIOS domain " +
+              "$ExpectedNetbios, found " +
+              "$($Domain.NetBIOSName)"
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Windows machine role
+      #
+      # Win32_ComputerSystem:
+      #   4 = backup domain controller
+      #   5 = primary domain controller
+      # ------------------------------------------------------
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem `
+          -ErrorAction Stop
+
+      if (
+          [int]$ComputerSystem.DomainRole `
+          -notin @(
+              4,
+              5
+          )
+      ) {
+          throw (
+              "Windows does not report this machine " +
+              "as a domain controller."
+          )
+      }
+
+
+      # ------------------------------------------------------
+      # Required AD services
+      # ------------------------------------------------------
+
+      $RequiredServices = @(
+          "NTDS",
+          "Netlogon",
+          "Kdc"
+      )
+
+      if ($ExpectDns) {
+          $RequiredServices += "DNS"
+      }
+
+      foreach (
+          $ServiceName
+          in
+          $RequiredServices
+      ) {
+
+          $Service = Get-Service `
+              -Name $ServiceName `
+              -ErrorAction Stop
+
+          if (
+              $Service.Status `
+              -ne
+              "Running"
+          ) {
+              throw (
+                  "Required Active Directory service " +
+                  "$ServiceName is not running."
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # AD-integrated DNS zone
+      # ------------------------------------------------------
+
+      if ($ExpectDns) {
+
+          Import-Module DnsServer `
+              -ErrorAction Stop
+
+          $null = Get-DnsServerZone `
+              -Name $ExpectedDomain `
+              -ErrorAction Stop
+
+
+          # LDAP DC locator record.
+
+          $LdapRecord = @(
+              Resolve-DnsName `
+                  -Name (
+                      "_ldap._tcp.dc._msdcs." +
+                      $ExpectedDomain
+                  ) `
+                  -Type SRV `
+                  -Server $ExpectedIp `
+                  -ErrorAction Stop
+          )
+
+          if (
+              $LdapRecord.Count
+              -lt 1
+          ) {
+              throw (
+                  "Active Directory LDAP SRV "
+                  + "record was not found."
+              )
+          }
+
+
+          # Kerberos locator record.
+
+          $KerberosRecord = @(
+              Resolve-DnsName `
+                  -Name (
+                      "_kerberos._tcp." +
+                      $ExpectedDomain
+                  ) `
+                  -Type SRV `
+                  -Server $ExpectedIp `
+                  -ErrorAction Stop
+          )
+
+          if (
+              $KerberosRecord.Count
+              -lt 1
+          ) {
+              throw (
+                  "Active Directory Kerberos SRV "
+                  + "record was not found."
+              )
+          }
+
+
+          # The DC hostname must resolve only to the
+          # domain-facing Crucible topology IPv4 address.
+
+          $HostRecords = @(
+              Resolve-DnsName `
+                  -Name (
+                      $env:COMPUTERNAME +
+                      "." +
+                      $ExpectedDomain
+                  ) `
+                  -Type A `
+                  -Server $ExpectedIp `
+                  -ErrorAction Stop |
+              Where-Object {
+                  $_.Type -eq "A"
+              }
+          )
+
+          $HostAddresses = @(
+              $HostRecords |
+              ForEach-Object {
+                  $_.IPAddress
+              }
+          )
+
+          if (
+              $ExpectedIp `
+              -notin
+              $HostAddresses
+          ) {
+              throw (
+                  "Domain controller DNS record " +
+                  "does not contain expected address " +
+                  "$ExpectedIp."
+              )
+          }
+
+          $UnexpectedAddresses = @(
+              $HostAddresses |
+              Where-Object {
+                  $_ -ne $ExpectedIp
+              }
+          )
+
+          if (
+              $UnexpectedAddresses.Count
+              -gt 0
+          ) {
+              throw (
+                  "Domain controller DNS contains " +
+                  "unexpected IPv4 addresses: " +
+                  (
+                      $UnexpectedAddresses
+                      -join ", "
+                  )
+              )
+          }
+      }
+
+
+      # ------------------------------------------------------
+      # Crucible automation account
+      # ------------------------------------------------------
+
+      if ($ExpectDomainAdmin) {
+
+          $CurrentUser = Get-ADUser `
+              -Identity $env:USERNAME `
+              -Properties MemberOf `
+              -ErrorAction Stop
+
+          $DomainAdminsSid = (
+              "$($Domain.DomainSID.Value)-512"
+          )
+
+          $DomainAdmins = Get-ADGroup `
+              -Identity $DomainAdminsSid `
+              -ErrorAction Stop
+
+          if (
+              $CurrentUser.MemberOf `
+              -notcontains `
+              $DomainAdmins.DistinguishedName
+          ) {
+              throw (
+                  "Crucible management identity " +
+                  "is not a member of Domain Admins."
+              )
+          }
+      }
+
+
+      [pscustomobject]@{
+
+          Domain = (
+              $Domain.DNSRoot
+          )
+
+          Forest = (
+              $Forest.RootDomain
+          )
+
+          NetBIOS = (
+              $Domain.NetBIOSName
+          )
+
+          DomainController = (
+              $env:COMPUTERNAME
+          )
+
+          IPv4 = (
+              $ExpectedIp
+          )
+
+          DomainRole = (
+              [int]$ComputerSystem.DomainRole
+          )
+
+          DNS = (
+              $ExpectDns
+          )
+
+          ActiveDirectoryHealthy = (
+              $true
+          )
+      }
+
+  register:
+    crucible_ad_ds_validation
+
+  changed_when: false
+
+  retries: 30
+
+  delay: 10
+
+  until:
+    crucible_ad_ds_validation
+    is succeeded
+
+
+- name: Display Active Directory validation result
+  ansible.builtin.debug:
+
+    var:
+      crucible_ad_ds_validation.output

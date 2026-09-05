@@ -1,0 +1,228 @@
+---
+
+# ============================================================
+# Resolve domain-facing topology interface
+# ============================================================
+
+- name: Resolve Active Directory service interface candidates
+  ansible.builtin.set_fact:
+
+    crucible_ad_ds_service_interface_matches: >-
+      {{
+        crucible_machine.network.topology
+        | default([])
+        | selectattr(
+            'label',
+            'equalto',
+            crucible_ad_ds_service_interface_label
+          )
+        | list
+      }}
+
+
+- name: Validate Active Directory service interface selection
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_ad_ds_service_interface_label
+        | length
+        > 0
+
+      - >-
+        crucible_ad_ds_service_interface_matches
+        | length
+        == 1
+
+    fail_msg: >-
+      Active Directory service_interface_label must
+      identify exactly one persistent topology interface.
+
+
+- name: Record Active Directory service interface
+  ansible.builtin.set_fact:
+
+    crucible_ad_ds_service_interface: >-
+      {{
+        crucible_ad_ds_service_interface_matches[0]
+      }}
+
+
+- name: Validate Active Directory service interface properties
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_ad_ds_service_interface
+        .attachment.type
+        | lower
+        == 'intnet'
+
+      - >-
+        crucible_ad_ds_service_interface
+        .ipv4.method
+        | lower
+        == 'static'
+
+      - >-
+        crucible_ad_ds_service_interface
+        .ipv4.address
+        | default('')
+        | length
+        > 0
+
+      - >-
+        crucible_ad_ds_service_interface
+        .mac_address
+        | default('')
+        | length
+        > 0
+
+    fail_msg: >-
+      Active Directory requires a persistent static
+      VirtualBox Internal Network interface.
+
+
+- name: Resolve Active Directory service IPv4 address
+  ansible.builtin.set_fact:
+
+    crucible_ad_ds_service_ipv4: >-
+      {{
+        crucible_ad_ds_service_interface
+        .ipv4.address
+        .split('/')[0]
+      }}
+
+    crucible_ad_ds_service_mac: >-
+      {{
+        crucible_ad_ds_service_interface
+        .mac_address
+      }}
+
+
+# ============================================================
+# Validate configuration parameters
+# ============================================================
+
+- name: Validate Active Directory configuration
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        crucible_ad_ds_deployment_mode
+        == 'new_forest'
+
+      - >-
+        crucible_ad_ds_dns_domain_name
+        | length
+        > 0
+
+      - >-
+        '.' in
+        crucible_ad_ds_dns_domain_name
+
+      - >-
+        crucible_ad_ds_domain_netbios_name
+        | length
+        > 0
+
+      - >-
+        crucible_ad_ds_domain_netbios_name
+        | length
+        <= 15
+
+      - >-
+        crucible_ad_ds_safe_mode_password
+        | length
+        > 0
+
+      - >-
+        crucible_ad_ds_install_dns
+        | bool
+
+    fail_msg: >-
+      The Windows Server 2022 Active Directory role
+      received invalid or unsupported parameters.
+
+
+# ============================================================
+# Inspect current machine role
+# ============================================================
+
+- name: Inspect existing Windows domain state
+  ansible.windows.win_powershell:
+
+    script: |
+
+      $ComputerSystem = Get-CimInstance `
+          -ClassName Win32_ComputerSystem `
+          -ErrorAction Stop
+
+      [pscustomobject]@{
+          PartOfDomain = [bool]$ComputerSystem.PartOfDomain
+          Domain       = [string]$ComputerSystem.Domain
+          DomainRole   = [int]$ComputerSystem.DomainRole
+      }
+
+  register:
+    crucible_ad_ds_existing_state
+
+  changed_when: false
+
+
+- name: Record existing Windows domain state
+  ansible.builtin.set_fact:
+
+    crucible_ad_ds_existing_part_of_domain: >-
+      {{
+        crucible_ad_ds_existing_state
+        .output[0]
+        .PartOfDomain
+        | bool
+      }}
+
+    crucible_ad_ds_existing_domain: >-
+      {{
+        crucible_ad_ds_existing_state
+        .output[0]
+        .Domain
+        | string
+      }}
+
+    crucible_ad_ds_existing_domain_role: >-
+      {{
+        crucible_ad_ds_existing_state
+        .output[0]
+        .DomainRole
+        | int
+      }}
+
+
+- name: Reject incompatible existing domain membership
+  ansible.builtin.assert:
+
+    that:
+
+      - >-
+        not
+        crucible_ad_ds_existing_part_of_domain
+        or
+        (
+          crucible_ad_ds_existing_domain_role
+          | int
+          >= 4
+          and
+          crucible_ad_ds_existing_domain
+          | lower
+          ==
+          crucible_ad_ds_dns_domain_name
+          | lower
+        )
+
+    fail_msg: >-
+      deployment_mode=new_forest requires a standalone
+      Windows Server, or an already-promoted DC for the
+      same requested domain.

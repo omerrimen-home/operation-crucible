@@ -308,6 +308,35 @@ def build_seed_iso(
         bootstrap_bytes
     ).decode("ascii")
 
+    guest_additions = (
+        autoinstall.get(
+            "guest_additions",
+            {},
+        )
+    )
+
+    if not isinstance(
+        guest_additions,
+        dict,
+    ):
+        raise UbuntuAutoinstallError(
+            "autoinstall.guest_additions "
+            "must be a mapping."
+        )
+
+    guest_additions_enabled = bool(
+        guest_additions.get(
+            "enabled",
+            True,
+        )
+    )
+
+    guest_additions_argument = (
+        "true"
+        if guest_additions_enabled
+        else "false"
+    )
+
     late_commands = [
         (
             "printf '%s' "
@@ -324,7 +353,9 @@ def build_seed_iso(
         (
             "curtin in-target -- "
             "/usr/local/sbin/"
-            f"crucible-bootstrap.sh {shlex.quote(bootstrap_username)}"
+            "crucible-bootstrap.sh "
+            f"{shlex.quote(bootstrap_username)} "
+            f"{guest_additions_argument}"
         ),
     ]
 

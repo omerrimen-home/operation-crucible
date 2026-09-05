@@ -4,12 +4,28 @@ set -Eeuo pipefail
 
 CRUCIBLE_USER="${1:-crucible}"
 
+INSTALL_GUEST_ADDITIONS="${2:-true}"
+
 LOG_FILE="/var/log/crucible-bootstrap.log"
 
 MARKER_FILE="/var/lib/crucible/bootstrap-complete"
 
 FAILURE_FILE="/var/lib/crucible/bootstrap-failed"
 
+case "${INSTALL_GUEST_ADDITIONS,,}" in
+    1|true|yes|y|on)
+        INSTALL_GUEST_ADDITIONS="true"
+        ;;
+
+    0|false|no|n|off)
+        INSTALL_GUEST_ADDITIONS="false"
+        ;;
+
+    *)
+        echo "ERROR: Invalid Guest Additions setting: ${INSTALL_GUEST_ADDITIONS}"
+        exit 1
+        ;;
+esac
 
 mkdir -p /var/lib/crucible
 
@@ -57,7 +73,7 @@ echo " Operation Crucible - Linux Bootstrap"
 echo "=========================================="
 
 echo
-echo "[1/5] Verifying Crucible prerequisites..."
+echo "[1/6] Verifying Crucible prerequisites..."
 
 if [[ ! -x /usr/sbin/sshd ]]; then
     echo "ERROR: OpenSSH server is not installed."
@@ -112,7 +128,7 @@ echo "Required packages are available."
 # ------------------------------------------------------------
 
 echo
-echo "[2/5] Updating installed operating system..."
+echo "[2/6] Updating installed operating system..."
 
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
@@ -217,11 +233,159 @@ fi
 
 
 # ------------------------------------------------------------
+# VirtualBox Guest Additions
+#
+# Linux guests use the distribution-provided VirtualBox guest
+# packages rather than executing VBoxLinuxAdditions.run from
+# Oracle's ISO.
+#
+# This is deliberate:
+#
+#   - Ubuntu executes this script through curtin in-target;
+#   - Kali executes it during first boot;
+#   - distribution packages integrate cleanly with the target
+#     kernel/package manager;
+#   - package upgrades remain managed by APT afterward.
+#
+# virtualbox-guest-utils provides the core guest service.
+# virtualbox-guest-x11 is installed only when an X server is
+# already part of the guest.
+# ------------------------------------------------------------
+
+echo
+echo "[3/6] Configuring VirtualBox Guest Additions..."
+
+if [[ "$INSTALL_GUEST_ADDITIONS" == "true" ]]; then
+
+    echo "Guest Additions requested."
+
+    GUEST_ADDITIONS_PACKAGES=(
+        virtualbox-guest-utils
+    )
+
+    # Desktop guests need the X11 integration package.
+    #
+    # Do not install it blindly on Ubuntu Server because that
+    # would unnecessarily pull graphical dependencies into a
+    # headless server VM.
+
+    if (
+        dpkg-query \
+            -W \
+            -f='${Status}\n' \
+            xserver-xorg-core \
+            2>/dev/null \
+        | grep \
+            -qx \
+            'install ok installed'
+    ); then
+
+        echo "Graphical Linux installation detected."
+
+        GUEST_ADDITIONS_PACKAGES+=(
+            virtualbox-guest-x11
+        )
+
+    else
+
+        echo "Headless Linux installation detected;" 
+        echo "X11 Guest Additions will not be installed."
+
+    fi
+
+    # Verify the requested packages actually exist in the
+    # configured repositories before changing package state.
+
+    for package in \
+        "${GUEST_ADDITIONS_PACKAGES[@]}"
+    do
+
+        if ! apt-cache \
+            show \
+            "$package" \
+            >/dev/null 2>&1
+        then
+            echo "ERROR: Required VirtualBox Guest Additions "
+            echo "package is not available: $package"
+
+            exit 1
+        fi
+
+    done
+
+    echo "Installing VirtualBox Guest Additions packages: "
+    echo "${GUEST_ADDITIONS_PACKAGES[*]}"
+
+    apt-get \
+        "${APT_OPTIONS[@]}" \
+        -y \
+        install \
+        "${GUEST_ADDITIONS_PACKAGES[@]}"
+
+    # Shared-folder access is controlled by the vboxsf group.
+    # Not every package/version necessarily creates it, so the
+    # membership change is conditional.
+
+    if getent \
+        group \
+        vboxsf \
+        >/dev/null 2>&1
+    then
+
+        usermod \
+            -aG \
+            vboxsf \
+            "$CRUCIBLE_USER"
+
+        echo "Added $CRUCIBLE_USER to the vboxsf group."
+
+    fi
+
+    # Ubuntu's curtin environment may not permit a real service
+    # restart while operating inside /target.
+    #
+    # Enabling/restarting is therefore best effort here.
+    # The normal guest boot will start VBoxService afterward.
+
+    systemctl \
+        enable \
+        virtualbox-guest-utils.service \
+        >/dev/null 2>&1 \
+        || true
+
+    systemctl \
+        restart \
+        virtualbox-guest-utils.service \
+        >/dev/null 2>&1 \
+        || true
+
+    # Verify that installation produced the core VirtualBox
+    # guest service binary.
+
+    if [[ ! -x /usr/sbin/VBoxService ]]; then
+
+        echo "ERROR: Guest Additions packages were installed "
+        echo "but /usr/sbin/VBoxService was not created."
+
+        exit 1
+    fi
+
+    echo "VirtualBox Guest Additions installed."
+
+else
+
+    echo "VirtualBox Guest Additions installation "
+    echo "disabled by machine manifest."
+
+fi
+
+
+# ------------------------------------------------------------
 # Crucible privilege escalation
 # ------------------------------------------------------------
 
 echo
-echo "[3/5] Configuring Crucible privilege escalation..."
+echo "[4/6] Configuring Crucible privilege escalation..."
 
 install -d -m 0755 /etc/sudoers.d
 
@@ -247,7 +411,7 @@ echo "Passwordless sudo configured for $CRUCIBLE_USER."
 # ------------------------------------------------------------
 
 echo
-echo "[4/5] Configuring SSH..."
+echo "[5/6] Configuring SSH..."
 
 install -d -m 0755 /etc/ssh/sshd_config.d
 
@@ -274,7 +438,7 @@ systemctl restart ssh.service >/dev/null 2>&1 || true
 # ------------------------------------------------------------
 
 echo
-echo "[5/5] Marking bootstrap complete..."
+echo "[6/6] Marking bootstrap complete..."
 
 rm -f "$FAILURE_FILE"
 

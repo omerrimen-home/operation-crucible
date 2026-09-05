@@ -179,6 +179,8 @@ SUPPORTED_OPERATING_SYSTEMS = {
     },
 }
 
+DEFAULT_INSTALL_GUEST_ADDITIONS = True
+
 DEFAULT_AUTOINSTALL = {
     "realname": "Crucible User",
     "username": "crucible",
@@ -210,6 +212,22 @@ DEFAULT_WINDOWS_UNATTEND = {
 
     "organization": "Operation Crucible",
 }
+
+ACTIVE_DIRECTORY_CONFIGURATION_ID = (
+    "windows-server-2022-ad-ds"
+)
+
+
+AD_DNS_LABEL_PATTERN = re.compile(
+    r"^[A-Za-z0-9]"
+    r"(?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+)
+
+
+AD_NETBIOS_NAME_PATTERN = re.compile(
+    r"^[A-Za-z0-9]"
+    r"(?:[A-Za-z0-9-]{0,13}[A-Za-z0-9])?$"
+)
 
 USE_COLOR = sys.stdout.isatty()
 
@@ -288,6 +306,40 @@ def ask_yes_no(prompt: str, *, default: bool = True) -> bool:
 def ask_with_default(prompt: str, default: str) -> str:
     answer = input(f"{prompt} [{default}]: ").strip()
     return answer if answer else default
+
+
+def ask_guest_additions() -> bool:
+    """
+    Ask whether VirtualBox Guest Additions should be
+    installed during the unattended bootstrap.
+
+    Guest Additions are enabled by default for every
+    currently supported Crucible operating system.
+    """
+
+    print()
+    print(
+        f"{BOLD}"
+        "VirtualBox Guest Additions"
+        f"{RESET}"
+    )
+    print()
+
+    print(
+        "Guest Additions provide improved VirtualBox "
+        "guest integration, including shared clipboard, "
+        "display integration, guest properties and other "
+        "host/guest services."
+    )
+
+    print()
+
+    return ask_yes_no(
+        "Install VirtualBox Guest Additions?",
+        default=(
+            DEFAULT_INSTALL_GUEST_ADDITIONS
+        ),
+    )
 
 
 def ask_vm_count() -> int:
@@ -951,6 +1003,598 @@ def ask_hardening_risk_parameters(
 
 
     return overrides
+
+
+def normalize_ad_dns_domain_name(
+    value: str,
+) -> str:
+    """
+    Validate and normalize an Active Directory DNS
+    domain name.
+
+    Crucible deliberately requires a multi-label DNS
+    name for a new forest.
+    """
+
+    candidate = (
+        value
+        .strip()
+        .rstrip(".")
+    )
+
+    if (
+        not candidate
+        or
+        len(candidate) > 253
+    ):
+        raise CrucibleForgeError(
+            "Active Directory DNS domain name "
+            "must contain between 1 and 253 "
+            "characters."
+        )
+
+    labels = candidate.split(
+        "."
+    )
+
+    if len(labels) < 2:
+        raise CrucibleForgeError(
+            "Active Directory forest root domains "
+            "must use a multi-label DNS name, "
+            "for example lab.test."
+        )
+
+    for label in labels:
+
+        if (
+            len(label) > 63
+            or
+            not AD_DNS_LABEL_PATTERN.fullmatch(
+                label
+            )
+        ):
+            raise CrucibleForgeError(
+                "Invalid Active Directory DNS "
+                f"label: {label!r}"
+            )
+
+    return candidate.lower()
+
+
+def normalize_ad_netbios_name(
+    value: str,
+) -> str:
+    """
+    Validate the legacy NetBIOS domain name.
+
+    Active Directory NetBIOS domain names are limited
+    to 15 characters.
+    """
+
+    candidate = (
+        value
+        .strip()
+        .upper()
+    )
+
+    if not (
+        AD_NETBIOS_NAME_PATTERN.fullmatch(
+            candidate
+        )
+    ):
+        raise CrucibleForgeError(
+            "Active Directory NetBIOS names must "
+            "contain 1-15 letters, numbers, or "
+            "hyphens and must begin and end with "
+            "a letter or number."
+        )
+
+    if candidate.isdigit():
+        raise CrucibleForgeError(
+            "Active Directory NetBIOS name may "
+            "not contain only numbers."
+        )
+
+    return candidate
+
+
+def windows_password_meets_complexity(
+    password: str,
+) -> bool:
+    """
+    Apply a conservative Crucible-side check before
+    handing a DSRM password to AD DS.
+
+    Three of the four normal Windows password
+    character categories are required.
+    """
+
+    if len(password) < 8:
+        return False
+
+    categories = sum(
+        (
+            any(
+                character.islower()
+                for character in password
+            ),
+            any(
+                character.isupper()
+                for character in password
+            ),
+            any(
+                character.isdigit()
+                for character in password
+            ),
+            any(
+                not character.isalnum()
+                for character in password
+            ),
+        )
+    )
+
+    return categories >= 3
+
+
+def ask_dsrm_password() -> str:
+    """
+    Ask for the Directory Services Restore Mode
+    password.
+
+    Pressing Enter creates a strong Crucible-generated
+    password.
+    """
+
+    print()
+    print(
+        f"{BOLD}"
+        "Directory Services Restore Mode"
+        f"{RESET}"
+    )
+    print()
+
+    print(
+        "The DSRM password is used for emergency "
+        "offline recovery of Active Directory."
+    )
+
+    print(
+        "Press Enter to have Crucible generate "
+        "a strong password."
+    )
+    print()
+
+    while True:
+
+        first = getpass.getpass(
+            "DSRM password [generate]: "
+        )
+
+        if not first:
+
+            generated = (
+                generate_password()
+            )
+
+            print()
+            print(
+                f"{GREEN}[✓]{RESET} "
+                "Generated DSRM password:"
+            )
+
+            print(
+                f"    {generated}"
+            )
+
+            print(
+                f"{DIM}"
+                "This secret will exist only in "
+                "Crucible runtime state under "
+                ".crucible/."
+                f"{RESET}"
+            )
+
+            return generated
+
+        if not (
+            windows_password_meets_complexity(
+                first
+            )
+        ):
+            print()
+            print(
+                f"{RED}"
+                "The DSRM password must contain "
+                "at least 8 characters and at "
+                "least three Windows password "
+                "character categories."
+                f"{RESET}"
+            )
+            continue
+
+        second = getpass.getpass(
+            "Confirm DSRM password: "
+        )
+
+        if first != second:
+
+            print(
+                f"{RED}"
+                "The two DSRM passwords did not "
+                "match."
+                f"{RESET}"
+            )
+
+            continue
+
+        return first
+
+
+def ask_active_directory_parameters(
+    configuration_ids: list[str],
+    catalog: ConfigurationCatalog,
+    topology_interfaces: list[
+        dict[str, Any]
+    ],
+) -> dict[
+    str,
+    dict[str, Any],
+]:
+    """
+    Collect parameters needed to create the first
+    Active Directory forest/root domain controller.
+
+    The configuration catalog has already required
+    at least one persistent static Internal Network
+    interface. This function chooses which eligible
+    interface will provide AD/DNS services.
+    """
+
+    if (
+        ACTIVE_DIRECTORY_CONFIGURATION_ID
+        not in configuration_ids
+    ):
+        return {}
+
+    definition = catalog.get(
+        ACTIVE_DIRECTORY_CONFIGURATION_ID
+    )
+
+    eligible_interfaces: list[
+        dict[str, Any]
+    ] = []
+
+    for interface in (
+        topology_interfaces
+    ):
+
+        attachment = (
+            interface.get(
+                "attachment",
+                {},
+            )
+        )
+
+        ipv4 = (
+            interface.get(
+                "ipv4",
+                {},
+            )
+        )
+
+        if (
+            isinstance(
+                attachment,
+                dict,
+            )
+            and
+            isinstance(
+                ipv4,
+                dict,
+            )
+            and
+            str(
+                attachment.get(
+                    "type",
+                    "",
+                )
+            ).strip().lower()
+            == "intnet"
+            and
+            str(
+                ipv4.get(
+                    "method",
+                    "",
+                )
+            ).strip().lower()
+            == "static"
+        ):
+            eligible_interfaces.append(
+                interface
+            )
+
+    if not eligible_interfaces:
+        raise CrucibleForgeError(
+            "Active Directory requires at least "
+            "one persistent VirtualBox Internal "
+            "Network interface using static IPv4."
+        )
+
+    print()
+    print(
+        f"{BOLD}"
+        f"{definition.display_name}"
+        f"{RESET}"
+    )
+    print()
+
+    print(
+        "Crucible will create the first writable "
+        "domain controller of a new forest."
+    )
+
+    print(
+        "Active Directory-integrated DNS will be "
+        "installed on the selected topology NIC."
+    )
+
+    print()
+
+    if len(
+        eligible_interfaces
+    ) == 1:
+
+        service_interface = (
+            eligible_interfaces[0]
+        )
+
+        print(
+            f"{GREEN}[✓]{RESET} "
+            "AD service interface:"
+        )
+
+        print(
+            "    "
+            f"{service_interface['label']} "
+            "("
+            f"{service_interface['ipv4']['address']}"
+            ")"
+        )
+
+    else:
+
+        print(
+            "Eligible AD service interfaces:"
+        )
+        print()
+
+        for index, interface in enumerate(
+            eligible_interfaces,
+            start=1,
+        ):
+
+            attachment = (
+                interface[
+                    "attachment"
+                ]
+            )
+
+            print(
+                f"  [{index}] "
+                f"{interface['label']}"
+            )
+
+            print(
+                "      IPv4: "
+                f"{interface['ipv4']['address']}"
+            )
+
+            print(
+                "      Internal network: "
+                f"{attachment.get('network', '')}"
+            )
+
+        print()
+
+        while True:
+
+            answer = input(
+                "AD service interface [1]: "
+            ).strip() or "1"
+
+            try:
+                selected_index = (
+                    int(answer)
+                )
+
+            except ValueError:
+
+                print(
+                    f"{RED}"
+                    "Enter one of the listed "
+                    "interface numbers."
+                    f"{RESET}"
+                )
+
+                continue
+
+            if (
+                1
+                <= selected_index
+                <= len(
+                    eligible_interfaces
+                )
+            ):
+
+                service_interface = (
+                    eligible_interfaces[
+                        selected_index - 1
+                    ]
+                )
+
+                break
+
+            print(
+                f"{RED}"
+                "That interface number "
+                "is not available."
+                f"{RESET}"
+            )
+
+    print()
+    print(
+        f"{BOLD}"
+        "Active Directory forest identity"
+        f"{RESET}"
+    )
+    print()
+
+    while True:
+
+        raw_domain_name = (
+            ask_with_default(
+                "Forest root DNS domain",
+                "lab.test",
+            )
+        )
+
+        try:
+
+            dns_domain_name = (
+                normalize_ad_dns_domain_name(
+                    raw_domain_name
+                )
+            )
+
+        except CrucibleForgeError as exc:
+
+            print(
+                f"{RED}"
+                f"{exc}"
+                f"{RESET}"
+            )
+
+            continue
+
+        break
+
+    default_netbios_name = (
+        dns_domain_name
+        .split(
+            ".",
+            1,
+        )[0]
+        .upper()
+    )
+
+    if not (
+        AD_NETBIOS_NAME_PATTERN
+        .fullmatch(
+            default_netbios_name
+        )
+    ):
+        default_netbios_name = (
+            "LAB"
+        )
+
+    while True:
+
+        raw_netbios_name = (
+            ask_with_default(
+                "NetBIOS domain name",
+                default_netbios_name,
+            )
+        )
+
+        try:
+
+            domain_netbios_name = (
+                normalize_ad_netbios_name(
+                    raw_netbios_name
+                )
+            )
+
+        except CrucibleForgeError as exc:
+
+            print(
+                f"{RED}"
+                f"{exc}"
+                f"{RESET}"
+            )
+
+            continue
+
+        break
+
+    safe_mode_password = (
+        ask_dsrm_password()
+    )
+
+    print()
+    print(
+        f"{GREEN}[✓]{RESET} "
+        "Active Directory configuration:"
+    )
+
+    print(
+        "    Forest root domain : "
+        f"{dns_domain_name}"
+    )
+
+    print(
+        "    NetBIOS domain     : "
+        f"{domain_netbios_name}"
+    )
+
+    print(
+        "    Service interface  : "
+        f"{service_interface['label']}"
+    )
+
+    print(
+        "    Service IPv4       : "
+        f"{service_interface['ipv4']['address']}"
+    )
+
+    print(
+        "    DNS                : installed"
+    )
+
+    return {
+        ACTIVE_DIRECTORY_CONFIGURATION_ID: {
+
+            "deployment_mode": (
+                "new_forest"
+            ),
+
+            "dns_domain_name": (
+                dns_domain_name
+            ),
+
+            "domain_netbios_name": (
+                domain_netbios_name
+            ),
+
+            "service_interface_label": (
+                str(
+                    service_interface[
+                        "label"
+                    ]
+                )
+            ),
+
+            "install_dns": True,
+
+            "create_dns_delegation": (
+                False
+            ),
+
+            "safe_mode_password": (
+                safe_mode_password
+            ),
+        }
+    }
+
 
 def show_network_slot_plan(
     topology_interfaces: (
@@ -2249,6 +2893,9 @@ def show_autoinstall_defaults(
     print("  OpenSSH Server  : yes")
     print("  SSH Password    : allowed")
     print("  Login Password  : securely generated")
+    print(
+        "  Guest Additions : yes by default"
+    )
 
     print(
     "  Crucible SSH Key: unique per-VM key"
@@ -2798,6 +3445,9 @@ def show_windows_unattend_defaults(
         "  First Login       : automatic once"
     )
 
+    print(
+        "  Guest Additions   : yes by default"
+    )
     print()
 
 def ask_windows_unattend(
@@ -3161,9 +3811,9 @@ def ask_installation_configuration(
     Dispatch installation configuration according to the
     selected OS profile and installer backend.
 
-    Linux and Windows installers expose their normal
-    Crucible defaults and allow machine-specific
-    customization where appropriate.
+    Guest Additions are a common Crucible unattended-install
+    option and therefore are selected after the OS-specific
+    installation settings have been resolved.
     """
 
     profile = load_os_profile(
@@ -3192,22 +3842,50 @@ def ask_installation_configuration(
                 "a Crucible SSH identity."
             )
 
-        return ask_autoinstall(
+        (
+            installation,
+            plaintext_password,
+        ) = ask_autoinstall(
             vm_name,
             crucible_public_key=(
                 crucible_public_key
             ),
         )
 
-    if backend == "windows-unattend":
-        return ask_windows_unattend(
+    elif backend == "windows-unattend":
+        (
+            installation,
+            plaintext_password,
+        ) = ask_windows_unattend(
             os_info,
             vm_name,
         )
 
-    raise CrucibleForgeError(
-        "Unsupported installer backend: "
-        f"{backend or 'undefined'}"
+    else:
+        raise CrucibleForgeError(
+            "Unsupported installer backend: "
+            f"{backend or 'undefined'}"
+        )
+
+    # ---------------------------------------------------------
+    # VirtualBox Guest Additions
+    #
+    # This is intentionally stored with the unattended-install
+    # settings rather than VM hardware. Guest Additions are
+    # software installed inside the guest.
+    # ---------------------------------------------------------
+
+    installation[
+        "guest_additions"
+    ] = {
+        "enabled": (
+            ask_guest_additions()
+        ),
+    }
+
+    return (
+        installation,
+        plaintext_password,
     )
 
 def build_machine_manifest(
@@ -5067,6 +5745,37 @@ def main() -> int:
         show_network_slot_plan(
             topology_interfaces
         )
+
+        # -----------------------------------------------------
+        # Configuration-specific service parameters
+        #
+        # Hardening parameters are collected before topology.
+        # Service configurations such as Active Directory may
+        # need to reference the topology that was just built.
+        # -----------------------------------------------------
+
+        service_configuration_parameters = (
+            ask_active_directory_parameters(
+                configuration_ids,
+                configuration_catalog,
+                topology_interfaces,
+            )
+        )
+
+        for (
+            configuration_id,
+            parameter_overrides,
+        ) in (
+            service_configuration_parameters
+            .items()
+        ):
+
+            configuration_parameters.setdefault(
+                configuration_id,
+                {},
+            ).update(
+                parameter_overrides
+            )
 
         autoinstall, plaintext_password = (
             ask_installation_configuration(

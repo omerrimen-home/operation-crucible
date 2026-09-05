@@ -266,6 +266,35 @@ def build_preseed(
             "installation is disabled."
         )
 
+    guest_additions = (
+        unattended.get(
+            "guest_additions",
+            {},
+        )
+    )
+
+    if not isinstance(
+        guest_additions,
+        dict,
+    ):
+        raise KaliPreseedError(
+            "autoinstall.guest_additions "
+            "must be a mapping."
+        )
+
+    guest_additions_enabled = bool(
+        guest_additions.get(
+            "enabled",
+            True,
+        )
+    )
+
+    guest_additions_argument = (
+        "true"
+        if guest_additions_enabled
+        else "false"
+    )
+
     identity = unattended.get(
         "identity",
         {},
@@ -463,7 +492,7 @@ def build_preseed(
         "\n"
         "[Service]\n"
         "Type=oneshot\n"
-        f"ExecStart=/usr/local/sbin/crucible-bootstrap.sh {username}\n"
+        f"ExecStart=/usr/local/sbin/crucible-bootstrap.sh {username} {guest_additions_argument}\n"
         "RemainAfterExit=yes\n"
         "\n"
         "[Install]\n"

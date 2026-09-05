@@ -284,6 +284,37 @@ def create_machine(
         )
     )
 
+    guest_additions_config = (
+        autoinstall.get(
+            "guest_additions",
+            {},
+        )
+        if isinstance(
+            autoinstall,
+            dict,
+        )
+        else {}
+    )
+
+    if not isinstance(
+        guest_additions_config,
+        dict,
+    ):
+        raise CrucibleError(
+            "autoinstall.guest_additions "
+            "must be a mapping."
+        )
+
+    guest_additions_enabled = (
+        unattended_enabled
+        and bool(
+            guest_additions_config.get(
+                "enabled",
+                True,
+            )
+        )
+    )
+
     start = manifest.get(
         "start",
         {},
@@ -561,6 +592,43 @@ def create_machine(
         verbose=verbose
     )
 
+    guest_additions_iso_path: (
+        Path | None
+    ) = None
+
+    if (
+        guest_additions_enabled
+        and installer_backend
+        == "windows-unattend"
+    ):
+        guest_additions_iso_path = (
+            provider
+            .default_guest_additions_iso()
+        )
+
+        print(
+            "      -> Guest Additions ISO: "
+            f"{guest_additions_iso_path}"
+        )
+
+    elif (
+        guest_additions_enabled
+        and installer_backend
+        in {
+            "ubuntu-autoinstall",
+            "debian-preseed",
+        }
+    ):
+        print(
+            "      -> Guest Additions: "
+            "Linux distribution packages"
+        )
+
+    else:
+        print(
+            "      -> Guest Additions: disabled"
+        )
+
     # ---------------------------------------------------------
     # Create VM and primary disk
     # ---------------------------------------------------------
@@ -625,6 +693,9 @@ def create_machine(
         name,
         vendor_iso=iso_path,
         seed_iso=seed_iso_path,
+        guest_additions_iso=(
+            guest_additions_iso_path
+        ),
     )
 
     # ---------------------------------------------------------

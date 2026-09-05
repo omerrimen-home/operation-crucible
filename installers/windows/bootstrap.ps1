@@ -18,6 +18,10 @@ $PersistentConfigPath = Join-Path `
     -Path $StateRoot `
     -ChildPath "crucible-bootstrap.json"
 
+$GuestAdditionsCompletePath = Join-Path `
+    -Path $StateRoot `
+    -ChildPath "guest-additions-complete"
+
 $WindowsUpdateCompletePath = Join-Path `
     -Path $StateRoot `
     -ChildPath "windows-update-complete"
@@ -554,6 +558,271 @@ function Invoke-CrucibleWindowsUpdates {
     )
 }
 
+function Find-CrucibleGuestAdditionsMedia {
+
+    param(
+        [int] $Attempts = 30
+    )
+
+    for (
+        $Attempt = 1;
+        $Attempt -le $Attempts;
+        $Attempt++
+    ) {
+
+        $OpticalDrives = @(
+            Get-CimInstance `
+                -ClassName Win32_LogicalDisk `
+                -Filter "DriveType = 5" `
+                -ErrorAction SilentlyContinue
+        )
+
+        foreach ($Drive in $OpticalDrives) {
+
+            $DeviceId = (
+                [string]$Drive.DeviceID
+            )
+
+            if (
+                [string]::IsNullOrWhiteSpace(
+                    $DeviceId
+                )
+            ) {
+                continue
+            }
+
+            $Root = (
+                $DeviceId + "\"
+            )
+
+            $Installer = Join-Path `
+                -Path $Root `
+                -ChildPath (
+                    "VBoxWindowsAdditions.exe"
+                )
+
+            if (
+                Test-Path `
+                    -LiteralPath $Installer
+            ) {
+
+                Write-CrucibleLog (
+                    "VirtualBox Guest Additions " +
+                    "media found at {0}." -f `
+                    $Root
+                )
+
+                return $Root
+            }
+        }
+
+        Write-CrucibleLog (
+            "Waiting for VirtualBox Guest " +
+            "Additions media " +
+            "(attempt {0}/{1})." -f `
+            $Attempt, `
+            $Attempts
+        )
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw (
+        "Could not locate VirtualBox " +
+        "Guest Additions installation media."
+    )
+}
+
+
+function Install-CrucibleGuestAdditions {
+
+    Write-CrucibleLog (
+        "Beginning VirtualBox Guest "
+        + "Additions installation."
+    )
+
+    $MediaRoot = (
+        Find-CrucibleGuestAdditionsMedia
+    )
+
+    $CertificateDirectory = Join-Path `
+        -Path $MediaRoot `
+        -ChildPath "cert"
+
+    $CertificateUtility = Join-Path `
+        -Path $CertificateDirectory `
+        -ChildPath "VBoxCertUtil.exe"
+
+    if (
+        -not (
+            Test-Path `
+                -LiteralPath (
+                    $CertificateUtility
+                )
+        )
+    ) {
+        throw (
+            "Guest Additions certificate " +
+            "utility not found: " +
+            $CertificateUtility
+        )
+    }
+
+
+    # ---------------------------------------------------------
+    # Trust Oracle Guest Additions driver certificates
+    #
+    # Oracle documents this step for automated installations
+    # so Windows does not display interactive driver prompts.
+    # ---------------------------------------------------------
+
+    Write-CrucibleLog (
+        "Installing VirtualBox Guest "
+        + "Additions signing certificates."
+    )
+
+    Push-Location `
+        -LiteralPath (
+            $CertificateDirectory
+        )
+
+    try {
+
+        & $CertificateUtility `
+            "add-trusted-publisher" `
+            "vbox*.cer" `
+            "--root" `
+            "vbox*.cer"
+
+        $CertificateExitCode = (
+            $LASTEXITCODE
+        )
+
+    }
+    finally {
+
+        Pop-Location
+    }
+
+    if (
+        $CertificateExitCode -ne 0
+    ) {
+        throw (
+            "VBoxCertUtil failed with " +
+            "exit code {0}." -f `
+            $CertificateExitCode
+        )
+    }
+
+
+    # ---------------------------------------------------------
+    # Silent Guest Additions installation
+    # ---------------------------------------------------------
+
+    $Installer = Join-Path `
+        -Path $MediaRoot `
+        -ChildPath (
+            "VBoxWindowsAdditions.exe"
+        )
+
+    if (
+        -not (
+            Test-Path `
+                -LiteralPath $Installer
+        )
+    ) {
+        throw (
+            "Guest Additions installer "
+            + "not found: "
+            + $Installer
+        )
+    }
+
+    Write-CrucibleLog (
+        "Running Guest Additions installer silently."
+    )
+
+    $InstallationProcess = (
+        Start-Process `
+            -FilePath $Installer `
+            -ArgumentList "/S" `
+            -Wait `
+            -PassThru
+    )
+
+    $InstallerExitCode = (
+        [int]$InstallationProcess.ExitCode
+    )
+
+    if (
+        $InstallerExitCode -ne 0
+        -and
+        $InstallerExitCode -ne 3010
+    ) {
+
+        throw (
+            "Guest Additions installer " +
+            "failed with exit code {0}." -f `
+            $InstallerExitCode
+        )
+    }
+
+    Write-CrucibleLog (
+        "VirtualBox Guest Additions "
+        + "installation completed."
+    )
+}
+
+
+function Confirm-CrucibleGuestAdditions {
+
+    Write-CrucibleLog (
+        "Verifying VirtualBox Guest Additions."
+    )
+
+    $VBoxService = Get-Service `
+        -Name "VBoxService" `
+        -ErrorAction SilentlyContinue
+
+    if (
+        $null -eq $VBoxService
+    ) {
+        throw (
+            "VBoxService was not found after "
+            + "Guest Additions installation."
+        )
+    }
+
+    Set-Service `
+        -Name "VBoxService" `
+        -StartupType Automatic
+
+    if (
+        $VBoxService.Status -ne "Running"
+    ) {
+
+        Start-Service `
+            -Name "VBoxService"
+
+        $VBoxService = Get-Service `
+            -Name "VBoxService"
+
+    }
+
+    if (
+        $VBoxService.Status -ne "Running"
+    ) {
+        throw (
+            "VBoxService did not enter "
+            + "the Running state."
+        )
+    }
+
+    Write-CrucibleLog (
+        "VirtualBox Guest Additions verified."
+    )
+}
+
 try {
 
     # ---------------------------------------------------------
@@ -717,6 +986,47 @@ try {
         "Bootstrap configuration loaded."
     )
 
+    # ---------------------------------------------------------
+    # Resolve Guest Additions preference
+    # ---------------------------------------------------------
+
+    $InstallGuestAdditions = $true
+
+    $GuestAdditionsProperty = (
+        $Config.PSObject.Properties[
+            "guest_additions"
+        ]
+    )
+
+    if (
+        $null -ne $GuestAdditionsProperty
+    ) {
+
+        $EnabledProperty = (
+            $Config.guest_additions
+            .PSObject
+            .Properties[
+                "enabled"
+            ]
+        )
+
+        if (
+            $null -ne $EnabledProperty
+        ) {
+            $InstallGuestAdditions = (
+                [bool](
+                    $Config
+                    .guest_additions
+                    .enabled
+                )
+            )
+        }
+    }
+
+    Write-CrucibleLog (
+        "Guest Additions requested: {0}" -f `
+        $InstallGuestAdditions
+    )
 
     # ---------------------------------------------------------
     # Resolve management settings
@@ -1416,6 +1726,76 @@ try {
         )
     }
 
+    # ---------------------------------------------------------
+    # VirtualBox Guest Additions
+    #
+    # Installation occurs only after Windows Update has
+    # converged. The installer is followed by one controlled
+    # reboot so drivers and VBoxService are active before
+    # Crucible writes bootstrap-complete.
+    # ---------------------------------------------------------
+
+    if ($InstallGuestAdditions) {
+
+        if (
+            -not (
+                Test-Path `
+                    -LiteralPath (
+                        $GuestAdditionsCompletePath
+                    )
+            )
+        ) {
+
+            Write-CrucibleLog (
+                "Beginning Guest Additions stage."
+            )
+
+            Install-CrucibleGuestAdditions
+
+            Set-Content `
+                -LiteralPath (
+                    $GuestAdditionsCompletePath
+                ) `
+                -Value (
+                    Get-Date
+                ).ToString("o") `
+                -Encoding ASCII
+
+            Register-CrucibleBootstrapResumeTask
+
+            Write-CrucibleLog (
+                "Restarting Windows to activate "
+                + "VirtualBox Guest Additions."
+            )
+
+            if ($TranscriptStarted) {
+
+                Stop-Transcript |
+                    Out-Null
+
+                $TranscriptStarted = (
+                    $false
+                )
+            }
+
+            Restart-Computer `
+                -Force
+
+            exit 0
+        }
+
+        # This path is reached after the Guest Additions reboot.
+
+        Confirm-CrucibleGuestAdditions
+
+    }
+    else {
+
+        Write-CrucibleLog (
+            "VirtualBox Guest Additions "
+            + "installation disabled."
+        )
+    }
 
     # ---------------------------------------------------------
     # Clean up reboot-resume state
